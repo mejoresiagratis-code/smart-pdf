@@ -1,0 +1,44 @@
+# ---- Gradle ----
+.gradle/
+build/
+**/build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# ---- Local config (NUNCA subir) ----
+local.properties
+*.keystore
+*.jks
+keystore.properties
+
+# ---- Android build outputs ----
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+bin/
+gen/
+out/
+release/
+
+# ---- Android Studio / IntelliJ ----
+.idea/
+*.iml
+*.ipr
+*.iws
+.navigation/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# ---- Kotlin ----
+.kotlin/
+
+# ---- Logs y temporales ----
+*.log
+*.hprof
+.DS_Store
+Thumbs.db
+
+# ---- NDK ----
+obj/
