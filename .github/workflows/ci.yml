@@ -1,4 +1,3 @@
-# .github/workflows/ci.yml
 name: CI
 
 on:
@@ -6,6 +5,7 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -18,13 +18,180 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-          cache: gradle
+
+      - name: Install Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # ---- Bootstrap: crea los archivos base SOLO si no existen ----
+      - name: Bootstrap minimal Android project (only if missing)
+        run: |
+          set -e
+
+          if [ ! -f "settings.gradle.kts" ]; then
+            echo "→ No settings.gradle.kts found. Bootstrapping minimal project..."
+
+            cat > settings.gradle.kts <<'EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "smart-pdf"
+          include(":app")
+          EOF
+
+            cat > build.gradle.kts <<'EOF'
+          plugins {
+              id("com.android.application") version "8.5.2" apply false
+              id("org.jetbrains.kotlin.android") version "2.0.20" apply false
+              id("org.jetbrains.kotlin.plugin.compose") version "2.0.20" apply false
+          }
+          EOF
+
+            mkdir -p app/src/main/java/com/mejoresiagratis/smartpdf
+            mkdir -p app/src/main/res/values
+            mkdir -p app/src/test/java/com/mejoresiagratis/smartpdf
+
+            cat > app/build.gradle.kts <<'EOF'
+          plugins {
+              id("com.android.application")
+              id("org.jetbrains.kotlin.android")
+              id("org.jetbrains.kotlin.plugin.compose")
+          }
+
+          android {
+              namespace = "com.mejoresiagratis.smartpdf"
+              compileSdk = 35
+
+              defaultConfig {
+                  applicationId = "com.mejoresiagratis.smartpdf"
+                  minSdk = 26
+                  targetSdk = 35
+                  versionCode = 1
+                  versionName = "0.1.0"
+                  testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+              }
+
+              buildTypes {
+                  release {
+                      isMinifyEnabled = false
+                  }
+              }
+
+              compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }
+              kotlinOptions {
+                  jvmTarget = "17"
+              }
+              buildFeatures {
+                  compose = true
+              }
+          }
+
+          dependencies {
+              val composeBom = platform("androidx.compose:compose-bom:2024.09.02")
+              implementation(composeBom)
+              implementation("androidx.core:core-ktx:1.13.1")
+              implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.6")
+              implementation("androidx.activity:activity-compose:1.9.2")
+              implementation("androidx.compose.ui:ui")
+              implementation("androidx.compose.ui:ui-graphics")
+              implementation("androidx.compose.material3:material3")
+
+              testImplementation("junit:junit:4.13.2")
+          }
+          EOF
+
+            cat > app/src/main/AndroidManifest.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <application
+                  android:allowBackup="true"
+                  android:label="Smart PDF"
+                  android:theme="@style/Theme.Material3.DayNight.NoActionBar">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+            cat > app/src/main/java/com/mejoresiagratis/smartpdf/MainActivity.kt <<'EOF'
+          package com.mejoresiagratis.smartpdf
+
+          import android.os.Bundle
+          import androidx.activity.ComponentActivity
+          import androidx.activity.compose.setContent
+          import androidx.compose.material3.MaterialTheme
+          import androidx.compose.material3.Surface
+          import androidx.compose.material3.Text
+
+          class MainActivity : ComponentActivity() {
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  setContent {
+                      MaterialTheme {
+                          Surface {
+                              Text("Smart PDF")
+                          }
+                      }
+                  }
+              }
+          }
+          EOF
+
+            cat > app/src/test/java/com/mejoresiagratis/smartpdf/ExampleUnitTest.kt <<'EOF'
+          package com.mejoresiagratis.smartpdf
+
+          import org.junit.Assert.assertEquals
+          import org.junit.Test
+
+          class ExampleUnitTest {
+              @Test
+              fun sanity_check() {
+                  assertEquals(4, 2 + 2)
+              }
+          }
+          EOF
+
+            printf 'org.gradle.jvmargs=-Xmx2048m\nandroid.useAndroidX=true\n' > gradle.properties
+
+            echo "→ Bootstrap done."
+          else
+            echo "→ Project already exists. Skipping bootstrap."
+          fi
+
+      # ---- Genera el Gradle wrapper (crea gradlew + gradle-wrapper.jar) ----
+      - name: Generate Gradle wrapper (if missing)
+        run: |
+          if [ ! -f "gradlew" ]; then
+            echo "→ Generating Gradle wrapper..."
+            gradle wrapper --gradle-version 8.10.2
+          else
+            echo "→ Wrapper already present."
+          fi
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
       - name: Run unit tests
-        run: ./gradlew test --stacktrace
+        run: ./gradlew testDebugUnitTest --stacktrace
 
       - name: Build debug APK
         run: ./gradlew assembleDebug --stacktrace
@@ -33,4 +200,21 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: smart-pdf-debug
-          path: app/build/outputs/apk/debug/*.apk
+          path: '**/build/outputs/apk/debug/*.apk'
+          if-no-files-found: warn
+
+      # ---- Guarda los archivos generados para que los descargues y commitees ----
+      - name: Upload generated project scaffold
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-scaffold
+          path: |
+            settings.gradle.kts
+            build.gradle.kts
+            gradle.properties
+            gradlew
+            gradlew.bat
+            gradle/wrapper/**
+            app/**
+          if-no-files-found: warn
