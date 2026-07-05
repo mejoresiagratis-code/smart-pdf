@@ -3,48 +3,55 @@ package com.mejoresiagratis.rellenador.data.model
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-/**
- * The 9 providers your ai-proxy.php multiplexes. Active vs inactive is a
- * runtime concern (whether a key is stored), not a compile-time one.
- */
-enum class AiProvider(val id: String, val displayName: String) {
+/** Los 9 motores que multiplexa ai-proxy.php. */
+enum class AiProvider(val id: String, val displayName: String, val eu: Boolean = false) {
     CLAUDE("claude", "Claude"),
     GEMINI("gemini", "Gemini"),
     GROQ("groq", "Groq"),
-    MISTRAL("mistral", "Mistral"),
-    EUROUTER("eurouter", "EUrouter"),
     GROK("grok", "Grok"),
-    SCALEWAY("scaleway", "Scaleway"),
-    OVHCLOUD("ovhcloud", "OVHcloud"),
-    NEBIUS("nebius", "Nebius");
+    MISTRAL("mistral", "Mistral", eu = true),
+    SCALEWAY("scaleway", "Scaleway", eu = true),
+    OVH("ovh", "OVHcloud", eu = true),
+    NEBIUS("nebius", "Nebius", eu = true),
+    EUROUTER("eurouter", "EUrouter", eu = true);
 
     companion object {
         fun fromId(id: String) = entries.firstOrNull { it.id == id }
     }
 }
 
-/** Request sent to the PHP proxy. Keys never live in the app if you keep the proxy. */
+/** Un documento a analizar: imagen (foto/escaneo) o PDF, en base64; o texto plano. */
+@Serializable
+data class DocPayload(
+    val mime: String,              // "image/jpeg", "application/pdf", "text/plain"
+    val b64: String? = null,
+    val text: String? = null
+)
+
+/** Petición al proxy — coincide EXACTAMENTE con ai-proxy.php. */
 @Serializable
 data class ProxyRequest(
     val provider: String,
     val prompt: String,
-    @SerialName("pdf_text") val pdfText: String? = null,
-    val model: String? = null
+    val task: String = "extract",           // "extract" | "locate_signature"
+    @SerialName("max_tokens") val maxTokens: Int = 2048,
+    val seq: Int = 0,
+    @SerialName("gemini_mode") val geminiMode: String = "g35",
+    val docs: List<DocPayload> = emptyList()
 )
 
+/** Respuesta del proxy: {ok, provider, text} o {ok:false, error}. */
 @Serializable
 data class ProxyResponse(
-    val provider: String,
     val ok: Boolean,
-    val json: Map<String, String>? = null,
+    val provider: String? = null,
+    val text: String? = null,
     val error: String? = null
 )
 
-/** A single extracted contract field, keyed by the exact AcroForm field name. */
+/** GET del proxy: qué motores tienen clave en servidor. */
 @Serializable
-data class ExtractedField(
-    val fieldName: String,
-    val value: String,
-    val confidence: Float = 1f,
-    val source: String = ""
+data class ProxyProviders(
+    val ok: Boolean = false,
+    val providers: Map<String, Boolean> = emptyMap()
 )

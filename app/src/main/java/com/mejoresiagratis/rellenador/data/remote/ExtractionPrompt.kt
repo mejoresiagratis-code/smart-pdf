@@ -1,0 +1,58 @@
+package com.mejoresiagratis.rellenador.data.remote
+
+import com.mejoresiagratis.rellenador.data.model.ContractFields
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.serializer
+import kotlinx.serialization.json.Json
+
+/**
+ * Construye el prompt de extracción IDÉNTICO al de la app web (rellenador-pro.html).
+ * No modificar sin replicar el cambio en la web: el comportamiento debe ser igual.
+ */
+object ExtractionPrompt {
+
+    fun build(fieldNames: List<String> = ContractFields.CANON.map { it.key }): String {
+        val fieldsJson = Json.encodeToString(ListSerializer(String.serializer()), fieldNames)
+        return """Eres un asistente meticuloso de back-office que rellena un contrato de distribución de telecomunicaciones (España). Vas a recibir UN documento y debes extraer datos del DISTRIBUIDOR / punto de venta para mapearlos a los campos listados.
+
+CAMPOS DEL PDF (claves EXACTAS): $fieldsJson
+
+INSTRUCCIONES IMPORTANTES:
+1) REGLA DE ORO — NO INVENTES NI DEDUZCAS. Transcribe SOLO valores que aparezcan LITERALMENTE en ESTE documento. Si un campo no está en el documento, OMÍTELO (no lo incluyas en el JSON). Prohibido: deducir, completar, suponer, traducir, calcular o COPIAR un valor de un campo a otro o de un bloque a otro. Ante la duda, omite. Es mejor un JSON corto y correcto que uno largo con suposiciones.
+2) SOLO DATOS DEL DISTRIBUIDOR / PUNTO DE VENTA. El documento puede contener datos de terceros (el operador Orange/MASORANGE, el banco como entidad, notaría, gestoría, testigos…). IGNÓRALOS. Extrae únicamente la identidad, dirección, cuenta e identificación del representante del DISTRIBUIDOR (el cliente/PdV). Si no estás seguro de a quién pertenece un dato, omítelo.
+3) PROPÓN TODO LO QUE ENCUENTRES DEL DISTRIBUIDOR: razón social, NIF/CIF/NIE, IBAN, dirección, CP, población, provincia, teléfono, email, nombre y NIF del administrador/representante. Lee el documento COMPLETO (todas las páginas; en fotos, también márgenes y sellos).
+4) FORMATEA bien:
+   - NIF/CIF/NIE en mayúsculas, sin espacios ni guiones (ej. "B24838195", "78134718S").
+   - IBAN en mayúsculas, TODO JUNTO: sin espacios NI guiones entre bloques (ej. "ES2121000418401234567890", nunca "ES21-2100-0418-40...").
+   - CP siempre 5 dígitos (rellena con cero a la izquierda si hace falta).
+   - Provincia con su nombre oficial sin abreviaturas (ej. "Valencia", no "VAL.").
+   - Teléfono solo 9 dígitos, sin prefijo internacional.
+   - "Nombre representante": SIEMPRE nombre de pila primero y apellidos después ("Juan Pérez García"), aunque el documento lo muestre como "Pérez García, Juan". Reordénalo tú.
+
+CONVENCIONES DEL CONTRATO:
+- "NIE" es el NÚMERO de identificación de la EMPRESA (no del representante). Será CIF si empieza por letra A/B/etc; NIF si es DNI; NIE si es X/Y/Z.
+- "Dirección"/"CP"/"Población"/"Provincia" SIN sufijo = SIEMPRE el domicilio/dirección FISCAL (el de facturación ante la AEAT), aunque el documento la llame "domicilio social" o "sede". NUNCA pongas ahí una dirección de tienda, local o punto de venta, aunque sea la única dirección que aparezca.
+- Sufijo "_2" ("Dirección_2"/"CP_2"/"Población_2"/"Provincia_2") = DIRECCIÓN DE COMERCIO / DEL PUNTO DE VENTA. Rellena "_2" SOLO si el documento distingue explícitamente una dirección comercial/de local distinta de la fiscal. Si el documento NO distingue una dirección de comercio propia, deja "_2" vacío en "sugerencias" (no la copies); si quieres, puedes incluir la fiscal también como paquete "direccion_comercio" con nota "misma que fiscal" para que el usuario decida si la aplica al bloque _2 o lo deja en blanco.
+- TITULAR AUTÓNOMO (tipo_identificacion = "NIF" o "NIE", es decir DNI o NIE de persona física): el titular actúa en nombre propio, NO hay representante distinto. NO propongas valor para "Nombre representante" ni "NIF representante" (omítelos de "sugerencias", "alternativas" y "paquetes").
+- TITULAR CON CIF (persona jurídica): SÍ debes proponer "Nombre representante" y "NIF representante" si aparecen en el documento (administrador/apoderado que firma).
+- "Actividad principal del negocio": usa el formato "XXX.X NOMBRE DE LA ACTIVIDAD" (código CNAE con un decimal + nombre en mayúsculas o como venga escrito), o transcribe el número/código tal y como aparece si no sigue ese formato en el documento. No inventes el código si no aparece.
+- "Fecha"=día (1-31), "de"=mes en letras minúsculas, "año"=último dígito del año actual. No los rellenes si NO aparecen en el documento.
+- "Datos bancarios del DISTRIBUIDOR" = IBAN completo del distribuidor, sin espacios.
+- "Nombre representante" = NOMBRE Y APELLIDOS completos del administrador/representante legal DEL DISTRIBUIDOR; "NIF representante" su NIF/DNI/NIE.
+
+DEVUELVE SOLO JSON VÁLIDO (sin texto adicional, sin ```):
+{
+ "sugerencias": { "<campo>": "valor" },
+ "tipo_identificacion": "CIF" | "NIF" | "NIE",
+ "alternativas": { "<campo>": [ {"valor":"...","fuente":"<qué documento es>","nota":"<qué representa esta variante>"} ] },
+ "paquetes": [
+   {"tipo":"direccion","etiqueta":"Dirección fiscal (AEAT)","fuente":"<doc>","datos":{"Dirección":"...","CP":"...","Población":"...","Provincia":"..."}},
+   {"tipo":"direccion_comercio","etiqueta":"Dirección de comercio/PdV","fuente":"<doc>","datos":{"Dirección":"...","CP":"...","Población":"...","Provincia":"..."}},
+   {"tipo":"empresa","etiqueta":"<razón social>","fuente":"<doc>","datos":{"Nombre  Razón Social":"...","NIE":"<CIF>"}},
+   {"tipo":"persona","etiqueta":"<nombre>","fuente":"<doc>","datos":{"Nombre representante":"...","NIF representante":"..."}},
+   {"tipo":"banco","etiqueta":"Cuenta <banco>","fuente":"<doc>","datos":{"Datos bancarios del DISTRIBUIDOR":"<IBAN>"}}
+ ]
+}
+Incluye "alternativas" SOLO cuando el documento contenga MÁS DE UNA variante literal para un mismo campo (p. ej. dos teléfonos escritos). No las uses para repetir o reformular un único valor. En "paquetes.datos" usa SIEMPRE las claves SIN sufijo (Dirección/CP/Población/Provincia), tanto para el paquete "direccion" como para "direccion_comercio" — el usuario decide a qué bloque (fiscal o _2) lo aplica al elegirlo. Sé conciso en "fuente" y "nota" (5-7 palabras)."""
+    }
+}
