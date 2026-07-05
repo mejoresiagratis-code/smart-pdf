@@ -18,6 +18,11 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      # Instala un SDK de Android limpio y correcto en el runner.
+      # Esto es justo lo que falta en el Codespace (ANDROID_HOME vacio).
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
