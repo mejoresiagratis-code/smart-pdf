@@ -12,7 +12,9 @@ de navegación de los 5 pasos ya cableado.
 3. **Revisión IA** — extracción multi-motor; toast de confirmación por campo con
    candidatos y consenso de motores; opción "dejar en blanco".
 4. **Relleno** — todos los campos canónicos editables, prerrellenados.
-5. **Firma** — PLACEHOLDER (siguiente tanda: Canvas + página 24 + PDF final).
+5. **Firma** — dibujar en Canvas o extraer de foto (locate_signature); colocación
+   automática en pág. 24 con ajuste manual (sliders); PDF final relleno+firmado
+   para compartir (FileProvider) o guardar (SAF).
 
 ## Arquitectura clave
 - `data/model/AiModels.kt` — 9 motores; ProxyRequest/Response ALINEADOS a ai-proxy.php
@@ -36,6 +38,17 @@ de navegación de los 5 pasos ya cableado.
   → {ok, provider, text}
 - Reduce imágenes en servidor (MAX_IMG_SIDE=1600). PDF nativo solo Claude/Gemini;
   el resto reciben imágenes (por eso rasterizamos PDF a JPEG en el cliente).
+
+## Fase 2 (COMPLETADA)
+- data/model/Signature.kt — SignatureData (PNG+aspect), SignatureStamp (pos. relativa), SignatureBox.
+- data/pdf/AcroFormFiller.kt — generate(): rellena + estampa firma en coords PDF (pág. 24).
+- data/pdf/SignatureProcessor.kt — recorte a caja IA + umbralización a trazo transparente.
+- data/pdf/PdfExporter.kt — abre assets/contrato-base.pdf o URI usuario, genera a filesDir/output,
+  FileProvider (share) + SAF CreateDocument (guardar).
+- data/remote/SignatureLocator.kt — task locate_signature, orden de motores de la web.
+- ui/wizard/SignatureCanvas.kt — lienzo manuscrito -> Bitmap.
+- ui/wizard/SignatureStep.kt — tabs Dibujar/Extraer, ajuste con sliders, generar/compartir/guardar.
+- FileProvider en manifest + res/xml/file_paths.xml.
 
 ## Pendiente (siguiente tanda)
 - **Firma**: captura manuscrita en Canvas + task "locate_signature" (ya soportada por

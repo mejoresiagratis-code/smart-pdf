@@ -4,6 +4,9 @@ import android.net.Uri
 import com.mejoresiagratis.rellenador.data.model.AiProvider
 import com.mejoresiagratis.rellenador.data.model.FieldProposal
 import com.mejoresiagratis.rellenador.data.model.Paquete
+import com.mejoresiagratis.rellenador.data.model.SignatureData
+import com.mejoresiagratis.rellenador.data.model.SignatureStamp
+import java.io.File
 
 /** Los 5 pasos del flujo, fieles a la app web. */
 enum class Step(val index: Int, val title: String) {
@@ -39,7 +42,13 @@ data class WizardUiState(
     // Valores finales confirmados por el usuario (campo canónico -> valor)
     val fieldValues: Map<String, String> = emptyMap(),
 
+    // Firma
+    val signature: SignatureData? = null,
+    val stamps: List<SignatureStamp> = emptyList(),
+    val locatingSignature: Boolean = false,
+
     // PDF final generado
+    val outputFile: File? = null,
     val outputReady: Boolean = false
 ) {
     val canAdvanceFromContrato get() = contractSource != null

@@ -32,7 +32,7 @@ fun WizardScreen(vm: WizardViewModel = hiltViewModel()) {
                     Step.DOCUMENTOS -> DocumentsStep(state, vm)
                     Step.REVISION -> ReviewStep(state, vm)
                     Step.RELLENO -> FillStep(state, vm)
-                    Step.FIRMA -> SignaturePlaceholderStep(state, vm)
+                    Step.FIRMA -> SignatureStep(state, vm)
                 }
                 if (state.busy) {
                     Surface(

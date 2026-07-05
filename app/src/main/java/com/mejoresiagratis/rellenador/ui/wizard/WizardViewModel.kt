@@ -5,7 +5,15 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mejoresiagratis.rellenador.data.model.AiProvider
 import com.mejoresiagratis.rellenador.data.model.ContractFields
+import android.graphics.Bitmap
+import com.mejoresiagratis.rellenador.data.model.SignatureData
+import com.mejoresiagratis.rellenador.data.model.SignatureStamp
 import com.mejoresiagratis.rellenador.data.pdf.DocumentLoader
+import com.mejoresiagratis.rellenador.data.pdf.PdfExporter
+import com.mejoresiagratis.rellenador.data.pdf.SignatureProcessor
+import com.mejoresiagratis.rellenador.data.remote.SignatureLocator
+import android.util.Base64
+import java.io.ByteArrayOutputStream
 import com.mejoresiagratis.rellenador.data.remote.MultiAiExtractor
 import com.mejoresiagratis.rellenador.data.remote.ProxyApi
 import com.mejoresiagratis.rellenador.data.repository.PrefsRepository
@@ -23,7 +31,10 @@ class WizardViewModel @Inject constructor(
     private val extractor: MultiAiExtractor,
     private val loader: DocumentLoader,
     private val api: ProxyApi,
-    private val prefs: PrefsRepository
+    private val prefs: PrefsRepository,
+    private val locator: SignatureLocator,
+    private val sigProcessor: SignatureProcessor,
+    private val exporter: PdfExporter
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(WizardUiState())
@@ -109,6 +120,83 @@ class WizardViewModel @Inject constructor(
     fun clearField(key: String) {
         _state.value = _state.value.copy(fieldValues = _state.value.fieldValues - key)
     }
+
+    // ---- Paso 5: firma ----
+    /** Firma dibujada en el lienzo: bitmap -> PNG transparente. */
+    fun setDrawnSignature(bmp: Bitmap) {
+        val stroke = sigProcessor.toTransparentStroke(bmp)
+        val data = sigProcessor.toSignatureData(stroke)
+        // Colocación por defecto en la página de firma del distribuidor (pág. 24).
+        _state.value = _state.value.copy(
+            signature = data,
+            stamps = listOf(defaultStamp())
+        )
+    }
+
+    /** Firma extraída de una foto: localiza con IA, recorta y limpia. */
+    fun extractSignatureFromPhoto(bmp: Bitmap) {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(locatingSignature = true, error = null)
+            val b64 = withContext(Dispatchers.IO) {
+                val jpg = ByteArrayOutputStream().also { bmp.compress(Bitmap.CompressFormat.JPEG, 85, it) }.toByteArray()
+                Base64.encodeToString(jpg, Base64.NO_WRAP)
+            }
+            val box = runCatching {
+                locator.locate(b64, _state.value.availableProviders)
+            }.getOrNull()
+            val cropped = if (box != null) sigProcessor.crop(bmp, box) else bmp
+            val stroke = sigProcessor.toTransparentStroke(cropped)
+            val data = sigProcessor.toSignatureData(stroke)
+            _state.value = _state.value.copy(
+                locatingSignature = false,
+                signature = data,
+                stamps = listOf(defaultStamp()),
+                error = if (box == null) "No se localizó la firma automáticamente; usa la imagen completa." else null
+            )
+        }
+    }
+
+    private fun defaultStamp() = SignatureStamp(
+        pageIndex = 23,       // página 24 (bloque EL DISTRIBUIDOR)
+        xRel = 0.30f, yRel = 0.82f, widthRel = 0.28f
+    )
+
+    /** Ajuste manual de la colocación (posición/tamaño relativos). */
+    fun updateStamp(xRel: Float, yRel: Float, widthRel: Float) {
+        _state.value = _state.value.copy(
+            stamps = listOf(SignatureStamp(23, xRel, yRel, widthRel))
+        )
+    }
+
+    fun clearSignature() {
+        _state.value = _state.value.copy(signature = null, stamps = emptyList())
+    }
+
+    /** Genera el PDF final (relleno + firmado) a fichero interno. */
+    fun generatePdf(onReady: (java.io.File) -> Unit = {}) {
+        val s = _state.value
+        viewModelScope.launch {
+            _state.value = s.copy(busy = true, busyMsg = "Generando PDF final…", error = null)
+            val file = runCatching {
+                withContext(Dispatchers.IO) {
+                    exporter.generateToFile(
+                        userContractUri = s.userContractUri,
+                        values = s.fieldValues,
+                        signature = s.signature,
+                        stamps = s.stamps
+                    )
+                }
+            }.getOrElse {
+                _state.value = _state.value.copy(busy = false, error = "No se pudo generar el PDF: ${it.message}")
+                return@launch
+            }
+            _state.value = _state.value.copy(busy = false, outputFile = file, outputReady = true)
+            onReady(file)
+        }
+    }
+
+    fun shareIntentFor(file: java.io.File) = exporter.shareIntent(file)
+    fun uriFor(file: java.io.File) = exporter.uriFor(file)
 
     // ---- Navegación ----
     fun goTo(step: Step) { _state.value = _state.value.copy(step = step) }
