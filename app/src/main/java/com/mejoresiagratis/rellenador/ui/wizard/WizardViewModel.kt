@@ -183,12 +183,12 @@ class WizardViewModel @Inject constructor(
             } ?: return@launch
             // Colocación por defecto en cada página detectada, anclada bajo el rótulo.
             val stamps = det.signPages.map { pageIdx ->
-                val yr = det.signAnchors[pageIdx]?.let { (it + 0.06f).coerceAtMost(0.95f) } ?: 0.82f
+                val yr = det.anchors[pageIdx]?.let { (it + 0.06f).coerceAtMost(0.95f) } ?: 0.82f
                 SignatureStamp(pageIndex = pageIdx, xRel = 0.30f, yRel = yr, widthRel = 0.28f)
             }
             _state.value = _state.value.copy(
                 signPages = det.signPages,
-                signAnchors = det.signAnchors,
+                signAnchors = det.anchors,
                 stamps = if (_state.value.signature != null) stamps else _state.value.stamps
             )
         }
