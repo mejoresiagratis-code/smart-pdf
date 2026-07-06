@@ -50,6 +50,10 @@ data class WizardUiState(
     val signature: SignatureData? = null,
     val stamps: List<SignatureStamp> = emptyList(),
     val locatingSignature: Boolean = false,
+    // Detección de huecos de firma (Tanda B)
+    val signPages: List<Int> = emptyList(),          // índices 0-based detectados/ajustados
+    val signAnchors: Map<Int, Float> = emptyMap(),   // página -> yr del rótulo
+    val totalPages: Int = 0,
 
     // PDF final generado
     val outputFile: File? = null,

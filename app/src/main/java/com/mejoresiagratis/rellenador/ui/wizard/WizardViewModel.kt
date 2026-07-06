@@ -17,6 +17,7 @@ import com.mejoresiagratis.rellenador.data.pdf.PdfExporter
 import com.mejoresiagratis.rellenador.data.pdf.SignatureProcessor
 import com.mejoresiagratis.rellenador.data.pdf.TemplateMapper
 import com.mejoresiagratis.rellenador.data.pdf.AcroFormFiller
+import com.mejoresiagratis.rellenador.data.pdf.SignaturePageDetector
 import com.mejoresiagratis.rellenador.data.remote.SignatureLocator
 import android.util.Base64
 import java.io.ByteArrayOutputStream
@@ -43,7 +44,8 @@ class WizardViewModel @Inject constructor(
     private val sigProcessor: SignatureProcessor,
     private val exporter: PdfExporter,
     private val templateMapper: TemplateMapper,
-    private val filler: AcroFormFiller
+    private val filler: AcroFormFiller,
+    private val pageDetector: SignaturePageDetector
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(WizardUiState())
@@ -68,6 +70,7 @@ class WizardViewModel @Inject constructor(
     // ---- Paso 1: contrato ----
     fun chooseDefaultContract() {
         _state.value = _state.value.copy(contractSource = ContractSource.DEFAULT, userContractUri = null)
+        detectSignaturePages()
     }
     fun chooseUserContract(uri: Uri) {
         _state.value = _state.value.copy(contractSource = ContractSource.USER, userContractUri = uri)
@@ -91,6 +94,7 @@ class WizardViewModel @Inject constructor(
                 fieldMapping = mapping,
                 needsMapping = true
             )
+            detectSignaturePages()
         }
     }
 
@@ -165,16 +169,78 @@ class WizardViewModel @Inject constructor(
         _state.value = _state.value.copy(fieldValues = _state.value.fieldValues + delta)
     }
 
+
+    /** Abre el contrato activo (por defecto o del usuario) para leerlo. */
+    private fun openContract(): java.io.InputStream =
+        _state.value.userContractUri?.let { context.contentResolver.openInputStream(it)!! }
+            ?: context.assets.open("contrato-base.pdf")
+
+    /** Detecta las páginas de firma del contrato activo (Tanda B). */
+    fun detectSignaturePages() {
+        viewModelScope.launch {
+            val det = withContext(Dispatchers.IO) {
+                runCatching { openContract().use { pageDetector.detect(it) } }.getOrNull()
+            } ?: return@launch
+            // Colocación por defecto en cada página detectada, anclada bajo el rótulo.
+            val stamps = det.signPages.map { pageIdx ->
+                val yr = det.signAnchors[pageIdx]?.let { (it + 0.06f).coerceAtMost(0.95f) } ?: 0.82f
+                SignatureStamp(pageIndex = pageIdx, xRel = 0.30f, yRel = yr, widthRel = 0.28f)
+            }
+            _state.value = _state.value.copy(
+                signPages = det.signPages,
+                signAnchors = det.signAnchors,
+                stamps = if (_state.value.signature != null) stamps else _state.value.stamps
+            )
+        }
+    }
+
+    /** Añade una página de firma manualmente (1-based desde la UI). */
+    fun addSignPage(pageOneBased: Int) {
+        val idx = pageOneBased - 1
+        if (idx < 0) return
+        if (idx in _state.value.signPages) return
+        _state.value = _state.value.copy(signPages = (_state.value.signPages + idx).sorted())
+    }
+
+    /** Quita una página de firma. */
+    fun removeSignPage(pageIdx: Int) {
+        _state.value = _state.value.copy(
+            signPages = _state.value.signPages - pageIdx,
+            stamps = _state.value.stamps.filterNot { it.pageIndex == pageIdx }
+        )
+    }
+
+    /** Estampado MASIVO: coloca la firma en TODAS las páginas de firma a la vez,
+     *  anclando bajo el rótulo detectado en cada una (fiel a bulkStamps de la web). */
+    fun stampAllPages() {
+        val sig = _state.value.signature ?: return
+        val stamps = _state.value.signPages.map { pageIdx ->
+            val yr = _state.value.signAnchors[pageIdx]?.let { (it + 0.06f).coerceAtMost(0.95f) } ?: 0.82f
+            SignatureStamp(pageIndex = pageIdx, xRel = 0.30f, yRel = yr, widthRel = 0.28f)
+        }
+        _state.value = _state.value.copy(stamps = stamps)
+    }
+
+    /** Estampado en UNA página concreta (modo una a una). */
+    fun stampOnePage(pageIdx: Int) {
+        val sig = _state.value.signature ?: return
+        val yr = _state.value.signAnchors[pageIdx]?.let { (it + 0.06f).coerceAtMost(0.95f) } ?: 0.82f
+        val others = _state.value.stamps.filterNot { it.pageIndex == pageIdx }
+        _state.value = _state.value.copy(
+            stamps = others + SignatureStamp(pageIdx, 0.30f, yr, 0.28f)
+        )
+    }
+
     // ---- Paso 5: firma ----
     /** Firma dibujada en el lienzo: bitmap -> PNG transparente. */
     fun setDrawnSignature(bmp: Bitmap) {
         val stroke = sigProcessor.toTransparentStroke(bmp)
         val data = sigProcessor.toSignatureData(stroke)
         // Colocación por defecto en la página de firma del distribuidor (pág. 24).
-        _state.value = _state.value.copy(
-            signature = data,
-            stamps = listOf(defaultStamp())
-        )
+        _state.value = _state.value.copy(signature = data)
+        // Colocar en todas las páginas de firma detectadas (o la 24 por defecto).
+        if (_state.value.signPages.isNotEmpty()) stampAllPages()
+        else _state.value = _state.value.copy(stamps = listOf(defaultStamp()))
     }
 
     /** Firma extraída de una foto: localiza con IA, recorta y limpia. */
@@ -192,11 +258,11 @@ class WizardViewModel @Inject constructor(
             val stroke = sigProcessor.toTransparentStroke(cropped)
             val data = sigProcessor.toSignatureData(stroke)
             _state.value = _state.value.copy(
-                locatingSignature = false,
-                signature = data,
-                stamps = listOf(defaultStamp()),
+                locatingSignature = false, signature = data,
                 error = if (box == null) "No se localizó la firma automáticamente; usa la imagen completa." else null
             )
+            if (_state.value.signPages.isNotEmpty()) stampAllPages()
+            else _state.value = _state.value.copy(stamps = listOf(defaultStamp()))
         }
     }
 

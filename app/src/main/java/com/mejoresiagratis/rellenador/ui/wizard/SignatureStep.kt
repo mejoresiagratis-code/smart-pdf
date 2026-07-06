@@ -7,10 +7,14 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -88,6 +92,56 @@ fun SignatureStep(state: WizardUiState, vm: WizardViewModel) {
 
         if (state.signature != null) {
             AssistChip(onClick = {}, label = { Text("Firma preparada ✓") })
+
+            // --- Páginas de firma detectadas (Tanda B) ---
+            HorizontalDivider(Modifier.padding(vertical = 4.dp))
+            Text("Páginas de firma detectadas: ${state.signPages.size}",
+                style = MaterialTheme.typography.labelLarge)
+            if (state.signPages.isEmpty()) {
+                Text("No se detectaron huecos automáticamente. Añade páginas manualmente.",
+                    style = MaterialTheme.typography.bodySmall)
+            }
+            state.signPages.sorted().forEach { idx ->
+                ElevatedCard {
+                    ListItem(
+                        headlineContent = { Text("Página ${idx + 1}") },
+                        supportingContent = {
+                            val anchored = state.signAnchors.containsKey(idx)
+                            Text(if (anchored) "Firma anclada bajo «EL DISTRIBUIDOR»" else "Colocación por defecto")
+                        },
+                        trailingContent = {
+                            Row {
+                                TextButton(onClick = { vm.stampOnePage(idx) }) { Text("Colocar") }
+                                IconButton(onClick = { vm.removeSignPage(idx) }) {
+                                    Icon(Icons.Default.Close, contentDescription = "Quitar")
+                                }
+                            }
+                        }
+                    )
+                }
+            }
+            // Añadir página manual
+            var pageInput by remember { mutableStateOf("") }
+            Row(verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = pageInput,
+                    onValueChange = { pageInput = it.filter { c -> c.isDigit() } },
+                    label = { Text("Nº página") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.weight(1f)
+                )
+                OutlinedButton(onClick = {
+                    pageInput.toIntOrNull()?.let { vm.addSignPage(it) }; pageInput = ""
+                }) { Text("Añadir") }
+            }
+            // Estampado masivo
+            if (state.signPages.size > 1) {
+                Button(onClick = vm::stampAllPages, modifier = Modifier.fillMaxWidth()) {
+                    Text("Firmar todas las páginas (${state.signPages.size})")
+                }
+            }
 
             // Ajuste manual de posición/tamaño en la página 24
             val stamp = state.stamps.firstOrNull()

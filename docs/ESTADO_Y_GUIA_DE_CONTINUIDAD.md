@@ -79,7 +79,23 @@ Componentes:
 - ContractStep — muestra el editor si el usuario aportó su PDF (needsMapping).
 
 ## PARIDAD CON WEB — plan de tandas (OK a todo del usuario)
-Tanda A ✅ · B firma-huecos · C preview · D extracción-fina · E firma-avanzada · F persistencia · G remates
+Tanda A ✅ · B ✅ · C preview · D extracción-fina · E firma-avanzada · F persistencia · G remates
+
+## Tanda B (COMPLETADA) — Detección real de huecos de firma
+VERIFICADO contra el contrato real con pdfplumber/pypdf:
+- Huecos de firma reales = páginas 24, 30, 33, 45, 54 (NO solo la 24 fija).
+- Algoritmo: campos multipágina (Fecha/de/año repetidos en esas páginas, excluyendo
+  portada) CRUZADO con presencia del rótulo "EL DISTRIBUIDOR" (señal fuerte) + su Y.
+- Lección clave: los tokenizadores de texto varían (la pág 24 se detecta distinto según
+  el método), por eso SIEMPRE se permite añadir/quitar páginas manualmente.
+Componentes:
+- data/pdf/SignaturePageDetector.kt — pdfbox: lee widgets multipágina + PDFTextStripper
+  que localiza "DISTRIBUIDOR" y su Y por página. Fallback a todas las multipágina.
+- WizardViewModel — detectSignaturePages() (auto al elegir contrato), addSignPage/
+  removeSignPage, stampAllPages (masivo), stampOnePage (una a una), ancla bajo rótulo.
+- SignatureStep — lista de páginas detectadas con quitar/colocar, añadir página manual,
+  botón "Firmar todas las páginas (N)".
+- generatePdf ya estampa en TODAS las páginas de state.stamps (multipágina).
 
 ## Tanda A (COMPLETADA) — Validación + normalización
 - data/validation/SpanishValidators.kt — DNI/NIE/CIF (control), IBAN (mod-97), teléfono,
