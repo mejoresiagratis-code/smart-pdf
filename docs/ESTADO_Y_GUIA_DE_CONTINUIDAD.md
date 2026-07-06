@@ -78,6 +78,20 @@ Componentes:
 - ui/wizard/MappingEditor.kt — editor de mapeo (dropdown por campo canónico).
 - ContractStep — muestra el editor si el usuario aportó su PDF (needsMapping).
 
+## PARIDAD CON WEB — plan de tandas (OK a todo del usuario)
+Tanda A ✅ · B firma-huecos · C preview · D extracción-fina · E firma-avanzada · F persistencia · G remates
+
+## Tanda A (COMPLETADA) — Validación + normalización
+- data/validation/SpanishValidators.kt — DNI/NIE/CIF (control), IBAN (mod-97), teléfono,
+  email, día. Algoritmos VERBATIM de la web, VERIFICADOS con valores reales
+  (DNI 12345678Z ✓, CIF A82528548=Xfera ✓, IBAN ES91... ✓).
+- data/validation/FieldNormalizer.kt — normVal (IBAN/CP/NIF/nombre "Apellidos, Nombre"->"Nombre Apellidos")
+  + tabla PROV (52 provincias) + cpProvinciaMsg.
+- data/validation/FieldValidator.kt — valida por campo canónico (fiel a validateField).
+- MultiAiExtractor — normaliza cada valor con normVal antes de agregar.
+- FillStep — validación en vivo bajo cada campo + teclado adecuado por tipo.
+- 10 tests unitarios con casos reales (ValidatorsTest.kt).
+
 ## Pendiente (siguiente tanda)
 - **Firma**: captura manuscrita en Canvas + task "locate_signature" (ya soportada por
   el proxy) para ubicar el hueco + inserción en página 24 + generar PDF final con

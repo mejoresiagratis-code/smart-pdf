@@ -4,23 +4,26 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import com.mejoresiagratis.rellenador.data.model.ContractFields
+import com.mejoresiagratis.rellenador.data.validation.FieldNormalizer
+import com.mejoresiagratis.rellenador.data.validation.FieldValidator
 
 /**
- * Paso 4 — Relleno editable. Todos los campos canónicos del contrato, prerrellenados
- * con lo confirmado en Revisión, editables antes de generar el PDF.
+ * Paso 4 — Relleno editable con validación en vivo (dígitos de control).
+ * Cada campo muestra su error concreto si el valor no es válido.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FillStep(state: WizardUiState, vm: WizardViewModel) {
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.padding(16.dp)) {
             Text("Paso 4 · Rellena o corrige los campos", style = MaterialTheme.typography.titleMedium)
-            Text("Revisa cada dato antes de firmar. El responsable comercial se rellena automáticamente.",
+            Text("Se valida NIF/CIF/IBAN/CP en vivo. El responsable comercial es automático.",
                 style = MaterialTheme.typography.bodySmall)
         }
         HorizontalDivider()
@@ -29,13 +32,34 @@ fun FillStep(state: WizardUiState, vm: WizardViewModel) {
             verticalArrangement = Arrangement.spacedBy(10.dp),
             contentPadding = PaddingValues(vertical = 10.dp)) {
             items(ContractFields.CANON, key = { it.key }) { field ->
-                OutlinedTextField(
-                    value = state.fieldValues[field.key] ?: "",
-                    onValueChange = { vm.setFieldValue(field.key, it) },
-                    label = { Text(field.label) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                val value = state.fieldValues[field.key] ?: ""
+                // Provincia hermana para validar el CP del mismo bloque (_2 o fiscal).
+                val provKey = if (field.key.endsWith("_2")) "Provincia_2" else "Provincia"
+                val result = FieldValidator.validate(
+                    fieldName = field.key,
+                    value = value,
+                    tipoId = state.tipoIdentificacion,
+                    provinciaSibling = state.fieldValues[provKey]
                 )
+                val isError = result?.ok == false
+
+                Column {
+                    OutlinedTextField(
+                        value = value,
+                        onValueChange = { vm.setFieldValue(field.key, it) },
+                        label = { Text(field.label) },
+                        singleLine = true,
+                        isError = isError,
+                        keyboardOptions = keyboardFor(field.key),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    if (isError) {
+                        Text(result?.message ?: "",
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.padding(start = 12.dp, top = 2.dp))
+                    }
+                }
             }
             item {
                 AssistChip(
@@ -52,4 +76,16 @@ fun FillStep(state: WizardUiState, vm: WizardViewModel) {
             Button(onClick = vm::next, modifier = Modifier.weight(1f)) { Text("Ir a la firma") }
         }
     }
+}
+
+/** Teclado adecuado por tipo de campo. */
+private fun keyboardFor(key: String): KeyboardOptions {
+    val b = FieldNormalizer.norm(key.substringBefore("_"))
+    val type = when {
+        b == "telefono" -> KeyboardType.Phone
+        b.startsWith("email") -> KeyboardType.Email
+        b == "cp" || b == "fecha" -> KeyboardType.Number
+        else -> KeyboardType.Text
+    }
+    return KeyboardOptions(keyboardType = type, imeAction = ImeAction.Next)
 }

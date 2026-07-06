@@ -1,6 +1,7 @@
 package com.mejoresiagratis.rellenador.data.remote
 
 import com.mejoresiagratis.rellenador.data.model.*
+import com.mejoresiagratis.rellenador.data.validation.FieldNormalizer
 import javax.inject.Inject
 
 /**
@@ -34,7 +35,7 @@ class MultiAiExtractor @Inject constructor(
         var tipoId: String? = null
 
         fun track(key: String, value: String?, engine: String) {
-            val v = value?.trim().orEmpty()
+            val v = FieldNormalizer.normVal(key, value)
             if (v.isEmpty()) return
             agg.getOrPut(key) { LinkedHashMap() }.getOrPut(v) { mutableSetOf() }.add(engine)
         }
