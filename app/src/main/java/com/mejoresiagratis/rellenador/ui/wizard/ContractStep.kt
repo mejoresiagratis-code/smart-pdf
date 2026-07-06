@@ -12,6 +12,14 @@ import androidx.compose.ui.unit.dp
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ContractStep(state: WizardUiState, vm: WizardViewModel) {
+    var showMapping by remember { mutableStateOf(false) }
+
+    // Si el usuario aportó su PDF y hay que mapear, mostrar el editor.
+    if (showMapping && state.needsMapping && state.userFieldNames.isNotEmpty()) {
+        MappingEditor(state, vm, onDone = { showMapping = false; vm.next() })
+        return
+    }
+
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri -> uri?.let(vm::chooseUserContract) }
@@ -41,9 +49,12 @@ fun ContractStep(state: WizardUiState, vm: WizardViewModel) {
 
         Spacer(Modifier.weight(1f))
         Button(
-            onClick = vm::next,
+            onClick = {
+                if (state.contractSource == ContractSource.USER && state.needsMapping) showMapping = true
+                else vm.next()
+            },
             enabled = state.canAdvanceFromContrato,
             modifier = Modifier.fillMaxWidth()
-        ) { Text("Continuar") }
+        ) { Text(if (state.contractSource == ContractSource.USER && state.needsMapping) "Revisar mapeo" else "Continuar") }
     }
 }

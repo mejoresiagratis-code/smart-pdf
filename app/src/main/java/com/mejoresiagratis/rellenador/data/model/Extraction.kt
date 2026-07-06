@@ -61,7 +61,8 @@ object ContractFields {
         CanonField("Población_2", "Población comercio"),
         CanonField("Provincia_2", "Provincia comercio"),
         CanonField("Teléfono", "Teléfono"),
-        CanonField("Email", "Email"),
+        CanonField("Email Comercial", "Email comercial"),
+        CanonField("Email  Facturación", "Email facturación"),
         CanonField("Datos bancarios del DISTRIBUIDOR", "IBAN"),
         CanonField("Fecha", "Fecha · día"),
         CanonField("de", "Fecha · mes"),
@@ -71,6 +72,23 @@ object ContractFields {
     /** Valor fijo autorrellenado (regla de la app web). */
     const val RESPONSABLE_KEY = "Responsable Comercial MASORANGE"
     const val RESPONSABLE_VALUE = "PABLO SALVADOR POVEDA"
+
+    // Checkboxes del tipo de identificación (valores reales del AcroForm).
+    const val CHECKBOX_NIF = "NIF"
+    const val CHECKBOX_CIF = "CIF"
+    const val CHECKBOX_ON = "/On"
+    const val CHECKBOX_OFF = "/Off"
+
+    /**
+     * Devuelve el estado de los checkboxes NIF/CIF según el tipo detectado por la IA.
+     * Solo marca si el tipo es concluyente (CIF o NIF). NIE no marca ninguno
+     * (el contrato solo tiene casillas NIF y CIF).
+     */
+    fun checkboxStateFor(tipoIdentificacion: String?): Map<String, String> = when (tipoIdentificacion?.uppercase()) {
+        "CIF" -> mapOf(CHECKBOX_CIF to CHECKBOX_ON, CHECKBOX_NIF to CHECKBOX_OFF)
+        "NIF" -> mapOf(CHECKBOX_NIF to CHECKBOX_ON, CHECKBOX_CIF to CHECKBOX_OFF)
+        else -> emptyMap()   // NIE o desconocido: no marcar (dejar manual)
+    }
 
     fun labelFor(key: String): String =
         CANON.firstOrNull { it.key == key }?.label ?: key

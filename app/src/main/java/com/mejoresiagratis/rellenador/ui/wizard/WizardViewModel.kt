@@ -1,6 +1,8 @@
 package com.mejoresiagratis.rellenador.ui.wizard
 
+import android.content.Context
 import android.net.Uri
+import dagger.hilt.android.qualifiers.ApplicationContext
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mejoresiagratis.rellenador.data.model.AiProvider
@@ -13,6 +15,8 @@ import com.mejoresiagratis.rellenador.data.model.SignatureStamp
 import com.mejoresiagratis.rellenador.data.pdf.DocumentLoader
 import com.mejoresiagratis.rellenador.data.pdf.PdfExporter
 import com.mejoresiagratis.rellenador.data.pdf.SignatureProcessor
+import com.mejoresiagratis.rellenador.data.pdf.TemplateMapper
+import com.mejoresiagratis.rellenador.data.pdf.AcroFormFiller
 import com.mejoresiagratis.rellenador.data.remote.SignatureLocator
 import android.util.Base64
 import java.io.ByteArrayOutputStream
@@ -30,13 +34,16 @@ import javax.inject.Inject
 
 @HiltViewModel
 class WizardViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val extractor: MultiAiExtractor,
     private val loader: DocumentLoader,
     private val api: ProxyApi,
     private val prefs: PrefsRepository,
     private val locator: SignatureLocator,
     private val sigProcessor: SignatureProcessor,
-    private val exporter: PdfExporter
+    private val exporter: PdfExporter,
+    private val templateMapper: TemplateMapper,
+    private val filler: AcroFormFiller
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(WizardUiState())
@@ -64,6 +71,34 @@ class WizardViewModel @Inject constructor(
     }
     fun chooseUserContract(uri: Uri) {
         _state.value = _state.value.copy(contractSource = ContractSource.USER, userContractUri = uri)
+        // Leer los nombres reales de campo del PDF del usuario y auto-mapear.
+        viewModelScope.launch {
+            val fields = withContext(Dispatchers.IO) {
+                runCatching {
+                    context.contentResolver.openInputStream(uri)!!.use { filler.listFields(it) }
+                }.getOrElse { emptyList() }
+            }
+            if (fields.isEmpty()) {
+                _state.value = _state.value.copy(userFieldNames = emptyList(), needsMapping = false)
+                return@launch
+            }
+            val suggestions = templateMapper.suggest(fields)
+            val mapping = suggestions.mapNotNull { sug ->
+                sug.canonicalKey?.let { it to sug.realField }
+            }.toMap()
+            _state.value = _state.value.copy(
+                userFieldNames = fields,
+                fieldMapping = mapping,
+                needsMapping = true
+            )
+        }
+    }
+
+    /** Ajuste manual de una asignación canónica -> real en el editor de mapeo. */
+    fun setMapping(canonicalKey: String, realField: String?) {
+        val m = _state.value.fieldMapping.toMutableMap()
+        if (realField == null) m.remove(canonicalKey) else m[canonicalKey] = realField
+        _state.value = _state.value.copy(fieldMapping = m)
     }
 
     // ---- Paso 2: documentación ----
@@ -192,7 +227,10 @@ class WizardViewModel @Inject constructor(
                         userContractUri = s.userContractUri,
                         values = s.fieldValues,
                         signature = s.signature,
-                        stamps = s.stamps
+                        stamps = s.stamps,
+                        checkboxes = com.mejoresiagratis.rellenador.data.model.ContractFields
+                            .checkboxStateFor(s.tipoIdentificacion),
+                        fieldMapping = if (s.contractSource == ContractSource.USER) s.fieldMapping else emptyMap()
                     )
                 }
             }.getOrElse {

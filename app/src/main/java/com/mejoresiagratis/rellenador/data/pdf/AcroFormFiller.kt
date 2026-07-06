@@ -48,7 +48,11 @@ class AcroFormFiller @Inject constructor() {
         signature: SignatureData? = null,
         stamps: List<SignatureStamp> = emptyList(),
         output: OutputStream,
-        flatten: Boolean = false
+        flatten: Boolean = false,
+        checkboxes: Map<String, String> = emptyMap(),
+        /** Traducción clave canónica -> nombre real del campo (para PDF del usuario).
+         *  Si está vacío, se usan las claves tal cual (contrato por defecto). */
+        fieldMapping: Map<String, String> = emptyMap()
     ): FillResult {
         PDDocument.load(template).use { doc ->
             val form = doc.documentCatalog.acroForm
@@ -61,10 +65,16 @@ class AcroFormFiller @Inject constructor() {
                 val effective = values.toMutableMap()
                 effective.putIfAbsent(ContractFields.RESPONSABLE_KEY, ContractFields.RESPONSABLE_VALUE)
 
+                fun realName(canonical: String) = fieldMapping[canonical] ?: canonical
+
                 for ((name, value) in effective) {
-                    val field = form.getField(name)
+                    val field = form.getField(realName(name))
                     if (field == null) { missing.add(name); continue }
                     runCatching { field.setValue(value); filled++ }.onFailure { missing.add(name) }
+                }
+                for ((name, value) in checkboxes) {
+                    val field = form.getField(realName(name)) ?: continue
+                    runCatching { field.setValue(value); filled++ }
                 }
                 if (form.getField(ContractFields.RESPONSABLE_KEY) != null &&
                     distributorSignaturePageIndex < doc.numberOfPages) {

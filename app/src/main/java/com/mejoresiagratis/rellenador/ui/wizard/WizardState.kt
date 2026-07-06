@@ -24,6 +24,10 @@ data class WizardUiState(
     val step: Step = Step.CONTRATO,
     val contractSource: ContractSource? = null,
     val userContractUri: Uri? = null,
+    // Mapeo de plantilla (cuando el PDF es del usuario)
+    val userFieldNames: List<String> = emptyList(),      // nombres reales del PDF del usuario
+    val fieldMapping: Map<String, String> = emptyMap(),  // canónica -> real
+    val needsMapping: Boolean = false,
 
     val docUris: List<Uri> = emptyList(),
     val availableProviders: List<AiProvider> = emptyList(),   // los que tienen clave en servidor (GET)

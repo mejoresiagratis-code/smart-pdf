@@ -60,6 +60,24 @@ de navegación de los 5 pasos ya cableado.
 - FillStep muestra automáticamente los 20 campos (incluye _2); AcroFormFiller los escribe
   por nombre exacto sin cambios.
 
+## Fase 4 (COMPLETADA) — Mapeo de PDF propio + campos reales verificados
+VERIFICADO con la skill pdf sobre el contrato real: 23 campos (20 texto + 3 checkbox).
+Correcciones aplicadas a CANON (antes asumidos):
+- DOS emails separados: "Email Comercial" (1 espacio) y "Email  Facturación" (2 espacios).
+- Checkboxes NIF/CIF (valores /On /Off): se marcan solo si tipo_identificacion es CIF o NIF
+  (NIE no marca). ContractFields.checkboxStateFor().
+- Confirmados Dirección_2/CP_2/Población_2/Provincia_2 (bloque comercio).
+- Campo residual en pág. 46 (nombre larguísimo) se ignora.
+Componentes:
+- data/pdf/TemplateMapper.kt — auto-mapea nombres reales del PDF del usuario a claves
+  canónicas por similitud normalizada (norm() = sin acentos/minúsculas/espacios colapsados).
+- AcroFormFiller.generate() — nuevos params: checkboxes (/On /Off) y fieldMapping
+  (canónica->real). Verificado rellenando el contrato real con la skill.
+- WizardViewModel — chooseUserContract() lee campos reales (listFields) y auto-mapea;
+  setMapping() para ajuste manual; generatePdf() pasa checkboxes+fieldMapping.
+- ui/wizard/MappingEditor.kt — editor de mapeo (dropdown por campo canónico).
+- ContractStep — muestra el editor si el usuario aportó su PDF (needsMapping).
+
 ## Pendiente (siguiente tanda)
 - **Firma**: captura manuscrita en Canvas + task "locate_signature" (ya soportada por
   el proxy) para ubicar el hueco + inserción en página 24 + generar PDF final con
@@ -68,9 +86,7 @@ de navegación de los 5 pasos ya cableado.
   con un solo toque en Revisión, incluyendo el mapeo a bloques _2. El modelo ya los
   captura (state.packages); falta la UI de aplicación en bloque.
 - **Ajustes**: pantalla para editar perfil comercial y URL del proxy; persistir motores
-  elegidos en PrefsRepository.
-- **Plantillas / detección de PDF**: mapear nombres reales del AcroForm a claves canónicas
-  cuando el usuario aporta su propio PDF (detectTemplate de la web).
+  elegidos y plantillas mapeadas en PrefsRepository.
 - **Release firmado**: signingConfig + keystore + APK release en el workflow.
 
 ## Notas técnicas heredadas

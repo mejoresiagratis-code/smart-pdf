@@ -29,6 +29,8 @@ class PdfExporter @Inject constructor(
         values: Map<String, String>,
         signature: SignatureData?,
         stamps: List<SignatureStamp>,
+        checkboxes: Map<String, String> = emptyMap(),
+        fieldMapping: Map<String, String> = emptyMap(),
         fileName: String = "contrato-relleno.pdf"
     ): File {
         val outDir = File(context.filesDir, "output").apply { mkdirs() }
@@ -37,7 +39,8 @@ class PdfExporter @Inject constructor(
             outFile.outputStream().use { os ->
                 filler.generate(
                     template = tpl, values = values,
-                    signature = signature, stamps = stamps, output = os
+                    signature = signature, stamps = stamps, output = os,
+                    checkboxes = checkboxes, fieldMapping = fieldMapping
                 )
             }
         }
