@@ -5,6 +5,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mejoresiagratis.rellenador.data.model.AiProvider
 import com.mejoresiagratis.rellenador.data.model.ContractFields
+import com.mejoresiagratis.rellenador.data.model.PackageApplier
+import com.mejoresiagratis.rellenador.data.model.Paquete
 import android.graphics.Bitmap
 import com.mejoresiagratis.rellenador.data.model.SignatureData
 import com.mejoresiagratis.rellenador.data.model.SignatureStamp
@@ -119,6 +121,13 @@ class WizardViewModel @Inject constructor(
     }
     fun clearField(key: String) {
         _state.value = _state.value.copy(fieldValues = _state.value.fieldValues - key)
+    }
+
+    /** Aplica un paquete en bloque (dirección/empresa/persona/banco).
+     *  Para direcciones, targetBlock2=true lo manda al bloque de comercio (_2). */
+    fun applyPackage(paquete: Paquete, targetBlock2: Boolean = false) {
+        val delta = PackageApplier.apply(paquete, targetBlock2)
+        _state.value = _state.value.copy(fieldValues = _state.value.fieldValues + delta)
     }
 
     // ---- Paso 5: firma ----

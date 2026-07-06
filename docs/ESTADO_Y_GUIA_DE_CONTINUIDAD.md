@@ -50,6 +50,16 @@ de navegación de los 5 pasos ya cableado.
 - ui/wizard/SignatureStep.kt — tabs Dibujar/Extraer, ajuste con sliders, generar/compartir/guardar.
 - FileProvider en manifest + res/xml/file_paths.xml.
 
+## Fase 3 (COMPLETADA) — Paquetes en bloque
+- CANON ampliado con bloque _2 (Dirección_2/CP_2/Población_2/Provincia_2 = comercio/PdV).
+- data/model/Extraction.kt::PackageApplier — aplica un paquete de golpe; direcciones
+  pueden ir al bloque fiscal o comercio (_2) según elija el usuario (fiel a applyPaquete web).
+- WizardViewModel::applyPackage(paquete, targetBlock2).
+- ui/wizard/ReviewStep.kt — sección "Bloques detectados" arriba: cada paquete se aplica
+  de un toque; direcciones ofrecen "A dirección fiscal" / "A comercio (_2)".
+- FillStep muestra automáticamente los 20 campos (incluye _2); AcroFormFiller los escribe
+  por nombre exacto sin cambios.
+
 ## Pendiente (siguiente tanda)
 - **Firma**: captura manuscrita en Canvas + task "locate_signature" (ya soportada por
   el proxy) para ubicar el hueco + inserción en página 24 + generar PDF final con

@@ -56,6 +56,10 @@ object ContractFields {
         CanonField("CP", "Código postal"),
         CanonField("Población", "Población"),
         CanonField("Provincia", "Provincia"),
+        CanonField("Dirección_2", "Dirección comercio/PdV"),
+        CanonField("CP_2", "CP comercio"),
+        CanonField("Población_2", "Población comercio"),
+        CanonField("Provincia_2", "Provincia comercio"),
         CanonField("Teléfono", "Teléfono"),
         CanonField("Email", "Email"),
         CanonField("Datos bancarios del DISTRIBUIDOR", "IBAN"),
@@ -70,4 +74,29 @@ object ContractFields {
 
     fun labelFor(key: String): String =
         CANON.firstOrNull { it.key == key }?.label ?: key
+}
+
+/**
+ * Aplica un paquete a los campos, replicando applyPaquete() de la web.
+ * Las claves del paquete vienen SIN sufijo (Dirección/CP/Población/Provincia).
+ * `targetBlock2 = true` las envía al bloque de comercio (_2); false al fiscal.
+ * Devuelve el mapa de (claveCanónica -> valor) a fusionar en fieldValues.
+ */
+object PackageApplier {
+    /** Claves de dirección que admiten el sufijo _2. */
+    private val ADDRESS_KEYS = setOf("Dirección", "CP", "Población", "Provincia")
+
+    fun apply(paquete: Paquete, targetBlock2: Boolean): Map<String, String> {
+        val out = LinkedHashMap<String, String>()
+        for ((key, value) in paquete.datos) {
+            if (value.isBlank()) continue
+            val targetKey = if (targetBlock2 && key in ADDRESS_KEYS) "${key}_2" else key
+            out[targetKey] = value
+        }
+        return out
+    }
+
+    /** ¿Este paquete puede ir al bloque _2? (solo direcciones). */
+    fun canTargetBlock2(paquete: Paquete): Boolean =
+        paquete.tipo == "direccion" || paquete.tipo == "direccion_comercio"
 }
