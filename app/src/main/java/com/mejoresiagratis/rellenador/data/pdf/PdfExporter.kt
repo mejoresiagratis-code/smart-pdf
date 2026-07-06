@@ -47,6 +47,19 @@ class PdfExporter @Inject constructor(
         return outFile
     }
 
+    /** Genera un PDF temporal para previsualizar (mismo contenido que el final). */
+    fun generatePreview(
+        userContractUri: Uri?,
+        values: Map<String, String>,
+        signature: com.mejoresiagratis.rellenador.data.model.SignatureData?,
+        stamps: List<SignatureStamp>,
+        checkboxes: Map<String, String> = emptyMap(),
+        fieldMapping: Map<String, String> = emptyMap()
+    ): File = generateToFile(
+        userContractUri, values, signature, stamps, checkboxes, fieldMapping,
+        fileName = "preview.pdf"
+    )
+
     fun uriFor(file: File): Uri =
         FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
 

@@ -79,7 +79,21 @@ Componentes:
 - ContractStep — muestra el editor si el usuario aportó su PDF (needsMapping).
 
 ## PARIDAD CON WEB — plan de tandas (OK a todo del usuario)
-Tanda A ✅ · B ✅ · C preview · D extracción-fina · E firma-avanzada · F persistencia · G remates
+Tanda A ✅ · B ✅ · C ✅ · D extracción-fina · E firma-avanzada · F persistencia · G remates
+
+## Tanda C (COMPLETADA) — Previsualización del PDF
+- data/pdf/PdfPageRenderer.kt — render bajo demanda (PdfRenderer) con caché LRU (4 págs),
+  para las 54 páginas sin agotar memoria.
+- PdfExporter.generatePreview() — genera PDF temporal (preview.pdf) con mismo contenido
+  que el final (campos + firmas estampadas).
+- WizardViewModel — buildPreview() (genera + abre renderer), renderer(), moveStamp()
+  (recolocar firma por toque), onCleared() libera el renderer.
+- ui/wizard/PdfPreview.kt — LazyColumn de 54 páginas navegables, badge "✍ firma" en
+  páginas detectadas, TOQUE en página de firma para recolocar la firma ahí.
+- SignatureStep — buildPreview() al entrar (LaunchedEffect), sección de preview con
+  altura FIJA 560.dp (evita crash de LazyColumn en scroll anidado), botón actualizar.
+NOTA: la preview refleja el estado actual; tras cambiar firma/campos, "Actualizar
+previsualización" regenera. Las fechas de pág.1 siguen vacías hasta Tanda D (autofill).
 
 ## Tanda B (COMPLETADA) — Detección real de huecos de firma
 VERIFICADO contra el contrato real con pdfplumber/pypdf:

@@ -55,6 +55,9 @@ data class WizardUiState(
     val signAnchors: Map<Int, Float> = emptyMap(),   // página -> yr del rótulo
     val totalPages: Int = 0,
 
+    // Previsualización (Tanda C)
+    val previewReady: Boolean = false,
+
     // PDF final generado
     val outputFile: File? = null,
     val outputReady: Boolean = false

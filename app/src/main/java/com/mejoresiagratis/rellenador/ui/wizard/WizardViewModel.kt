@@ -18,6 +18,7 @@ import com.mejoresiagratis.rellenador.data.pdf.SignatureProcessor
 import com.mejoresiagratis.rellenador.data.pdf.TemplateMapper
 import com.mejoresiagratis.rellenador.data.pdf.AcroFormFiller
 import com.mejoresiagratis.rellenador.data.pdf.SignaturePageDetector
+import com.mejoresiagratis.rellenador.data.pdf.PdfPageRenderer
 import com.mejoresiagratis.rellenador.data.remote.SignatureLocator
 import android.util.Base64
 import java.io.ByteArrayOutputStream
@@ -48,6 +49,7 @@ class WizardViewModel @Inject constructor(
     private val pageDetector: SignaturePageDetector
 ) : ViewModel() {
 
+    private var previewRenderer: PdfPageRenderer? = null
     private val _state = MutableStateFlow(WizardUiState())
     val state: StateFlow<WizardUiState> = _state.asStateFlow()
 
@@ -311,6 +313,48 @@ class WizardViewModel @Inject constructor(
     fun shareIntentFor(file: java.io.File) = exporter.shareIntent(file)
     fun uriFor(file: java.io.File) = exporter.uriFor(file)
 
+    /** Genera el PDF de preview y abre el renderer bajo demanda. */
+    fun buildPreview() {
+        val s = _state.value
+        viewModelScope.launch {
+            _state.value = s.copy(busy = true, busyMsg = "Preparando previsualización…", error = null)
+            val result = runCatching {
+                withContext(Dispatchers.IO) {
+                    val file = exporter.generatePreview(
+                        userContractUri = s.userContractUri,
+                        values = s.fieldValues,
+                        signature = s.signature,
+                        stamps = s.stamps,
+                        checkboxes = com.mejoresiagratis.rellenador.data.model.ContractFields
+                            .checkboxStateFor(s.tipoIdentificacion),
+                        fieldMapping = if (s.contractSource == ContractSource.USER) s.fieldMapping else emptyMap()
+                    )
+                    previewRenderer?.close()
+                    PdfPageRenderer(file)
+                }
+            }.getOrElse {
+                _state.value = _state.value.copy(busy = false, error = "No se pudo previsualizar: ${it.message}")
+                return@launch
+            }
+            previewRenderer = result
+            _state.value = _state.value.copy(busy = false, totalPages = result.pageCount, previewReady = true)
+        }
+    }
+
+    fun renderer(): PdfPageRenderer? = previewRenderer
+
+    /** Mueve la firma de una página a una posición relativa (por arrastre/toque). */
+    fun moveStamp(pageIdx: Int, xRel: Float, yRel: Float) {
+        val cur = _state.value.stamps.firstOrNull { it.pageIndex == pageIdx }
+        val width = cur?.widthRel ?: 0.28f
+        val others = _state.value.stamps.filterNot { it.pageIndex == pageIdx }
+        _state.value = _state.value.copy(
+            stamps = others + com.mejoresiagratis.rellenador.data.model.SignatureStamp(
+                pageIdx, xRel.coerceIn(0f, 1f), yRel.coerceIn(0f, 1f), width
+            )
+        )
+    }
+
     // ---- Navegación ----
     fun goTo(step: Step) { _state.value = _state.value.copy(step = step) }
     fun next() {
@@ -324,4 +368,9 @@ class WizardViewModel @Inject constructor(
         _state.value = _state.value.copy(step = Step.entries[prevIdx])
     }
     fun dismissError() { _state.value = _state.value.copy(error = null) }
+
+    override fun onCleared() {
+        previewRenderer?.close(); previewRenderer = null
+        super.onCleared()
+    }
 }

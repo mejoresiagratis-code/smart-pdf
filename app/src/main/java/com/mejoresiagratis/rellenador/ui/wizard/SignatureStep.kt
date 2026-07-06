@@ -23,6 +23,9 @@ fun SignatureStep(state: WizardUiState, vm: WizardViewModel) {
     val context = LocalContext.current
     var mode by remember { mutableIntStateOf(0) }  // 0 = dibujar, 1 = extraer de foto
 
+    // Generar la previsualización al entrar al paso de firma.
+    LaunchedEffect(Unit) { vm.buildPreview() }
+
     val photoPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
@@ -153,6 +156,19 @@ fun SignatureStep(state: WizardUiState, vm: WizardViewModel) {
                 LabeledSlider("Tamaño", stamp.widthRel, 0.1f, 0.6f) { vm.updateStamp(stamp.xRel, stamp.yRel, it) }
             }
             OutlinedButton(onClick = vm::clearSignature) { Text("Quitar firma") }
+        }
+
+        HorizontalDivider()
+
+        // --- Previsualización del PDF (Tanda C) ---
+        Text("Previsualización", style = MaterialTheme.typography.titleSmall)
+        Text("54 páginas. Toca una página de firma para recolocar la firma ahí.",
+            style = MaterialTheme.typography.bodySmall)
+        OutlinedButton(onClick = vm::buildPreview, modifier = Modifier.fillMaxWidth()) {
+            Text("Actualizar previsualización")
+        }
+        if (state.previewReady) {
+            PdfPreview(state, vm, modifier = Modifier.fillMaxWidth().height(560.dp))
         }
 
         HorizontalDivider()
