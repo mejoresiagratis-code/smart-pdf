@@ -79,7 +79,18 @@ Componentes:
 - ContractStep — muestra el editor si el usuario aportó su PDF (needsMapping).
 
 ## PARIDAD CON WEB — plan de tandas (OK a todo del usuario)
-Tanda A ✅ · B ✅ · C ✅ · D extracción-fina · E firma-avanzada · F persistencia · G remates
+Tanda A ✅ · B ✅ · C ✅ · D ✅ · E firma-avanzada · F persistencia · G remates
+
+## Tanda D (COMPLETADA) — Extracción fina
+- data/model/DateAutofill.kt — autofill fecha actual (día/mes-letras-ES/año-último-dígito),
+  solo campos de fecha vacíos. Fiel a autoFillDates(). YA rellena las fechas de pág.1.
+- MultiAiExtractor — votación de tipo de identificación por MAYORÍA (tipoVotes, antes
+  cogía el primero); corte inteligente earlyStop (allCovered() sobre campos canónicos
+  sin fechas) fiel a allFieldsCovered() — deja de llamar motores si ya está todo cubierto.
+- WizardViewModel.runExtraction — aplica DateAutofill.values() tras el prefill.
+- ReviewStep — tap-again-to-deselect: tocar el candidato ya elegido lo desmarca (fiel web).
+- 4 tests DateAutofillTest (año=1 dígito, mes español, no sobrescribe).
+NOTA: las fechas de pág.1 YA se rellenan automáticamente al extraer.
 
 ## Tanda C (COMPLETADA) — Previsualización del PDF
 - data/pdf/PdfPageRenderer.kt — render bajo demanda (PdfRenderer) con caché LRU (4 págs),

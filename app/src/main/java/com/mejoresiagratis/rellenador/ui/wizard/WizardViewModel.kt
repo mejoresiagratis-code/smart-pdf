@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mejoresiagratis.rellenador.data.model.AiProvider
 import com.mejoresiagratis.rellenador.data.model.ContractFields
+import com.mejoresiagratis.rellenador.data.model.DateAutofill
 import com.mejoresiagratis.rellenador.data.model.PackageApplier
 import com.mejoresiagratis.rellenador.data.model.Paquete
 import android.graphics.Bitmap
@@ -145,6 +146,8 @@ class WizardViewModel @Inject constructor(
             }.toMutableMap()
             // Regla fija de la web.
             prefill[ContractFields.RESPONSABLE_KEY] = ContractFields.RESPONSABLE_VALUE
+            // Autofill de fechas (Tanda D): rellena Fecha/de/año actuales si están vacías.
+            prefill.putAll(DateAutofill.values(prefill))
 
             _state.value = _state.value.copy(
                 busy = false, step = Step.REVISION,

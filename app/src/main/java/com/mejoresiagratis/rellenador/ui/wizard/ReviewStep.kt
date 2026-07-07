@@ -136,13 +136,17 @@ private fun ProposalCard(
                 fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
 
             proposal.candidates.forEach { c ->
+                val chosen = selected == c.value
                 Row(
                     Modifier.fillMaxWidth().selectable(
-                        selected = selected == c.value, onClick = { onSelect(c.value) }
+                        selected = chosen,
+                        // Fiel a la web: tocar el ya elegido lo desmarca (vuelve a sin elegir).
+                        onClick = { onSelect(if (chosen) null else c.value) }
                     ),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    RadioButton(selected = selected == c.value, onClick = { onSelect(c.value) })
+                    RadioButton(selected = chosen,
+                        onClick = { onSelect(if (chosen) null else c.value) })
                     Column(Modifier.weight(1f)) {
                         Text(c.value, style = MaterialTheme.typography.bodyMedium)
                         if (c.sources.isNotEmpty()) {

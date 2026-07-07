@@ -24,7 +24,8 @@ class MultiAiExtractor @Inject constructor(
     suspend fun extract(
         docs: List<DocPayload>,
         enabled: List<AiProvider>,
-        geminiMode: String = "g35"
+        geminiMode: String = "g35",
+        earlyStop: Boolean = true
     ): Result {
         val prompt = ExtractionPrompt.build()
         // acumulador: campo -> (valor -> fuentes)
@@ -32,7 +33,7 @@ class MultiAiExtractor @Inject constructor(
         val errors = mutableListOf<String>()
         val enginesOk = linkedSetOf<String>()
         val allPackages = mutableListOf<Paquete>()
-        var tipoId: String? = null
+        val tipoVotes = LinkedHashMap<String, Int>()   // votación de tipo (fiel a la web)
 
         fun track(key: String, value: String?, engine: String) {
             val v = FieldNormalizer.normVal(key, value)
@@ -40,30 +41,48 @@ class MultiAiExtractor @Inject constructor(
             agg.getOrPut(key) { LinkedHashMap() }.getOrPut(v) { mutableSetOf() }.add(engine)
         }
 
-        docs.forEachIndexed { i, doc ->
-            enabled.forEach { provider ->
-                val req = ProxyRequest(
-                    provider = provider.id, prompt = prompt, task = "extract",
-                    maxTokens = 2048, seq = i, geminiMode = geminiMode, docs = listOf(doc)
-                )
-                val resp = runCatching { api.call(req) }.getOrElse {
-                    errors.add("${provider.displayName}: ${it.message}"); return@forEach
-                }
-                if (!resp.ok) { errors.add("${provider.displayName}: ${resp.error ?: "error"}"); return@forEach }
+        // Campos de texto canónicos que cuentan para "cobertura" (excluye fechas y responsable).
+        val coverageKeys = com.mejoresiagratis.rellenador.data.model.ContractFields.CANON
+            .map { it.key }
+            .filterNot { it in setOf("Fecha", "de", "año") }
 
-                var ex = AiJsonParser.parse(resp.text) ?: run {
-                    errors.add("${provider.displayName}: respuesta incompleta"); return@forEach
-                }
-                // Groq (texto plano) especula: quedarse solo con sugerencias.
-                if (provider == AiProvider.GROQ) ex = ex.copy(alternativas = emptyMap(), paquetes = emptyList())
+        fun allCovered(): Boolean = coverageKeys.all { agg[it]?.isNotEmpty() == true }
 
-                enginesOk.add(provider.displayName)
-                tipoId = tipoId ?: ex.tipo_identificacion
-                ex.sugerencias.forEach { (k, v) -> track(k, v, provider.displayName) }
-                ex.alternativas.forEach { (k, list) -> list.forEach { track(k, it.valor, provider.displayName) } }
-                ex.paquetes.forEach { pk ->
-                    allPackages.add(pk)
-                    pk.datos.forEach { (k, v) -> track(k, v, provider.displayName) }
+        run docsLoop@{
+            docs.forEachIndexed { i, doc ->
+                for (provider in enabled) {
+                    val req = ProxyRequest(
+                        provider = provider.id, prompt = prompt, task = "extract",
+                        maxTokens = 2048, seq = i, geminiMode = geminiMode, docs = listOf(doc)
+                    )
+                    val resp = try {
+                        api.call(req)
+                    } catch (e: Exception) {
+                        errors.add("${provider.displayName}: ${e.message}"); null
+                    }
+                    if (resp == null) continue
+                    if (!resp.ok) { errors.add("${provider.displayName}: ${resp.error ?: "error"}"); continue }
+
+                    val parsed = AiJsonParser.parse(resp.text)
+                    if (parsed == null) {
+                        errors.add("${provider.displayName}: respuesta incompleta"); continue
+                    }
+                    // Groq (texto plano) especula: quedarse solo con sugerencias.
+                    val ex = if (provider == AiProvider.GROQ)
+                        parsed.copy(alternativas = emptyMap(), paquetes = emptyList()) else parsed
+
+                    enginesOk.add(provider.displayName)
+                    ex.tipo_identificacion?.let { tipoVotes[it] = (tipoVotes[it] ?: 0) + 1 }
+                    ex.sugerencias.forEach { (k, v) -> track(k, v, provider.displayName) }
+                    ex.alternativas.forEach { (k, list) -> list.forEach { track(k, it.valor, provider.displayName) } }
+                    ex.paquetes.forEach { pk ->
+                        allPackages.add(pk)
+                        pk.datos.forEach { (k, v) -> track(k, v, provider.displayName) }
+                    }
+
+                    // Corte inteligente (fiel a allFieldsCovered de la web): si ya está todo
+                    // cubierto, no seguir gastando llamadas a más motores/documentos.
+                    if (earlyStop && allCovered()) return@docsLoop
                 }
             }
         }
@@ -75,6 +94,7 @@ class MultiAiExtractor @Inject constructor(
                     .sortedByDescending { it.sources.size }   // consenso primero
             )
         }
+        val tipoId = tipoVotes.maxByOrNull { it.value }?.key   // mayoría
         return Result(proposals, tipoId, allPackages, enginesOk, errors)
     }
 }
