@@ -239,8 +239,13 @@ class WizardViewModel @Inject constructor(
     // ---- Paso 5: firma ----
     /** Firma dibujada en el lienzo: bitmap -> PNG transparente. */
     fun setDrawnSignature(bmp: Bitmap) {
-        val stroke = sigProcessor.toTransparentStroke(bmp)
-        val data = sigProcessor.toSignatureData(stroke)
+        // Trazo dibujado: tintar (color elegido) sobre transparente con Otsu.
+        val px = IntArray(bmp.width * bmp.height)
+        bmp.getPixels(px, 0, bmp.width, 0, 0, bmp.width, bmp.height)
+        val thr = sigProcessor.otsuThreshold(px)
+        val processed = sigProcessor.processInk(bmp, thr, _state.value.inkColor, _state.value.sigBackground)
+            ?: bmp
+        val data = sigProcessor.toSignatureData(processed)
         // Colocación por defecto en la página de firma del distribuidor (pág. 24).
         _state.value = _state.value.copy(signature = data)
         // Colocar en todas las páginas de firma detectadas (o la 24 por defecto).
@@ -260,8 +265,9 @@ class WizardViewModel @Inject constructor(
                 locator.locate(b64, _state.value.availableProviders)
             }.getOrNull()
             val cropped = if (box != null) sigProcessor.crop(bmp, box) else bmp
-            val stroke = sigProcessor.toTransparentStroke(cropped)
-            val data = sigProcessor.toSignatureData(stroke)
+            val processed = sigProcessor.fromPhoto(cropped, _state.value.inkColor, _state.value.sigBackground)
+                ?: cropped
+            val data = sigProcessor.toSignatureData(processed)
             _state.value = _state.value.copy(
                 locatingSignature = false, signature = data,
                 error = if (box == null) "No se localizó la firma automáticamente; usa la imagen completa." else null
@@ -356,6 +362,40 @@ class WizardViewModel @Inject constructor(
                 pageIdx, xRel.coerceIn(0f, 1f), yRel.coerceIn(0f, 1f), width
             )
         )
+    }
+
+    /** Cambia el color de la tinta de la firma (re-procesa si hay firma cruda). */
+    fun setInkColor(color: Int) {
+        _state.value = _state.value.copy(inkColor = color)
+    }
+    fun setSigBackground(bg: com.mejoresiagratis.rellenador.data.pdf.SignatureProcessor.Background) {
+        _state.value = _state.value.copy(sigBackground = bg)
+    }
+
+    /** Guarda la firma actual para reutilizarla (persistida en PrefsRepository). */
+    fun saveCurrentSignature(name: String) {
+        val sig = _state.value.signature ?: return
+        viewModelScope.launch {
+            val b64 = android.util.Base64.encodeToString(sig.pngBytes, android.util.Base64.NO_WRAP)
+            prefs.saveSignature(name, b64, sig.aspectRatio)
+            refreshSavedSignatures()
+        }
+    }
+    fun refreshSavedSignatures() {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(savedSignatures = prefs.listSignatures())
+        }
+    }
+    fun useSavedSignature(name: String) {
+        viewModelScope.launch {
+            val saved = prefs.getSignature(name) ?: return@launch
+            val bytes = android.util.Base64.decode(saved.first, android.util.Base64.NO_WRAP)
+            _state.value = _state.value.copy(
+                signature = com.mejoresiagratis.rellenador.data.model.SignatureData(bytes, saved.second)
+            )
+            if (_state.value.signPages.isNotEmpty()) stampAllPages()
+            else _state.value = _state.value.copy(stamps = listOf(defaultStamp()))
+        }
     }
 
     // ---- Navegación ----

@@ -50,6 +50,10 @@ data class WizardUiState(
     val signature: SignatureData? = null,
     val stamps: List<SignatureStamp> = emptyList(),
     val locatingSignature: Boolean = false,
+    val inkColor: Int = android.graphics.Color.rgb(20, 30, 90),   // azul oscuro por defecto
+    val sigBackground: com.mejoresiagratis.rellenador.data.pdf.SignatureProcessor.Background =
+        com.mejoresiagratis.rellenador.data.pdf.SignatureProcessor.Background.TRANSPARENT,
+    val savedSignatures: List<String> = emptyList(),
     // Detección de huecos de firma (Tanda B)
     val signPages: List<Int> = emptyList(),          // índices 0-based detectados/ajustados
     val signAnchors: Map<Int, Float> = emptyMap(),   // página -> yr del rótulo

@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -36,11 +37,14 @@ fun PdfPreview(
     val renderer = vm.renderer() ?: return
     LazyColumn(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         items((0 until renderer.pageCount).toList(), key = { it }) { pageIdx ->
+            val stamp = state.stamps.firstOrNull { it.pageIndex == pageIdx }
             PdfPageView(
                 renderer = renderer,
                 pageIdx = pageIdx,
                 isSignPage = pageIdx in state.signPages,
-                onTapToPlace = { xRel, yRel -> vm.moveStamp(pageIdx, xRel, yRel) }
+                stampXRel = stamp?.xRel,
+                stampYRel = stamp?.yRel,
+                onMove = { xRel, yRel -> vm.moveStamp(pageIdx, xRel, yRel) }
             )
         }
     }
@@ -51,7 +55,9 @@ private fun PdfPageView(
     renderer: PdfPageRenderer,
     pageIdx: Int,
     isSignPage: Boolean,
-    onTapToPlace: (Float, Float) -> Unit
+    stampXRel: Float?,
+    stampYRel: Float?,
+    onMove: (Float, Float) -> Unit
 ) {
     var bitmap by remember(pageIdx) { mutableStateOf<Bitmap?>(null) }
     var containerWidthPx by remember { mutableIntStateOf(0) }
@@ -72,11 +78,22 @@ private fun PdfPageView(
                 .onSizeChanged { containerWidthPx = it.width; containerSize = it }
                 .pointerInput(pageIdx, isSignPage) {
                     if (isSignPage) {
+                        // Toque para colocar Y arrastre para mover la firma de esta página.
                         detectTapGestures { offset ->
                             if (containerSize.width > 0 && containerSize.height > 0) {
-                                onTapToPlace(
-                                    offset.x / containerSize.width,
-                                    offset.y / containerSize.height
+                                onMove(offset.x / containerSize.width, offset.y / containerSize.height)
+                            }
+                        }
+                    }
+                }
+                .pointerInput(pageIdx, isSignPage) {
+                    if (isSignPage) {
+                        detectDragGestures { change, _ ->
+                            change.consume()
+                            if (containerSize.width > 0 && containerSize.height > 0) {
+                                onMove(
+                                    (change.position.x / containerSize.width).coerceIn(0f, 1f),
+                                    (change.position.y / containerSize.height).coerceIn(0f, 1f)
                                 )
                             }
                         }
@@ -91,6 +108,21 @@ private fun PdfPageView(
                 Box(Modifier.fillMaxWidth().height(400.dp).background(Color(0xFFF0F0F0)),
                     contentAlignment = Alignment.Center) { CircularProgressIndicator() }
             }
+            // Marcador arrastrable de la firma en esta página.
+            if (isSignPage && stampXRel != null && stampYRel != null &&
+                containerSize.width > 0 && containerSize.height > 0) {
+                val density = LocalDensity.current
+                val xDp = with(density) { (stampXRel * containerSize.width).toDp() }
+                val yDp = with(density) { (stampYRel * containerSize.height).toDp() }
+                Box(
+                    Modifier
+                        .absoluteOffset(x = xDp - 20.dp, y = yDp - 12.dp)
+                        .size(width = 40.dp, height = 24.dp)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.35f))
+                ) {
+                    Text("✍", modifier = Modifier.align(Alignment.Center))
+                }
+            }
             // Etiqueta de página
             Surface(color = Color.Black.copy(alpha = 0.5f),
                 modifier = Modifier.align(Alignment.TopStart).padding(6.dp)) {
@@ -101,7 +133,7 @@ private fun PdfPageView(
             if (isSignPage) {
                 Surface(color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.align(Alignment.TopEnd).padding(6.dp)) {
-                    Text("✍ firma · toca para mover", color = MaterialTheme.colorScheme.onPrimary,
+                    Text("✍ arrastra para mover", color = MaterialTheme.colorScheme.onPrimary,
                         style = MaterialTheme.typography.labelSmall,
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
                 }

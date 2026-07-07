@@ -79,7 +79,18 @@ Componentes:
 - ContractStep — muestra el editor si el usuario aportó su PDF (needsMapping).
 
 ## PARIDAD CON WEB — plan de tandas (OK a todo del usuario)
-Tanda A ✅ · B ✅ · C ✅ · D ✅ · E firma-avanzada · F persistencia · G remates
+Tanda A ✅ · B ✅ · C ✅ · D ✅ · E ✅ · F persistencia · G remates
+
+## Tanda E (COMPLETADA) — Firma avanzada + arrastre
+- SignatureProcessor — otsuThreshold (umbral automático), flattenIllumination (aplana
+  iluminación por blur de escalado), processInk (tintado alpha-graduado + recorte a bbox
+  + fondo transp/blanco), fromPhoto (pipeline completo). Todo fiel a la web.
+- inkColor + sigBackground configurables (azul/negro/azul claro · transparente/blanco).
+- Firmas guardadas: PrefsRepository.saveSignature/listSignatures/getSignature (DataStore);
+  guardar con nombre y reutilizar en otros contratos.
+- PdfPreview — ARRASTRAR la firma sobre cada página de firma para recolocarla (detectDrag
+  + detectTap), marcador visual ✍ arrastrable en la posición actual del stamp.
+- SignatureStep — opciones de tinta/fondo, firmas guardadas (chips), guardar firma actual.
 
 ## Tanda D (COMPLETADA) — Extracción fina
 - data/model/DateAutofill.kt — autofill fecha actual (día/mes-letras-ES/año-último-dígito),

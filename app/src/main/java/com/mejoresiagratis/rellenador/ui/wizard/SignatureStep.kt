@@ -23,8 +23,8 @@ fun SignatureStep(state: WizardUiState, vm: WizardViewModel) {
     val context = LocalContext.current
     var mode by remember { mutableIntStateOf(0) }  // 0 = dibujar, 1 = extraer de foto
 
-    // Generar la previsualización al entrar al paso de firma.
-    LaunchedEffect(Unit) { vm.buildPreview() }
+    // Generar preview y cargar firmas guardadas al entrar.
+    LaunchedEffect(Unit) { vm.buildPreview(); vm.refreshSavedSignatures() }
 
     val photoPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -93,6 +93,49 @@ fun SignatureStep(state: WizardUiState, vm: WizardViewModel) {
             }
         }
 
+
+        // --- Opciones avanzadas de firma (Tanda E) ---
+        ElevatedCard {
+            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Color de tinta", style = MaterialTheme.typography.labelLarge)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val inks = listOf(
+                        "Azul" to android.graphics.Color.rgb(20, 30, 90),
+                        "Negro" to android.graphics.Color.rgb(20, 20, 20),
+                        "Azul claro" to android.graphics.Color.rgb(30, 80, 180)
+                    )
+                    inks.forEach { (label, color) ->
+                        FilterChip(
+                            selected = state.inkColor == color,
+                            onClick = { vm.setInkColor(color) },
+                            label = { Text(label) }
+                        )
+                    }
+                }
+                Text("Fondo", style = MaterialTheme.typography.labelLarge)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = state.sigBackground == com.mejoresiagratis.rellenador.data.pdf.SignatureProcessor.Background.TRANSPARENT,
+                        onClick = { vm.setSigBackground(com.mejoresiagratis.rellenador.data.pdf.SignatureProcessor.Background.TRANSPARENT) },
+                        label = { Text("Transparente") }
+                    )
+                    FilterChip(
+                        selected = state.sigBackground == com.mejoresiagratis.rellenador.data.pdf.SignatureProcessor.Background.WHITE,
+                        onClick = { vm.setSigBackground(com.mejoresiagratis.rellenador.data.pdf.SignatureProcessor.Background.WHITE) },
+                        label = { Text("Blanco") }
+                    )
+                }
+                if (state.savedSignatures.isNotEmpty()) {
+                    Text("Firmas guardadas", style = MaterialTheme.typography.labelLarge)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        state.savedSignatures.forEach { name ->
+                            AssistChip(onClick = { vm.useSavedSignature(name) }, label = { Text(name) })
+                        }
+                    }
+                }
+            }
+        }
+
         if (state.signature != null) {
             AssistChip(onClick = {}, label = { Text("Firma preparada ✓") })
 
@@ -154,6 +197,17 @@ fun SignatureStep(state: WizardUiState, vm: WizardViewModel) {
                 LabeledSlider("Horizontal", stamp.xRel) { vm.updateStamp(it, stamp.yRel, stamp.widthRel) }
                 LabeledSlider("Vertical", stamp.yRel) { vm.updateStamp(stamp.xRel, it, stamp.widthRel) }
                 LabeledSlider("Tamaño", stamp.widthRel, 0.1f, 0.6f) { vm.updateStamp(stamp.xRel, stamp.yRel, it) }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                var sigName by remember { mutableStateOf("") }
+                OutlinedTextField(
+                    value = sigName, onValueChange = { sigName = it },
+                    label = { Text("Nombre") }, singleLine = true,
+                    modifier = Modifier.weight(1f)
+                )
+                OutlinedButton(onClick = {
+                    if (sigName.isNotBlank()) vm.saveCurrentSignature(sigName.trim())
+                }) { Text("Guardar firma") }
             }
             OutlinedButton(onClick = vm::clearSignature) { Text("Quitar firma") }
         }

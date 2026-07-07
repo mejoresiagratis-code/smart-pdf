@@ -8,6 +8,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.mejoresiagratis.rellenador.data.model.AiProvider
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -42,4 +43,28 @@ class PrefsRepository @Inject constructor(
     suspend fun saveProfile(json: String) {
         context.dataStore.edit { it[profileKey] = json }
     }
+
+    // --- Firmas guardadas (Tanda E) ---
+    private val sigListKey = stringSetPreferencesKey("saved_signatures")
+    private fun sigDataKey(name: String) = stringPreferencesKey("sig_data_$name")
+    private fun sigArKey(name: String) = stringPreferencesKey("sig_ar_$name")
+
+    suspend fun saveSignature(name: String, b64: String, aspectRatio: Float) {
+        context.dataStore.edit { p ->
+            p[sigListKey] = (p[sigListKey] ?: emptySet()) + name
+            p[sigDataKey(name)] = b64
+            p[sigArKey(name)] = aspectRatio.toString()
+        }
+    }
+    suspend fun listSignatures(): List<String> =
+        context.dataStore.data.map { it[sigListKey]?.toList() ?: emptyList() }.first()
+
+    /** Devuelve (base64, aspectRatio) o null. */
+    suspend fun getSignature(name: String): Pair<String, Float>? =
+        context.dataStore.data.map { p ->
+            val b64 = p[sigDataKey(name)] ?: return@map null
+            val ar = p[sigArKey(name)]?.toFloatOrNull() ?: 0.4f
+            b64 to ar
+        }.first()
+
 }
