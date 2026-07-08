@@ -31,6 +31,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -56,16 +57,30 @@ class WizardViewModel @Inject constructor(
 
     init { probeProviders() }
 
-    /** GET al proxy: qué motores tienen clave en servidor. */
+    /** GET al proxy: qué motores tienen clave en servidor, cruzado con lo elegido en Ajustes. */
     private fun probeProviders() {
         viewModelScope.launch {
             val resp = runCatching { api.providers() }.getOrNull()
             val available = resp?.providers.orEmpty()
                 .filterValues { it }.keys
                 .mapNotNull { AiProvider.fromId(it) }
+            val stored = prefs.enabledProviders.first().toSet()
+            val enabled = stored.intersect(available.toSet()).ifEmpty { available.toSet() }
             _state.value = _state.value.copy(
                 availableProviders = available,
-                enabledProviders = available.toSet()   // por defecto todos los disponibles
+                enabledProviders = enabled
+            )
+        }
+    }
+
+    /** Vuelve a leer los motores elegidos en Ajustes (por si el usuario los cambió allí). */
+    fun reloadEnabledProviders() {
+        viewModelScope.launch {
+            val available = _state.value.availableProviders
+            if (available.isEmpty()) return@launch   // aún sin sondear; probeProviders() lo resolverá
+            val stored = prefs.enabledProviders.first().toSet()
+            _state.value = _state.value.copy(
+                enabledProviders = stored.intersect(available.toSet()).ifEmpty { available.toSet() }
             )
         }
     }
@@ -119,6 +134,7 @@ class WizardViewModel @Inject constructor(
         val cur = _state.value.enabledProviders.toMutableSet()
         if (!cur.add(p)) cur.remove(p)
         _state.value = _state.value.copy(enabledProviders = cur)
+        viewModelScope.launch { prefs.setEnabled(cur.toList()) }
     }
 
     /** Lanza la extracción multi-motor y avanza a Revisión. */
@@ -144,8 +160,9 @@ class WizardViewModel @Inject constructor(
             val prefill = result.proposals.associate { fp ->
                 fp.fieldKey to (fp.candidates.firstOrNull()?.value ?: "")
             }.toMutableMap()
-            // Regla fija de la web.
-            prefill[ContractFields.RESPONSABLE_KEY] = ContractFields.RESPONSABLE_VALUE
+            // Regla fija de la web, con el nombre editable en Ajustes si el usuario lo cambió.
+            val responsable = prefs.responsableComercial.first().ifBlank { ContractFields.RESPONSABLE_VALUE }
+            prefill[ContractFields.RESPONSABLE_KEY] = responsable
             // Autofill de fechas (Tanda D): rellena Fecha/de/año actuales si están vacías.
             prefill.putAll(DateAutofill.values(prefill))
 
@@ -293,11 +310,18 @@ class WizardViewModel @Inject constructor(
         _state.value = _state.value.copy(signature = null, stamps = emptyList())
     }
 
-    /** Genera el PDF final (relleno + firmado) a fichero interno. */
+    /** Etiqueta legible para el histórico: razón social o nombre comercial si los hay. */
+    private fun historyLabelFor(values: Map<String, String>): String =
+        values["Nombre  Razón Social"]?.trim()?.takeIf { it.isNotBlank() }
+            ?: values["Nombre Comercial"]?.trim()?.takeIf { it.isNotBlank() }
+            ?: "Contrato sin nombre"
+
+    /** Genera el PDF final (relleno + firmado) a fichero interno y lo apunta en el histórico. */
     fun generatePdf(onReady: (java.io.File) -> Unit = {}) {
         val s = _state.value
         viewModelScope.launch {
             _state.value = s.copy(busy = true, busyMsg = "Generando PDF final…", error = null)
+            val timestamp = System.currentTimeMillis()
             val file = runCatching {
                 withContext(Dispatchers.IO) {
                     exporter.generateToFile(
@@ -307,7 +331,8 @@ class WizardViewModel @Inject constructor(
                         stamps = s.stamps,
                         checkboxes = com.mejoresiagratis.rellenador.data.model.ContractFields
                             .checkboxStateFor(s.tipoIdentificacion),
-                        fieldMapping = if (s.contractSource == ContractSource.USER) s.fieldMapping else emptyMap()
+                        fieldMapping = if (s.contractSource == ContractSource.USER) s.fieldMapping else emptyMap(),
+                        fileName = "contrato-$timestamp.pdf"
                     )
                 }
             }.getOrElse {
@@ -315,6 +340,14 @@ class WizardViewModel @Inject constructor(
                 return@launch
             }
             _state.value = _state.value.copy(busy = false, outputFile = file, outputReady = true)
+            prefs.addHistoryEntry(
+                com.mejoresiagratis.rellenador.data.repository.HistoryEntry(
+                    id = timestamp.toString(),
+                    label = historyLabelFor(s.fieldValues),
+                    filePath = file.absolutePath,
+                    createdAt = timestamp
+                )
+            )
             onReady(file)
         }
     }

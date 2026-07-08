@@ -43,7 +43,7 @@ en texto plano.
 4. El CI de GitHub genera el APK debug como artefacto en cada push.
 
 ## Pendiente (TODO marcados en el código)
-- Selector de PDF (SAF) → extracción de texto → `vm.runExtraction()`.
-- Captura de firma (Canvas) e incrustado en el PDF.
-- Histórico de contratos/firmas y multi-firmante.
-- Pantalla de ajustes para activar/desactivar motores y editar el perfil.
+- Multi-firmante (varias firmas/roles en el mismo contrato).
+- Recordar el mapeo de un PDF propio entre sesiones (hoy hay que re-mapear cada vez).
+- URL del proxy editable en runtime desde Ajustes (hoy fija en BuildConfig).
+- Release firmado (signingConfig + keystore + APK release en el workflow).

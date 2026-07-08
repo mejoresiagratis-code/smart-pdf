@@ -10,10 +10,23 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import javax.inject.Inject
 import javax.inject.Singleton
 
 private val Context.dataStore by preferencesDataStore(name = "rellenador")
+
+/** Una entrada del histórico: un PDF final ya generado (relleno + firmado). */
+@Serializable
+data class HistoryEntry(
+    val id: String,
+    val label: String,       // razón social / nombre comercial, o "Contrato sin nombre"
+    val filePath: String,     // ruta absoluta en filesDir/output
+    val createdAt: Long
+)
 
 /**
  * Replaces the browser localStorage: enabled providers, contract/signature
@@ -22,10 +35,14 @@ private val Context.dataStore by preferencesDataStore(name = "rellenador")
  */
 @Singleton
 class PrefsRepository @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val json: Json
 ) {
     private val enabledKey = stringSetPreferencesKey("enabled_providers")
-    private val profileKey = stringPreferencesKey("commercial_profile")
+    private val responsableKey = stringPreferencesKey("perfil_responsable")
+    private val historyKey = stringPreferencesKey("contract_history_json")
+
+    // ---- Motores IA activos ----
 
     val enabledProviders: Flow<List<AiProvider>> =
         context.dataStore.data.map { prefs ->
@@ -37,11 +54,35 @@ class PrefsRepository @Inject constructor(
         context.dataStore.edit { it[enabledKey] = providers.map { p -> p.id }.toSet() }
     }
 
-    val profile: Flow<String> =
-        context.dataStore.data.map { it[profileKey] ?: "" }
+    // ---- Perfil comercial ----
 
-    suspend fun saveProfile(json: String) {
-        context.dataStore.edit { it[profileKey] = json }
+    /** Nombre del Responsable Comercial autorrellenado. Vacío = usar ContractFields.RESPONSABLE_VALUE. */
+    val responsableComercial: Flow<String> =
+        context.dataStore.data.map { it[responsableKey] ?: "" }
+
+    suspend fun setResponsableComercial(nombre: String) {
+        context.dataStore.edit { prefs ->
+            if (nombre.isBlank()) prefs.remove(responsableKey) else prefs[responsableKey] = nombre.trim()
+        }
+    }
+
+    // ---- Histórico de contratos generados (Tanda F) ----
+
+    val history: Flow<List<HistoryEntry>> =
+        context.dataStore.data.map { prefs ->
+            prefs[historyKey]?.let { raw ->
+                runCatching { json.decodeFromString<List<HistoryEntry>>(raw) }.getOrNull()
+            } ?: emptyList()
+        }
+
+    suspend fun addHistoryEntry(entry: HistoryEntry) {
+        val updated = history.first() + entry
+        context.dataStore.edit { it[historyKey] = json.encodeToString(updated) }
+    }
+
+    suspend fun deleteHistoryEntry(id: String) {
+        val updated = history.first().filterNot { it.id == id }
+        context.dataStore.edit { it[historyKey] = json.encodeToString(updated) }
     }
 
     // --- Firmas guardadas (Tanda E) ---
