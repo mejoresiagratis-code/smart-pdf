@@ -130,16 +130,8 @@ class SignatureProcessor @Inject constructor() {
     }
 
     fun toSignatureData(bmp: Bitmap): SignatureData {
-        // Upscale para evitar pixelado al estampar en el PDF a alta DPI
-        val targetSide = 1500
-        val maxSide = maxOf(bmp.width, bmp.height)
-        val scaled = if (maxSide in 1 until targetSide) {
-            val ratio = targetSide.toFloat() / maxSide
-            Bitmap.createScaledBitmap(bmp, (bmp.width * ratio).toInt(), (bmp.height * ratio).toInt(), true)
-        } else bmp
-        val png = ByteArrayOutputStream().also { scaled.compress(Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
-        val ar = if (scaled.width > 0) scaled.height.toFloat() / scaled.width.toFloat() else 0.4f
-        if (scaled !== bmp) scaled.recycle()
+        val png = ByteArrayOutputStream().also { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
+        val ar = if (bmp.width > 0) bmp.height.toFloat() / bmp.width.toFloat() else 0.4f
         return SignatureData(png, ar)
-}
+    }
 }
