@@ -87,7 +87,7 @@ class SignatureProcessor @Inject constructor() {
         for (i in px.indices) {
             val c = px[i]
             val lum = 0.299 * Color.red(c) + 0.587 * Color.green(c) + 0.114 * Color.blue(c)
-            if (lum > threshold || Color.alpha(c) < 40) {
+            if (lum > threshold * 1.15 || Color.alpha(c) < 40) {
                 px[i] = Color.TRANSPARENT
             } else {
                 val a = min(255, ((threshold - lum) / max(30.0, threshold * 0.35) * 255).roundToInt() + 90)
