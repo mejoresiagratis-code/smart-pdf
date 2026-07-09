@@ -112,8 +112,8 @@ private fun PdfPageView(
                                 // Acumular localmente para no perder posición entre eventos
                                 // de arrastre (si se re-lanzara con cada onMove, el gesto
                                 // se cancelaría a mitad de camino).
-                                var curX = stampXRel
-                                var curY = stampYRel
+                                var curX = stampXRel ?: 0.5f
+                                var curY = stampYRel ?: 0.5f
                                 detectDragGestures { change, dragAmount ->
                                     change.consume()
                                     if (containerSize.width > 0 && containerSize.height > 0) {
