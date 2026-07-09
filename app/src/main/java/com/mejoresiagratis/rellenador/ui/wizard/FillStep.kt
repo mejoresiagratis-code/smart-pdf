@@ -20,9 +20,16 @@ import com.mejoresiagratis.rellenador.data.validation.FieldValidator
  */
 @Composable
 fun FillStep(state: WizardUiState, vm: WizardViewModel) {
+    var showHistory by remember { mutableStateOf(false) }
+    if (showHistory) HistoryPanel(vm, onDismiss = { showHistory = false })
+
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.padding(16.dp)) {
-            Text("Paso 4 · Rellena o corrige los campos", style = MaterialTheme.typography.titleMedium)
+            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Text("Paso 4 · Rellena o corrige los campos", style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f))
+                TextButton(onClick = { showHistory = true }) { Text("Historial") }
+            }
             Text("Se valida NIF/CIF/IBAN/CP en vivo. El responsable comercial es automático.",
                 style = MaterialTheme.typography.bodySmall)
         }

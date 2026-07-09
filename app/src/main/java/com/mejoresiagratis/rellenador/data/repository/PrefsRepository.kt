@@ -6,27 +6,17 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.mejoresiagratis.rellenador.data.model.AiProvider
+import com.mejoresiagratis.rellenador.data.model.ContractProfile
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import javax.inject.Inject
 import javax.inject.Singleton
 
 private val Context.dataStore by preferencesDataStore(name = "rellenador")
-
-/** Una entrada del histórico: un PDF final ya generado (relleno + firmado). */
-@Serializable
-data class HistoryEntry(
-    val id: String,
-    val label: String,       // razón social / nombre comercial, o "Contrato sin nombre"
-    val filePath: String,     // ruta absoluta en filesDir/output
-    val createdAt: Long
-)
 
 /**
  * Replaces the browser localStorage: enabled providers, contract/signature
@@ -35,14 +25,10 @@ data class HistoryEntry(
  */
 @Singleton
 class PrefsRepository @Inject constructor(
-    @ApplicationContext private val context: Context,
-    private val json: Json
+    @ApplicationContext private val context: Context
 ) {
     private val enabledKey = stringSetPreferencesKey("enabled_providers")
-    private val responsableKey = stringPreferencesKey("perfil_responsable")
-    private val historyKey = stringPreferencesKey("contract_history_json")
-
-    // ---- Motores IA activos ----
+    private val profileKey = stringPreferencesKey("commercial_profile")
 
     val enabledProviders: Flow<List<AiProvider>> =
         context.dataStore.data.map { prefs ->
@@ -54,35 +40,72 @@ class PrefsRepository @Inject constructor(
         context.dataStore.edit { it[enabledKey] = providers.map { p -> p.id }.toSet() }
     }
 
-    // ---- Perfil comercial ----
+    val profile: Flow<String> =
+        context.dataStore.data.map { it[profileKey] ?: "" }
 
-    /** Nombre del Responsable Comercial autorrellenado. Vacío = usar ContractFields.RESPONSABLE_VALUE. */
-    val responsableComercial: Flow<String> =
-        context.dataStore.data.map { it[responsableKey] ?: "" }
+    suspend fun saveProfile(json: String) {
+        context.dataStore.edit { it[profileKey] = json }
+    }
 
-    suspend fun setResponsableComercial(nombre: String) {
-        context.dataStore.edit { prefs ->
-            if (nombre.isBlank()) prefs.remove(responsableKey) else prefs[responsableKey] = nombre.trim()
+
+    // --- Tanda F: plantillas por huella, historial de contratos, perfiles ---
+    private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+
+    private val templatesKey = stringPreferencesKey("templates_v1")     // fingerprint -> mapping JSON
+    private val historyIndexKey = stringSetPreferencesKey("history_ids_v1")
+    private fun historyEntryKey(id: String) = stringPreferencesKey("history_$id")
+
+    /** Guarda el mapeo (canónica->real) asociado a la huella de una plantilla. */
+    suspend fun saveTemplate(fingerprint: String, fieldMapping: Map<String, String>) {
+        context.dataStore.edit { p ->
+            val all = p[templatesKey]?.let {
+                runCatching { json.decodeFromString<Map<String, Map<String, String>>>(it) }.getOrNull()
+            }.orEmpty().toMutableMap()
+            all[fingerprint] = fieldMapping
+            p[templatesKey] = json.encodeToString(all)
         }
     }
 
-    // ---- Histórico de contratos generados (Tanda F) ----
-
-    val history: Flow<List<HistoryEntry>> =
-        context.dataStore.data.map { prefs ->
-            prefs[historyKey]?.let { raw ->
-                runCatching { json.decodeFromString<List<HistoryEntry>>(raw) }.getOrNull()
-            } ?: emptyList()
-        }
-
-    suspend fun addHistoryEntry(entry: HistoryEntry) {
-        val updated = history.first() + entry
-        context.dataStore.edit { it[historyKey] = json.encodeToString(updated) }
+    /** Busca un mapeo guardado para esta huella, o null si no existe (plantilla nueva). */
+    suspend fun findTemplate(fingerprint: String): Map<String, String>? {
+        val raw = context.dataStore.data.map { it[templatesKey] }.first() ?: return null
+        val all = runCatching { json.decodeFromString<Map<String, Map<String, String>>>(raw) }.getOrNull()
+        return all?.get(fingerprint)
     }
 
-    suspend fun deleteHistoryEntry(id: String) {
-        val updated = history.first().filterNot { it.id == id }
-        context.dataStore.edit { it[historyKey] = json.encodeToString(updated) }
+    /** Guarda el contrato actual (campos confirmados) en el historial. */
+    suspend fun saveToHistory(profile: ContractProfile): String {
+        val id = "h_" + System.currentTimeMillis().toString(36)
+        context.dataStore.edit { p ->
+            p[historyIndexKey] = (p[historyIndexKey] ?: emptySet()) + id
+            p[historyEntryKey(id)] = json.encodeToString(profile)
+        }
+        return id
+    }
+
+    suspend fun listHistory(): List<Pair<String, ContractProfile>> {
+        val ids = context.dataStore.data.map { it[historyIndexKey] ?: emptySet() }.first()
+        return ids.mapNotNull { id ->
+            val raw = context.dataStore.data.map { it[historyEntryKey(id)] }.first() ?: return@mapNotNull null
+            val profile = runCatching { json.decodeFromString<ContractProfile>(raw) }.getOrNull() ?: return@mapNotNull null
+            id to profile
+        }.sortedByDescending { it.second.guardado }
+    }
+
+    suspend fun deleteFromHistory(id: String) {
+        context.dataStore.edit { p ->
+            p[historyIndexKey] = (p[historyIndexKey] ?: emptySet()) - id
+            p.remove(historyEntryKey(id))
+        }
+    }
+
+    /** Serializa el perfil actual a JSON (para exportar a fichero). */
+    fun exportProfileJson(profile: ContractProfile): String = json.encodeToString(profile)
+
+    /** Parsea un JSON de perfil importado; valida que sea de esta app. */
+    fun importProfileJson(raw: String): ContractProfile? {
+        val p = runCatching { json.decodeFromString<ContractProfile>(raw) }.getOrNull() ?: return null
+        return if (p.tipo == "perfil-rellenador-pdv") p else null
     }
 
     // --- Firmas guardadas (Tanda E) ---

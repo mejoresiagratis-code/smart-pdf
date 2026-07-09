@@ -79,28 +79,20 @@ Componentes:
 - ContractStep — muestra el editor si el usuario aportó su PDF (needsMapping).
 
 ## PARIDAD CON WEB — plan de tandas (OK a todo del usuario)
-Tanda A ✅ · B ✅ · C ✅ · D ✅ · E ✅ · F ✅ persistencia · G remates
+Tanda A ✅ · B ✅ · C ✅ · D ✅ · E ✅ · F ✅ · G remates
 
-## Tanda F (COMPLETADA) — Persistencia (perfil, motores, histórico)
-- `data/repository/PrefsRepository.kt` — `responsableComercial` (nombre editable del
-  Responsable Comercial; antes fijo en ContractFields.RESPONSABLE_VALUE) y `history`
-  (lista de `HistoryEntry(id, label, filePath, createdAt)` serializada a JSON con
-  kotlinx.serialization). `enabledProviders` ya existía pero no se leía/escribía desde
-  ningún sitio — ahora sí.
-- `WizardViewModel` — `probeProviders()`/`reloadEnabledProviders()` cruzan los motores
-  con clave en servidor con lo elegido en Ajustes; `toggleProvider()` persiste;
-  `runExtraction()` usa el Responsable Comercial guardado si existe; `generatePdf()`
-  ahora genera cada contrato con nombre de fichero único (`contrato-<timestamp>.pdf`,
-  antes SIEMPRE sobrescribía `contrato-relleno.pdf`) y añade una entrada al histórico
-  con la razón social/nombre comercial como etiqueta.
-- `ui/settings/AjustesViewModel.kt` + `AjustesScreen.kt` — perfil comercial y motores
-  IA activos (9, con badge 🇪🇺). Accesible desde el icono de engranaje en la TopAppBar.
-- `ui/history/HistorialViewModel.kt` + `HistorialScreen.kt` — lista de contratos ya
-  generados (más recientes primero), compartir de nuevo o borrar del historial (y del
-  disco); aviso si el fichero ya no está en el dispositivo. Accesible desde el icono
-  de historial en la TopAppBar.
-- `RellenadorNavHost`/`WizardScreen` — rutas "ajustes"/"historial"; `WizardScreen`
-  releé los motores activos al volver de Ajustes vía `LaunchedEffect`.
+## Tanda F (COMPLETADA) — Persistencia: plantillas, perfiles, historial
+- data/model/ContractProfile.kt — objeto perfil reutilizado (campos + fingerprint + fecha),
+  fiel a buildProfileObject() de la web. TemplateFingerprint.of() = nº páginas + nombres
+  de campo normalizados y ordenados (fiel a templateFingerprint()).
+- PrefsRepository — saveTemplate/findTemplate (mapeo por huella, DataStore+JSON),
+  saveToHistory/listHistory/deleteFromHistory, exportProfileJson/importProfileJson
+  (valida tipo="perfil-rellenador-pdv").
+- WizardViewModel — al elegir PDF de usuario calcula huella y busca plantilla guardada
+  (si existe, la usa y NO pide revisar mapeo); rememberTemplateMapping() al confirmar
+  el editor; saveCurrentToHistory/loadHistoryList/applyProfile/importProfileFromJson.
+- ui/wizard/HistoryPanel.kt — diálogo: guardar contrato actual con nombre, cargar o
+  borrar entradas. Integrado en FillStep (botón "Historial").
 
 ## Tanda E (COMPLETADA) — Firma avanzada + arrastre
 - SignatureProcessor — otsuThreshold (umbral automático), flattenIllumination (aplana
@@ -166,10 +158,14 @@ Componentes:
 - 10 tests unitarios con casos reales (ValidatorsTest.kt).
 
 ## Pendiente (siguiente tanda)
-- **Tanda G (remates)**: multi-firmante (varias firmas/roles en el mismo contrato),
-  plantillas de PDF propio recordadas entre sesiones (memoria de mapeo por huella del
-  PDF, hoy hay que re-mapear cada vez que se sube un PDF distinto), URL del proxy
-  editable en runtime desde Ajustes (hoy fija en BuildConfig.PROXY_BASE_URL).
+- **Firma**: captura manuscrita en Canvas + task "locate_signature" (ya soportada por
+  el proxy) para ubicar el hueco + inserción en página 24 + generar PDF final con
+  AcroFormFiller + compartir/guardar (FileProvider).
+- **Paquetes**: aplicar paquetes (dirección fiscal / comercio / empresa / persona / banco)
+  con un solo toque en Revisión, incluyendo el mapeo a bloques _2. El modelo ya los
+  captura (state.packages); falta la UI de aplicación en bloque.
+- **Ajustes**: pantalla para editar perfil comercial y URL del proxy; persistir motores
+  elegidos y plantillas mapeadas en PrefsRepository.
 - **Release firmado**: signingConfig + keystore + APK release en el workflow.
 
 ## Notas técnicas heredadas

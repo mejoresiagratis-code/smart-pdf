@@ -2,9 +2,6 @@ package com.mejoresiagratis.rellenador.ui.wizard
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -17,29 +14,12 @@ import androidx.hilt.navigation.compose.hiltViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun WizardScreen(
-    onOpenSettings: () -> Unit = {},
-    onOpenHistory: () -> Unit = {},
-    vm: WizardViewModel = hiltViewModel()
-) {
+fun WizardScreen(vm: WizardViewModel = hiltViewModel()) {
     val state by vm.state.collectAsState()
-
-    // Al volver de Ajustes (esta pantalla vuelve a componerse), releer motores activos.
-    LaunchedEffect(Unit) { vm.reloadEnabledProviders() }
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Rellenador de Contratos") },
-                actions = {
-                    IconButton(onClick = onOpenHistory) {
-                        Icon(Icons.Default.History, contentDescription = "Historial")
-                    }
-                    IconButton(onClick = onOpenSettings) {
-                        Icon(Icons.Default.Settings, contentDescription = "Ajustes")
-                    }
-                }
-            )
+            TopAppBar(title = { Text("Rellenador de Contratos") })
         }
     ) { pad ->
         Column(Modifier.padding(pad).fillMaxSize()) {

@@ -16,7 +16,7 @@ fun ContractStep(state: WizardUiState, vm: WizardViewModel) {
 
     // Si el usuario aportó su PDF y hay que mapear, mostrar el editor.
     if (showMapping && state.needsMapping && state.userFieldNames.isNotEmpty()) {
-        MappingEditor(state, vm, onDone = { showMapping = false; vm.next() })
+        MappingEditor(state, vm, onDone = { vm.rememberTemplateMapping(); showMapping = false; vm.next() })
         return
     }
 

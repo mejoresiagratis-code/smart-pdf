@@ -20,6 +20,8 @@ import com.mejoresiagratis.rellenador.data.pdf.TemplateMapper
 import com.mejoresiagratis.rellenador.data.pdf.AcroFormFiller
 import com.mejoresiagratis.rellenador.data.pdf.SignaturePageDetector
 import com.mejoresiagratis.rellenador.data.pdf.PdfPageRenderer
+import com.mejoresiagratis.rellenador.data.model.ContractProfile
+import com.mejoresiagratis.rellenador.data.model.TemplateFingerprint
 import com.mejoresiagratis.rellenador.data.remote.SignatureLocator
 import android.util.Base64
 import java.io.ByteArrayOutputStream
@@ -31,7 +33,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -57,30 +58,16 @@ class WizardViewModel @Inject constructor(
 
     init { probeProviders() }
 
-    /** GET al proxy: qué motores tienen clave en servidor, cruzado con lo elegido en Ajustes. */
+    /** GET al proxy: qué motores tienen clave en servidor. */
     private fun probeProviders() {
         viewModelScope.launch {
             val resp = runCatching { api.providers() }.getOrNull()
             val available = resp?.providers.orEmpty()
                 .filterValues { it }.keys
                 .mapNotNull { AiProvider.fromId(it) }
-            val stored = prefs.enabledProviders.first().toSet()
-            val enabled = stored.intersect(available.toSet()).ifEmpty { available.toSet() }
             _state.value = _state.value.copy(
                 availableProviders = available,
-                enabledProviders = enabled
-            )
-        }
-    }
-
-    /** Vuelve a leer los motores elegidos en Ajustes (por si el usuario los cambió allí). */
-    fun reloadEnabledProviders() {
-        viewModelScope.launch {
-            val available = _state.value.availableProviders
-            if (available.isEmpty()) return@launch   // aún sin sondear; probeProviders() lo resolverá
-            val stored = prefs.enabledProviders.first().toSet()
-            _state.value = _state.value.copy(
-                enabledProviders = stored.intersect(available.toSet()).ifEmpty { available.toSet() }
+                enabledProviders = available.toSet()   // por defecto todos los disponibles
             )
         }
     }
@@ -107,13 +94,59 @@ class WizardViewModel @Inject constructor(
             val mapping = suggestions.mapNotNull { sug ->
                 sug.canonicalKey?.let { it to sug.realField }
             }.toMap()
+            val fp = TemplateFingerprint.of(fields.size, fields)  // huella provisional (páginas se ajustan tras detectar)
+            val saved = runCatching { prefs.findTemplate(fp) }.getOrNull()
             _state.value = _state.value.copy(
                 userFieldNames = fields,
-                fieldMapping = mapping,
-                needsMapping = true
+                fieldMapping = saved ?: mapping,
+                needsMapping = saved == null,   // si ya había plantilla guardada, no hace falta revisar
+                templateFingerprint = fp
             )
             detectSignaturePages()
         }
+    }
+
+    /** Persiste el mapeo actual bajo la huella de la plantilla, para reaplicarlo la próxima vez. */
+    fun rememberTemplateMapping() {
+        val s = _state.value
+        if (s.templateFingerprint.isBlank() || s.fieldMapping.isEmpty()) return
+        viewModelScope.launch { prefs.saveTemplate(s.templateFingerprint, s.fieldMapping) }
+    }
+
+    // ---- Perfiles e historial (Tanda F) ----
+    private fun buildProfile(label: String): ContractProfile = ContractProfile(
+        label = label,
+        guardado = java.time.Instant.now().toString(),
+        fingerprint = _state.value.templateFingerprint,
+        campos = _state.value.fieldValues.filterValues { it.isNotBlank() },
+        fieldMapping = _state.value.fieldMapping
+    )
+
+    fun exportProfileJson(label: String): String = prefs.exportProfileJson(buildProfile(label))
+
+    fun saveCurrentToHistory(label: String) {
+        viewModelScope.launch { prefs.saveToHistory(buildProfile(label)) }
+    }
+
+    fun loadHistoryList(onLoaded: (List<Pair<String, ContractProfile>>) -> Unit) {
+        viewModelScope.launch { onLoaded(prefs.listHistory()) }
+    }
+
+    fun deleteHistoryEntry(id: String) {
+        viewModelScope.launch { prefs.deleteFromHistory(id) }
+    }
+
+    /** Aplica un perfil (de historial o importado) sobre los campos actuales. */
+    fun applyProfile(profile: ContractProfile) {
+        _state.value = _state.value.copy(
+            fieldValues = _state.value.fieldValues + profile.campos
+        )
+    }
+
+    fun importProfileFromJson(raw: String): Boolean {
+        val profile = prefs.importProfileJson(raw) ?: return false
+        applyProfile(profile)
+        return true
     }
 
     /** Ajuste manual de una asignación canónica -> real en el editor de mapeo. */
@@ -134,7 +167,6 @@ class WizardViewModel @Inject constructor(
         val cur = _state.value.enabledProviders.toMutableSet()
         if (!cur.add(p)) cur.remove(p)
         _state.value = _state.value.copy(enabledProviders = cur)
-        viewModelScope.launch { prefs.setEnabled(cur.toList()) }
     }
 
     /** Lanza la extracción multi-motor y avanza a Revisión. */
@@ -160,9 +192,8 @@ class WizardViewModel @Inject constructor(
             val prefill = result.proposals.associate { fp ->
                 fp.fieldKey to (fp.candidates.firstOrNull()?.value ?: "")
             }.toMutableMap()
-            // Regla fija de la web, con el nombre editable en Ajustes si el usuario lo cambió.
-            val responsable = prefs.responsableComercial.first().ifBlank { ContractFields.RESPONSABLE_VALUE }
-            prefill[ContractFields.RESPONSABLE_KEY] = responsable
+            // Regla fija de la web.
+            prefill[ContractFields.RESPONSABLE_KEY] = ContractFields.RESPONSABLE_VALUE
             // Autofill de fechas (Tanda D): rellena Fecha/de/año actuales si están vacías.
             prefill.putAll(DateAutofill.values(prefill))
 
@@ -310,18 +341,11 @@ class WizardViewModel @Inject constructor(
         _state.value = _state.value.copy(signature = null, stamps = emptyList())
     }
 
-    /** Etiqueta legible para el histórico: razón social o nombre comercial si los hay. */
-    private fun historyLabelFor(values: Map<String, String>): String =
-        values["Nombre  Razón Social"]?.trim()?.takeIf { it.isNotBlank() }
-            ?: values["Nombre Comercial"]?.trim()?.takeIf { it.isNotBlank() }
-            ?: "Contrato sin nombre"
-
-    /** Genera el PDF final (relleno + firmado) a fichero interno y lo apunta en el histórico. */
+    /** Genera el PDF final (relleno + firmado) a fichero interno. */
     fun generatePdf(onReady: (java.io.File) -> Unit = {}) {
         val s = _state.value
         viewModelScope.launch {
             _state.value = s.copy(busy = true, busyMsg = "Generando PDF final…", error = null)
-            val timestamp = System.currentTimeMillis()
             val file = runCatching {
                 withContext(Dispatchers.IO) {
                     exporter.generateToFile(
@@ -331,8 +355,7 @@ class WizardViewModel @Inject constructor(
                         stamps = s.stamps,
                         checkboxes = com.mejoresiagratis.rellenador.data.model.ContractFields
                             .checkboxStateFor(s.tipoIdentificacion),
-                        fieldMapping = if (s.contractSource == ContractSource.USER) s.fieldMapping else emptyMap(),
-                        fileName = "contrato-$timestamp.pdf"
+                        fieldMapping = if (s.contractSource == ContractSource.USER) s.fieldMapping else emptyMap()
                     )
                 }
             }.getOrElse {
@@ -340,14 +363,6 @@ class WizardViewModel @Inject constructor(
                 return@launch
             }
             _state.value = _state.value.copy(busy = false, outputFile = file, outputReady = true)
-            prefs.addHistoryEntry(
-                com.mejoresiagratis.rellenador.data.repository.HistoryEntry(
-                    id = timestamp.toString(),
-                    label = historyLabelFor(s.fieldValues),
-                    filePath = file.absolutePath,
-                    createdAt = timestamp
-                )
-            )
             onReady(file)
         }
     }

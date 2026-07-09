@@ -28,6 +28,7 @@ data class WizardUiState(
     val userFieldNames: List<String> = emptyList(),      // nombres reales del PDF del usuario
     val fieldMapping: Map<String, String> = emptyMap(),  // canónica -> real
     val needsMapping: Boolean = false,
+    val templateFingerprint: String = "",
 
     val docUris: List<Uri> = emptyList(),
     val availableProviders: List<AiProvider> = emptyList(),   // los que tienen clave en servidor (GET)
