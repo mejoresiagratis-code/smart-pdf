@@ -137,7 +137,7 @@ class SignatureProcessor @Inject constructor() {
             val ratio = targetSide.toFloat() / maxSide
             Bitmap.createScaledBitmap(bmp, (bmp.width * ratio).toInt(), (bmp.height * ratio).toInt(), true)
         } else bmp
-        val png = java.io.ByteArrayOutputStream().also { scaled.compress(Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
+        val png = ByteArrayOutputStream().also { scaled.compress(Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
         val ar = if (scaled.width > 0) scaled.height.toFloat() / scaled.width.toFloat() else 0.4f
         if (scaled !== bmp) scaled.recycle()
         return SignatureData(png, ar)
