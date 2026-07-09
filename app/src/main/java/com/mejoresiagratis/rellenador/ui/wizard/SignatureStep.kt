@@ -1,6 +1,10 @@
 package com.mejoresiagratis.rellenador.ui.wizard
 
 import android.graphics.BitmapFactory
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.Color
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -137,6 +141,22 @@ fun SignatureStep(state: WizardUiState, vm: WizardViewModel) {
         }
 
         if (state.signature != null) {
+            // Previsualización de la firma ya procesada (recorte/tinta/fondo aplicados).
+            val sigBmp = remember(state.signature) {
+                state.signature?.let {
+                    BitmapFactory.decodeByteArray(it.pngBytes, 0, it.pngBytes.size)
+                }
+            }
+            if (sigBmp != null) {
+                Box(
+                    Modifier.fillMaxWidth().height(120.dp)
+                        .background(Color(0xFFE0E0E0)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Image(sigBmp.asImageBitmap(), contentDescription = "Firma procesada",
+                        modifier = Modifier.height(100.dp))
+                }
+            }
             AssistChip(onClick = {}, label = { Text("Firma preparada ✓") })
 
             // --- Páginas de firma detectadas (Tanda B) ---

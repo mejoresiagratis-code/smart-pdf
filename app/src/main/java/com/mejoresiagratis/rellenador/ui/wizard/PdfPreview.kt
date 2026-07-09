@@ -62,6 +62,7 @@ private fun PdfPageView(
     var bitmap by remember(pageIdx) { mutableStateOf<Bitmap?>(null) }
     var containerWidthPx by remember { mutableIntStateOf(0) }
     var containerSize by remember { mutableStateOf(IntSize.Zero) }
+    var selected by remember(pageIdx) { mutableStateOf(false) }
 
     LaunchedEffect(pageIdx, containerWidthPx) {
         if (containerWidthPx > 0) {
@@ -73,32 +74,11 @@ private fun PdfPageView(
 
     ElevatedCard(Modifier.fillMaxWidth()) {
         Box(
+            // Sin gestos aquí: el scroll de la lista funciona libre en toda la página;
+            // solo el marcador (abajo) responde al toque/arrastre.
             Modifier
                 .fillMaxWidth()
                 .onSizeChanged { containerWidthPx = it.width; containerSize = it }
-                .pointerInput(pageIdx, isSignPage) {
-                    if (isSignPage) {
-                        // Toque para colocar Y arrastre para mover la firma de esta página.
-                        detectTapGestures { offset ->
-                            if (containerSize.width > 0 && containerSize.height > 0) {
-                                onMove(offset.x / containerSize.width, offset.y / containerSize.height)
-                            }
-                        }
-                    }
-                }
-                .pointerInput(pageIdx, isSignPage) {
-                    if (isSignPage) {
-                        detectDragGestures { change, _ ->
-                            change.consume()
-                            if (containerSize.width > 0 && containerSize.height > 0) {
-                                onMove(
-                                    (change.position.x / containerSize.width).coerceIn(0f, 1f),
-                                    (change.position.y / containerSize.height).coerceIn(0f, 1f)
-                                )
-                            }
-                        }
-                    }
-                }
         ) {
             val bmp = bitmap
             if (bmp != null && !bmp.isRecycled) {
@@ -108,7 +88,9 @@ private fun PdfPageView(
                 Box(Modifier.fillMaxWidth().height(400.dp).background(Color(0xFFF0F0F0)),
                     contentAlignment = Alignment.Center) { CircularProgressIndicator() }
             }
-            // Marcador arrastrable de la firma en esta página.
+            // Marcador de la firma: primero TÓCALO para seleccionarlo (se resalta),
+            // luego ARRÁSTRALO para elegir la nueva posición. Así no interfiere con
+            // el scroll de la lista al pasar el dedo por el resto de la página.
             if (isSignPage && stampXRel != null && stampYRel != null &&
                 containerSize.width > 0 && containerSize.height > 0) {
                 val density = LocalDensity.current
@@ -116,9 +98,32 @@ private fun PdfPageView(
                 val yDp = with(density) { (stampYRel * containerSize.height).toDp() }
                 Box(
                     Modifier
-                        .absoluteOffset(x = xDp - 20.dp, y = yDp - 12.dp)
-                        .size(width = 40.dp, height = 24.dp)
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.35f))
+                        .absoluteOffset(x = xDp - 22.dp, y = yDp - 14.dp)
+                        .size(width = 44.dp, height = 28.dp)
+                        .background(
+                            if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+                            else MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                        )
+                        .pointerInput(pageIdx) {
+                            detectTapGestures { selected = !selected }
+                        }
+                        .pointerInput(pageIdx, selected) {
+                            if (selected) {
+                                // Acumular localmente para no perder posición entre eventos
+                                // de arrastre (si se re-lanzara con cada onMove, el gesto
+                                // se cancelaría a mitad de camino).
+                                var curX = stampXRel
+                                var curY = stampYRel
+                                detectDragGestures { change, dragAmount ->
+                                    change.consume()
+                                    if (containerSize.width > 0 && containerSize.height > 0) {
+                                        curX = (curX + dragAmount.x / containerSize.width).coerceIn(0f, 1f)
+                                        curY = (curY + dragAmount.y / containerSize.height).coerceIn(0f, 1f)
+                                        onMove(curX, curY)
+                                    }
+                                }
+                            }
+                        }
                 ) {
                     Text("✍", modifier = Modifier.align(Alignment.Center))
                 }
@@ -133,7 +138,9 @@ private fun PdfPageView(
             if (isSignPage) {
                 Surface(color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.align(Alignment.TopEnd).padding(6.dp)) {
-                    Text("✍ arrastra para mover", color = MaterialTheme.colorScheme.onPrimary,
+                    Text(
+                        if (selected) "✍ arrastra para mover" else "✍ toca la firma para moverla",
+                        color = MaterialTheme.colorScheme.onPrimary,
                         style = MaterialTheme.typography.labelSmall,
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
                 }

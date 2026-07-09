@@ -157,6 +157,25 @@ Componentes:
 - FillStep — validación en vivo bajo cada campo + teclado adecuado por tipo.
 - 10 tests unitarios con casos reales (ValidatorsTest.kt).
 
+## Fixes post-Tanda F (bugs reales reportados en uso)
+- **Fotos sin redimensionar → 400/500/429**: DocumentLoader mandaba fotos del cliente
+  a resolución completa (varios MB). Causaba Claude 400, Gemini 500, Groq/Mistral 429/
+  incompleta. FIX: downscaleIfNeeded() a 1600px lado mayor antes de enviar (igual que
+  ya se hacía para páginas de PDF rasterizadas).
+- **locate_signature con el mismo problema**: extractSignatureFromPhoto también mandaba
+  el bitmap sin redimensionar. Mismo fix aplicado (1600px antes de base64).
+- **Preview de firma ausente**: SignatureStep no mostraba la imagen de la firma procesada,
+  solo un chip de texto. FIX: Image() con el PNG decodificado (recorte/tinta/fondo ya
+  aplicados) antes del chip "Firma preparada".
+- **Arrastre de firma interfería con el scroll**: el gesto respondía en toda la página,
+  no solo en el marcador, y podía cancelarse a mitad de arrastre. FIX: el gesto vive
+  SOLO en el marcador ✍; primer toque = seleccionar (resalta), con seleccionado=true
+  se puede arrastrar (acumulando posición localmente para no perder el gesto).
+- **Dos commits "Tanda F" distintos en el repo**: c3b6545 (código huérfano de Ajustes/
+  Historial de una fase muy anterior, nunca conectado) vs el actual (ContractProfile/
+  HistoryPanel). Si persisten errores de compilación en ui/history o ui/settings,
+  hay que `git rm -r` esas carpetas — no son parte de esta migración actual.
+
 ## Pendiente (siguiente tanda)
 - **Firma**: captura manuscrita en Canvas + task "locate_signature" (ya soportada por
   el proxy) para ubicar el hueco + inserción en página 24 + generar PDF final con

@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.ParcelFileDescriptor
 import android.util.Base64
 import androidx.core.graphics.createBitmap
+import androidx.core.graphics.scale
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.ByteArrayOutputStream
 import javax.inject.Inject
@@ -59,6 +60,17 @@ class DocumentLoader @Inject constructor(
         return out
     }
 
+    /** Redimensiona si el lado mayor supera targetLongSide (evita 400/500 en las IAs
+     *  por fotos de móvil a resolución completa; el proxy espera imágenes razonables). */
+    private fun downscaleIfNeeded(bmp: Bitmap, targetLongSide: Int = 1600): Bitmap {
+        val longSide = maxOf(bmp.width, bmp.height)
+        if (longSide <= targetLongSide) return bmp
+        val scale = targetLongSide.toFloat() / longSide
+        val w = (bmp.width * scale).toInt().coerceAtLeast(1)
+        val h = (bmp.height * scale).toInt().coerceAtLeast(1)
+        return bmp.scale(w, h)
+    }
+
     private fun Bitmap.toJpegBytes(quality: Int = 85): ByteArray =
         ByteArrayOutputStream().also { compress(Bitmap.CompressFormat.JPEG, quality, it) }.toByteArray()
 
@@ -72,9 +84,23 @@ class DocumentLoader @Inject constructor(
         val mime = mimeOf(uri)
         return when {
             mime.startsWith("image/") -> {
-                val bytes = readBytes(uri)
-                val outMime = if (mime in listOf("image/jpeg", "image/png", "image/webp", "image/gif")) mime else "image/jpeg"
-                listOf(com.mejoresiagratis.rellenador.data.model.DocPayload(mime = outMime, b64 = bytes.b64()))
+                // Decodificar y redimensionar SIEMPRE a JPEG razonable: evita 400/500 en
+                // las IAs por fotos de móvil a resolución completa (varios MB sin comprimir).
+                val original = context.contentResolver.openInputStream(uri)!!.use {
+                    android.graphics.BitmapFactory.decodeStream(it)
+                }
+                if (original == null) {
+                    // Si no se puede decodificar (formato raro), fallback: bytes tal cual.
+                    val bytes = readBytes(uri)
+                    val outMime = if (mime in listOf("image/jpeg", "image/png", "image/webp", "image/gif")) mime else "image/jpeg"
+                    listOf(com.mejoresiagratis.rellenador.data.model.DocPayload(mime = outMime, b64 = bytes.b64()))
+                } else {
+                    val resized = downscaleIfNeeded(original)
+                    val jpg = resized.toJpegBytes(85)
+                    if (resized !== original) original.recycle()
+                    resized.recycle()
+                    listOf(com.mejoresiagratis.rellenador.data.model.DocPayload(mime = "image/jpeg", b64 = jpg.b64()))
+                }
             }
             mime == "application/pdf" -> renderPdf(uri).map {
                 com.mejoresiagratis.rellenador.data.model.DocPayload(mime = "image/jpeg", b64 = it.b64())

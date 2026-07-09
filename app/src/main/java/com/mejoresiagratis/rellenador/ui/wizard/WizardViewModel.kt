@@ -11,6 +11,7 @@ import com.mejoresiagratis.rellenador.data.model.DateAutofill
 import com.mejoresiagratis.rellenador.data.model.PackageApplier
 import com.mejoresiagratis.rellenador.data.model.Paquete
 import android.graphics.Bitmap
+import androidx.core.graphics.scale
 import com.mejoresiagratis.rellenador.data.model.SignatureData
 import com.mejoresiagratis.rellenador.data.model.SignatureStamp
 import com.mejoresiagratis.rellenador.data.pdf.DocumentLoader
@@ -305,8 +306,17 @@ class WizardViewModel @Inject constructor(
     fun extractSignatureFromPhoto(bmp: Bitmap) {
         viewModelScope.launch {
             _state.value = _state.value.copy(locatingSignature = true, error = null)
+            // Redimensionar antes de mandar a locate_signature (mismo motivo que en
+            // DocumentLoader: fotos a resolución completa provocan 400/500 en las IAs).
+            val forLocate = withContext(Dispatchers.Default) {
+                val longSide = maxOf(bmp.width, bmp.height)
+                if (longSide > 1600) {
+                    val scale = 1600f / longSide
+                    bmp.scale((bmp.width * scale).toInt().coerceAtLeast(1), (bmp.height * scale).toInt().coerceAtLeast(1))
+                } else bmp
+            }
             val b64 = withContext(Dispatchers.IO) {
-                val jpg = ByteArrayOutputStream().also { bmp.compress(Bitmap.CompressFormat.JPEG, 85, it) }.toByteArray()
+                val jpg = ByteArrayOutputStream().also { forLocate.compress(Bitmap.CompressFormat.JPEG, 85, it) }.toByteArray()
                 Base64.encodeToString(jpg, Base64.NO_WRAP)
             }
             val box = runCatching {
