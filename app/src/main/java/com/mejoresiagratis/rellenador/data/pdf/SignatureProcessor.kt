@@ -141,8 +141,4 @@ class SignatureProcessor @Inject constructor() {
         val ar = if (scaled.width > 0) scaled.height.toFloat() / scaled.width.toFloat() else 0.4f
         if (scaled !== bmp) scaled.recycle()
         return SignatureData(png, ar)
-    }.toByteArray()
-        val ar = if (bmp.width > 0) bmp.height.toFloat() / bmp.width.toFloat() else 0.4f
-        return SignatureData(png, ar)
-    }
 }
