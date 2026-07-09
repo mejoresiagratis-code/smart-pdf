@@ -142,3 +142,4 @@ class SignatureProcessor @Inject constructor() {
         if (scaled !== bmp) scaled.recycle()
         return SignatureData(png, ar)
 }
+}
