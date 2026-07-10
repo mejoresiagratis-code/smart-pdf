@@ -11,15 +11,24 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun WizardScreen(vm: WizardViewModel = hiltViewModel()) {
+fun WizardScreen(vm: WizardViewModel = hiltViewModel(), onOpenSettings: () -> Unit = {}) {
     val state by vm.state.collectAsState()
 
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text("Rellenador de Contratos") })
+            TopAppBar(
+                title = { Text("Rellenador de Contratos") },
+                actions = {
+                    IconButton(onClick = onOpenSettings) {
+                        Icon(Icons.Default.Settings, contentDescription = "Ajustes")
+                    }
+                }
+            )
         }
     ) { pad ->
         Column(Modifier.padding(pad).fillMaxSize()) {

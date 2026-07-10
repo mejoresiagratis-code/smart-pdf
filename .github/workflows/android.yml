@@ -18,6 +18,8 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      # Instala un SDK de Android limpio y correcto en el runner.
+      # Esto es justo lo que falta en el Codespace (ANDROID_HOME vacio).
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
@@ -27,30 +29,12 @@ jobs:
       - name: Dar permiso de ejecucion a gradlew
         run: chmod +x gradlew
 
-      # Lee versionName del build.gradle.kts para nombrar el artifact/APK
-      - name: Extraer versionName
-        id: ver
-        run: |
-          VERSION=$(grep -Po 'versionName\s*=\s*"\K[^"]+' app/build.gradle.kts | head -1)
-          if [ -z "$VERSION" ]; then VERSION="unversioned-${GITHUB_SHA::7}"; fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Building version: $VERSION"
-
       - name: Compilar APK debug
         run: ./gradlew assembleDebug --stacktrace
-
-      # Renombra el APK con la versión antes de subirlo, para distinguir builds
-      - name: Renombrar APK con versión
-        run: |
-          cd app/build/outputs/apk/debug
-          for apk in *.apk; do
-            mv "$apk" "rellenador-${{ steps.ver.outputs.version }}.apk"
-          done
-          ls -la
 
       - name: Subir APK como artefacto
         uses: actions/upload-artifact@v4
         with:
-          name: rellenador-${{ steps.ver.outputs.version }}
+          name: app-debug-apk
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: warn

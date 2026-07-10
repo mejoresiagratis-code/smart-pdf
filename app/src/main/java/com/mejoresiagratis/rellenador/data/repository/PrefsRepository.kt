@@ -108,6 +108,31 @@ class PrefsRepository @Inject constructor(
         return if (p.tipo == "perfil-rellenador-pdv") p else null
     }
 
+
+    // --- Ajustes: perfil comercial (Responsable) + URL del proxy ---
+    private val responsableKey = stringPreferencesKey("responsable_comercial")
+    private val proxyUrlKey = stringPreferencesKey("proxy_base_url_override")
+
+    /** Nombre del responsable comercial que se autorrellena en el contrato. */
+    val responsableComercial: Flow<String> =
+        context.dataStore.data.map { it[responsableKey] ?: DEFAULT_RESPONSABLE }
+
+    suspend fun setResponsableComercial(value: String) {
+        context.dataStore.edit { it[responsableKey] = value }
+    }
+
+    /** URL del proxy si el usuario la sobrescribe; vacío = usar la de compilación. */
+    val proxyBaseUrlOverride: Flow<String> =
+        context.dataStore.data.map { it[proxyUrlKey] ?: "" }
+
+    suspend fun setProxyBaseUrlOverride(url: String) {
+        context.dataStore.edit { it[proxyUrlKey] = url.trim() }
+    }
+
+    companion object {
+        const val DEFAULT_RESPONSABLE = "PABLO SALVADOR POVEDA"
+    }
+
     // --- Firmas guardadas (Tanda E) ---
     private val sigListKey = stringSetPreferencesKey("saved_signatures")
     private fun sigDataKey(name: String) = stringPreferencesKey("sig_data_$name")

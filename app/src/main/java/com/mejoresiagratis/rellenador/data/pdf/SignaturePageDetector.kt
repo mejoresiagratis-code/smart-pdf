@@ -86,15 +86,7 @@ class SignaturePageDetector @Inject constructor() {
 
             // 3. Señal fuerte: candidata + rótulo presente. Fallback: todas las candidatas.
             val strong = candidates.filter { anchors.containsKey(it) }
-            var signPages = if (strong.isNotEmpty()) strong else candidates
-
-            // La página 24 (índice 23) NO tiene campos AcroForm propios — verificado contra
-            // contrato-relleno-a1.pdf, pypdf no encuentra ningún widget ahí — así que la
-            // detección estructural (multipágina) SIEMPRE la pierde. Es un hueco de firma
-            // real y conocido: forzarla siempre que exista esa página en el documento.
-            if (total > 23 && 23 !in signPages) {
-                signPages = (signPages + 23).sorted()
-            }
+            val signPages = if (strong.isNotEmpty()) strong else candidates
 
             return Detection(signPages, anchors, multipageFields)
         }

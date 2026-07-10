@@ -27,9 +27,10 @@ object AppModule {
     }
 
     @Provides @Singleton
-    fun okHttp(): OkHttpClient = OkHttpClient.Builder()
+    fun okHttp(dynamicBaseUrlInterceptor: com.mejoresiagratis.rellenador.data.remote.DynamicBaseUrlInterceptor): OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(120, TimeUnit.SECONDS) // AI calls can be slow
+        .addInterceptor(dynamicBaseUrlInterceptor)
         .addInterceptor(HttpLoggingInterceptor().apply {
             level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BODY
                     else HttpLoggingInterceptor.Level.NONE

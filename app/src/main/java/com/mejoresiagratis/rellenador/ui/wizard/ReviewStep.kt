@@ -24,8 +24,6 @@ import com.mejoresiagratis.rellenador.data.model.Paquete
  */
 @Composable
 fun ReviewStep(state: WizardUiState, vm: WizardViewModel) {
-    var showFailuresDetail by remember { mutableStateOf(false) }
-
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("Paso 3 · Revisa lo detectado por la IA", style = MaterialTheme.typography.titleMedium)
@@ -34,39 +32,8 @@ fun ReviewStep(state: WizardUiState, vm: WizardViewModel) {
                 style = MaterialTheme.typography.bodySmall)
             Text("Aplica un bloque completo o confirma campo a campo.",
                 style = MaterialTheme.typography.bodySmall)
-
-            // Chip compacto con motores caídos — se abre el detalle al pulsar.
-            if (state.engineFailures.isNotEmpty()) {
-                AssistChip(
-                    onClick = { showFailuresDetail = true },
-                    label = { Text("${state.engineFailures.size} motores no disponibles — ver detalle") }
-                )
-            }
         }
         HorizontalDivider()
-
-        if (showFailuresDetail) {
-            AlertDialog(
-                onDismissRequest = { showFailuresDetail = false },
-                title = { Text("Motores no disponibles") },
-                text = {
-                    Column {
-                        Text(
-                            "Estos motores no respondieron correctamente durante la última " +
-                            "extracción. Los que sí funcionaron aparecen arriba en «Motores».",
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                        Spacer(Modifier.height(12.dp))
-                        state.engineFailures.forEach { (motor, estado) ->
-                            Text("• $motor: $estado", style = MaterialTheme.typography.bodyMedium)
-                        }
-                    }
-                },
-                confirmButton = {
-                    TextButton(onClick = { showFailuresDetail = false }) { Text("Cerrar") }
-                }
-            )
-        }
 
         LazyColumn(Modifier.weight(1f).padding(horizontal = 12.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),

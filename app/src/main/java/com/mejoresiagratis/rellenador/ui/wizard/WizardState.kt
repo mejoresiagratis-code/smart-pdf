@@ -29,6 +29,8 @@ data class WizardUiState(
     val fieldMapping: Map<String, String> = emptyMap(),  // canónica -> real
     val needsMapping: Boolean = false,
     val templateFingerprint: String = "",
+    val responsableComercial: String = com.mejoresiagratis.rellenador.data.model.ContractFields.RESPONSABLE_VALUE,
+    val proxyBaseUrlOverride: String = "",
 
     val docUris: List<Uri> = emptyList(),
     val availableProviders: List<AiProvider> = emptyList(),   // los que tienen clave en servidor (GET)
@@ -43,8 +45,6 @@ data class WizardUiState(
     val packages: List<Paquete> = emptyList(),
     val tipoIdentificacion: String? = null,
     val enginesOk: Set<String> = emptySet(),
-    /** Motor -> último estado de fallo (para el panel "detalles"). Vacío si no hubo fallos. */
-    val engineFailures: Map<String, String> = emptyMap(),
 
     // Valores finales confirmados por el usuario (campo canónico -> valor)
     val fieldValues: Map<String, String> = emptyMap(),
@@ -53,7 +53,7 @@ data class WizardUiState(
     val signature: SignatureData? = null,
     val stamps: List<SignatureStamp> = emptyList(),
     val locatingSignature: Boolean = false,
-    val inkColor: Int = android.graphics.Color.rgb(20, 20, 20),   // azul oscuro por defecto
+    val inkColor: Int = android.graphics.Color.rgb(20, 30, 90),   // azul oscuro por defecto
     val sigBackground: com.mejoresiagratis.rellenador.data.pdf.SignatureProcessor.Background =
         com.mejoresiagratis.rellenador.data.pdf.SignatureProcessor.Background.TRANSPARENT,
     val savedSignatures: List<String> = emptyList(),

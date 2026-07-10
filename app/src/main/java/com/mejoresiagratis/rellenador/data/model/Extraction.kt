@@ -71,6 +71,7 @@ object ContractFields {
 
     /** Valor fijo autorrellenado (regla de la app web). */
     const val RESPONSABLE_KEY = "Responsable Comercial MASORANGE"
+    /** Valor por defecto; el real lo edita el usuario en Ajustes (PrefsRepository). */
     const val RESPONSABLE_VALUE = "PABLO SALVADOR POVEDA"
 
     // Checkboxes del tipo de identificación (valores reales del AcroForm).

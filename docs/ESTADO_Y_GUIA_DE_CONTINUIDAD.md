@@ -176,6 +176,29 @@ Componentes:
   HistoryPanel). Si persisten errores de compilación en ui/history o ui/settings,
   hay que `git rm -r` esas carpetas — no son parte de esta migración actual.
 
+## Tanda Ajustes (COMPLETADA) — perfil comercial, URL proxy, motores persistidos
+- PrefsRepository: responsableComercial (Flow, default "PABLO SALVADOR POVEDA") +
+  setResponsableComercial(); proxyBaseUrlOverride (Flow, default "") + setProxyBaseUrlOverride().
+- data/remote/DynamicBaseUrlInterceptor.kt — interceptor OkHttp: si hay URL override
+  guardada, reescribe host/base de cada petición manteniendo el endpoint (ai-proxy.php)
+  y la query; si no hay override, la petición sale con BuildConfig.PROXY_BASE_URL tal cual.
+  Lectura de DataStore vía runBlocking (corre en hilo de OkHttp, no en el principal).
+- AppModule: OkHttpClient ahora inyecta el interceptor dinámico antes del logging.
+- WizardState: responsableComercial + proxyBaseUrlOverride. WizardViewModel:
+  loadPersistedSettings() al iniciar (carga perfil y URL guardados); probeProviders()
+  ahora cruza los motores disponibles con los persistidos en prefs.enabledProviders
+  (si el usuario ya eligió antes, se respeta esa selección); toggleProvider() ahora
+  persiste con prefs.setEnabled() además de actualizar el state; prefill del contrato
+  usa state.responsableComercial (editable) en vez de la constante fija.
+- ui/settings/AjustesScreen.kt (NUEVO, no confundir con el huérfano ya borrado):
+  editar nombre del responsable, URL del proxy (+ restaurar por defecto), switches
+  de motores IA activos (persistidos).
+- Navegación: RellenadorNavHost tiene ruta "ajustes"; comparte la MISMA instancia de
+  WizardViewModel entre "wizard" y "ajustes" (vía hiltViewModel(backStackEntry) del
+  backstack de "wizard") para que los cambios se vean sin recargar. Icono de Ajustes
+  en el TopAppBar del WizardScreen.
+- FillStep muestra el nombre real configurado (no la constante) en el chip automático.
+
 ## Pendiente (siguiente tanda)
 - **Firma**: captura manuscrita en Canvas + task "locate_signature" (ya soportada por
   el proxy) para ubicar el hueco + inserción en página 24 + generar PDF final con

@@ -71,7 +71,7 @@ fun FillStep(state: WizardUiState, vm: WizardViewModel) {
             item {
                 AssistChip(
                     onClick = { },
-                    label = { Text("${ContractFields.RESPONSABLE_VALUE} (automático)") },
+                    label = { Text("${state.responsableComercial} (automático · editar en Ajustes)") },
                     modifier = Modifier.padding(top = 4.dp)
                 )
             }
