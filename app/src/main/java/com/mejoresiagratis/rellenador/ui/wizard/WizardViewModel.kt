@@ -54,6 +54,17 @@ class WizardViewModel @Inject constructor(
 ) : ViewModel() {
 
     private var previewRenderer: PdfPageRenderer? = null
+    // Bitmap "crudo" de la firma (antes de tintar/recortar), guardado para poder
+    // reprocesar en vivo cuando el usuario cambia color de tinta o fondo, sin
+    // tener que volver a llamar a la IA de localización. null si la firma activa
+    // viene de un dibujo a mano (que ya se procesa una sola vez) o de una firma
+    // guardada (que ya está tintada y no tiene sentido reprocesar).
+    private var rawSignatureBitmap: Bitmap? = null
+    private var rawSignatureHasLocatedBox: Boolean = false
+    // true = viene de un canvas dibujado a mano (conviene bounding-crop al reprocesar);
+    // false = viene de una foto (recortada por locator o no) — NUNCA bounding-crop de nuevo.
+    private var rawSignatureIsHandDrawn: Boolean = false
+
     private val _state = MutableStateFlow(WizardUiState())
     val state: StateFlow<WizardUiState> = _state.asStateFlow()
 
@@ -232,18 +243,25 @@ class WizardViewModel @Inject constructor(
             ?: context.assets.open("contrato-base.pdf")
 
     /**
-     * Coordenadas calibradas manualmente sobre el contrato real (`contrato-relleno-a1.pdf`).
-     * Índice = página 0-based; valores extraídos con pdfplumber de un contrato firmado.
+     * Coordenadas calibradas contra `contrato-relleno-a1.pdf` (contrato real ya firmado).
+     * Medidas con pdfplumber: para cada página se localizó el rótulo "EL DISTRIBUIDOR" y
+     * la imagen de firma inmediatamente asociada a él (más cercana en Y, alineada en X),
+     * y se convirtió su posición a CENTRO relativo (xRel/yRel esperan centro, no esquina —
+     * ver AcroFormFiller). Esto reemplaza el valor fijo anterior (0.30/0.82 para todas)
+     * que colocaba la firma a un lado en vez de justo debajo y centrada al rótulo.
      *
-     * Formato: pageIndex → Triple(xRel, yRel, widthRel).
-     * yRel es TOP-LEFT (compatible con pdfbox-android al estampar).
+     * Nota importante: el rótulo "EL DISTRIBUIDOR" NO está siempre a la izquierda de la
+     * página. En las páginas 30 y 33 el bloque del distribuidor está a la DERECHA (Xfera
+     * a la izquierda, distribuidor a la derecha); en 24, 45 y 54 está a la izquierda.
+     *
+     * Índice = página 0-based. Valores: Triple(xRel centro, yRel centro, widthRel).
      */
     private val calibratedStamps: Map<Int, Triple<Float, Float, Float>> = mapOf(
-        23 to Triple(0.147f, 0.406f, 0.256f),   // Página 24 — bloque "EL DISTRIBUIDOR" abajo-izquierda
-        29 to Triple(0.594f, 0.204f, 0.256f),   // Página 30 — rótulo a la DERECHA (verificado vs contrato real)
-        32 to Triple(0.092f, 0.883f, 0.256f),   // Página 33
-        44 to Triple(0.093f, 0.796f, 0.256f),   // Página 45
-        53 to Triple(0.055f, 0.829f, 0.256f)    // Página 54
+        23 to Triple(0.275f, 0.463f, 0.256f),   // Página 24 — izquierda
+        29 to Triple(0.722f, 0.261f, 0.256f),   // Página 30 — derecha
+        32 to Triple(0.220f, 0.940f, 0.256f),   // Página 33 — izquierda, muy abajo
+        44 to Triple(0.222f, 0.853f, 0.256f),   // Página 45 — izquierda
+        53 to Triple(0.183f, 0.886f, 0.256f)    // Página 54 — izquierda
     )
 
     /** Devuelve el stamp para una página: usa calibración si existe, si no cae al ancla detectada. */
@@ -314,6 +332,10 @@ class WizardViewModel @Inject constructor(
         val processed = sigProcessor.processInk(bmp, thr, _state.value.inkColor, _state.value.sigBackground)
             ?: bmp
         val data = sigProcessor.toSignatureData(processed)
+        // Guardar crudo (canvas limpio, sí conviene bounding-crop al reprocesar).
+        rawSignatureBitmap = bmp
+        rawSignatureHasLocatedBox = true   // el canvas ya está "recortado" por diseño
+        rawSignatureIsHandDrawn = true
         // Colocación por defecto en la página de firma del distribuidor (pág. 24).
         _state.value = _state.value.copy(signature = data)
         // Colocar en todas las páginas de firma detectadas (o la 24 por defecto).
@@ -348,8 +370,10 @@ class WizardViewModel @Inject constructor(
             //  - SIN caja: no aplicamos processInk sobre la foto entera (sacaba bounding boxes
             //    en cualquier sombra), sino que dejamos la foto tal cual — es peor calidad
             //    pero al menos se ve la firma. Se avisa al usuario.
+            val rawForReprocess: Bitmap
             val processed = if (box != null) {
                 val cropped = sigProcessor.crop(bmp, box)
+                rawForReprocess = cropped
                 sigProcessor.fromPhoto(
                     src = cropped,
                     tint = _state.value.inkColor,
@@ -360,6 +384,7 @@ class WizardViewModel @Inject constructor(
                 // Fallback razonable: procesar la foto entera SIN bounding-crop (para no
                 // dejar un puntito) y con fondo blanco para que sea legible en el PDF.
                 // La calidad no será ideal pero es infinitamente mejor que un cuadro vacío.
+                rawForReprocess = bmp
                 sigProcessor.fromPhoto(
                     src = bmp,
                     tint = _state.value.inkColor,
@@ -367,6 +392,11 @@ class WizardViewModel @Inject constructor(
                     applyBoundingCrop = false
                 ) ?: bmp
             }
+            // Guardar crudo para poder reprocesar en vivo cuando cambien color/fondo.
+            rawSignatureBitmap = rawForReprocess
+            rawSignatureHasLocatedBox = box != null
+            rawSignatureIsHandDrawn = false
+
             val data = sigProcessor.toSignatureData(processed)
             _state.value = _state.value.copy(
                 locatingSignature = false, signature = data,
@@ -377,10 +407,38 @@ class WizardViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Reprocesa la firma cruda (si la hay) con el color de tinta / fondo actuales.
+     * Se llama automáticamente al cambiar cualquiera de esas dos opciones, para que
+     * el usuario vea el resultado en vivo sin tener que volver a elegir la foto.
+     */
+    private fun reprocessSignatureIfPossible() {
+        val raw = rawSignatureBitmap ?: return
+        val processed = if (rawSignatureIsHandDrawn) {
+            // Dibujo a mano: bounding-crop normal (canvas limpio, sin riesgo de
+            // recortar sobre ruido de fondo).
+            val px = IntArray(raw.width * raw.height)
+            raw.getPixels(px, 0, raw.width, 0, 0, raw.width, raw.height)
+            val thr = sigProcessor.otsuThreshold(px)
+            sigProcessor.processInk(raw, thr, _state.value.inkColor, _state.value.sigBackground)
+        } else {
+            // Foto (con o sin caja del locator): nunca bounding-crop de nuevo.
+            sigProcessor.fromPhoto(
+                src = raw,
+                tint = _state.value.inkColor,
+                bg = if (rawSignatureHasLocatedBox) _state.value.sigBackground
+                     else SignatureProcessor.Background.WHITE,
+                applyBoundingCrop = false
+            )
+        } ?: return
+        val data = sigProcessor.toSignatureData(processed)
+        _state.value = _state.value.copy(signature = data)
+    }
+
     private fun defaultStamp() = SignatureStamp(
         pageIndex = 23,       // página 24 (bloque EL DISTRIBUIDOR)
-        // Coordenadas calibradas contra contrato-relleno-a1.pdf
-        xRel = 0.147f, yRel = 0.406f, widthRel = 0.256f
+        // Coordenadas calibradas contra contrato-relleno-a1.pdf (centro real)
+        xRel = 0.275f, yRel = 0.463f, widthRel = 0.256f
     )
 
     /** Ajuste manual de la colocación (posición/tamaño relativos). */
@@ -391,6 +449,7 @@ class WizardViewModel @Inject constructor(
     }
 
     fun clearSignature() {
+        rawSignatureBitmap = null
         _state.value = _state.value.copy(signature = null, stamps = emptyList())
     }
 
@@ -465,12 +524,14 @@ class WizardViewModel @Inject constructor(
         )
     }
 
-    /** Cambia el color de la tinta de la firma (re-procesa si hay firma cruda). */
+    /** Cambia el color de la tinta de la firma y reprocesa en vivo si hay firma cruda. */
     fun setInkColor(color: Int) {
         _state.value = _state.value.copy(inkColor = color)
+        reprocessSignatureIfPossible()
     }
     fun setSigBackground(bg: com.mejoresiagratis.rellenador.data.pdf.SignatureProcessor.Background) {
         _state.value = _state.value.copy(sigBackground = bg)
+        reprocessSignatureIfPossible()
     }
 
     /** Guarda la firma actual para reutilizarla (persistida en PrefsRepository). */
@@ -491,6 +552,9 @@ class WizardViewModel @Inject constructor(
         viewModelScope.launch {
             val saved = prefs.getSignature(name) ?: return@launch
             val bytes = android.util.Base64.decode(saved.first, android.util.Base64.NO_WRAP)
+            // Una firma guardada ya está tintada/procesada; no hay crudo para reprocesar
+            // en vivo hasta que el usuario elija/dibuje una nueva.
+            rawSignatureBitmap = null
             _state.value = _state.value.copy(
                 signature = com.mejoresiagratis.rellenador.data.model.SignatureData(bytes, saved.second)
             )

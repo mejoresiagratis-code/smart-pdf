@@ -97,6 +97,37 @@ fun SignatureStep(state: WizardUiState, vm: WizardViewModel) {
             }
         }
 
+        // --- Previsualización de la firma preparada (justo tras elegirla/dibujarla) ---
+        // Movido aquí (antes estaba al final, tras el bloque de páginas) para que el
+        // usuario vea de inmediato el resultado de lo que acaba de cargar/dibujar.
+        if (state.signature != null) {
+            val sigBmp = remember(state.signature) {
+                state.signature?.let {
+                    BitmapFactory.decodeByteArray(it.pngBytes, 0, it.pngBytes.size)
+                }
+            }
+            ElevatedCard {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Previsualización de la firma", style = MaterialTheme.typography.labelLarge)
+                    if (sigBmp != null) {
+                        Box(
+                            Modifier.fillMaxWidth().height(120.dp)
+                                .background(Color(0xFFE0E0E0)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Image(sigBmp.asImageBitmap(), contentDescription = "Firma procesada",
+                                modifier = Modifier.height(100.dp))
+                        }
+                    }
+                    // Confirmación de carga + cuántas páginas quedarán firmadas.
+                    val pagesCount = state.signPages.size
+                    val confirmText = if (pagesCount > 0)
+                        "Firma cargada ✓ · lista para $pagesCount página${if (pagesCount != 1) "s" else ""}"
+                    else "Firma cargada ✓"
+                    AssistChip(onClick = {}, label = { Text(confirmText) })
+                }
+            }
+        }
 
         // --- Opciones avanzadas de firma (Tanda E) ---
         ElevatedCard {
@@ -141,24 +172,6 @@ fun SignatureStep(state: WizardUiState, vm: WizardViewModel) {
         }
 
         if (state.signature != null) {
-            // Previsualización de la firma ya procesada (recorte/tinta/fondo aplicados).
-            val sigBmp = remember(state.signature) {
-                state.signature?.let {
-                    BitmapFactory.decodeByteArray(it.pngBytes, 0, it.pngBytes.size)
-                }
-            }
-            if (sigBmp != null) {
-                Box(
-                    Modifier.fillMaxWidth().height(120.dp)
-                        .background(Color(0xFFE0E0E0)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Image(sigBmp.asImageBitmap(), contentDescription = "Firma procesada",
-                        modifier = Modifier.height(100.dp))
-                }
-            }
-            AssistChip(onClick = {}, label = { Text("Firma preparada ✓") })
-
             // --- Páginas de firma detectadas (Tanda B) ---
             HorizontalDivider(Modifier.padding(vertical = 4.dp))
             Text("Páginas de firma detectadas: ${state.signPages.size}",
@@ -202,7 +215,10 @@ fun SignatureStep(state: WizardUiState, vm: WizardViewModel) {
                     pageInput.toIntOrNull()?.let { vm.addSignPage(it) }; pageInput = ""
                 }) { Text("Añadir") }
             }
-            // Estampado masivo
+            // Estampado masivo: rellena TODAS las páginas de firma detectadas (o ya
+            // colocadas manualmente) con la firma actual, respetando cada posición
+            // calibrada. Útil para "cargar todas de una vez" o "rellenar las que
+            // falten" tras colocar alguna a mano.
             if (state.signPages.size > 1) {
                 Button(onClick = vm::stampAllPages, modifier = Modifier.fillMaxWidth()) {
                     Text("Firmar todas las páginas (${state.signPages.size})")

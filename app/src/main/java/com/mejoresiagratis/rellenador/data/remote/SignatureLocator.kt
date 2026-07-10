@@ -21,8 +21,13 @@ class SignatureLocator @Inject constructor(
         "{\"x\":<%>,\"y\":<%>,\"w\":<%>,\"h\":<%>} (0-100). " +
         "Si toda la imagen es la firma: {\"x\":0,\"y\":0,\"w\":100,\"h\":100}."
 
+    // Orden de preferencia para LOCALIZAR (requiere visión real sobre la imagen).
+    // Groq queda fuera: es un motor de texto plano — no puede analizar dónde está
+    // una firma en una foto, solo "especularía" un JSON sin sentido.
+    // Se prioriza lo que funciona hoy en el proxy (Mistral/Scaleway con visión)
+    // antes que Claude/Gemini, que en este momento están devolviendo 400/500.
     private val order = listOf(
-        AiProvider.CLAUDE, AiProvider.GEMINI, AiProvider.GROQ, AiProvider.GROK, AiProvider.MISTRAL
+        AiProvider.MISTRAL, AiProvider.SCALEWAY, AiProvider.CLAUDE, AiProvider.GEMINI, AiProvider.GROK
     )
 
     private fun parseBox(raw: String?): SignatureBox? {
