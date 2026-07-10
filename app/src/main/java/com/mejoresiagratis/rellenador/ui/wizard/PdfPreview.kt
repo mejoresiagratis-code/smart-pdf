@@ -93,9 +93,13 @@ private fun PdfPageView(
             // el scroll de la lista al pasar el dedo por el resto de la página.
             if (isSignPage && stampXRel != null && stampYRel != null &&
                 containerSize.width > 0 && containerSize.height > 0) {
+                // Vals explícitos no-nulos: evita que `var curX = stampXRel` (Float?)
+                // arrastre la nulabilidad dentro del lambda de arrastre.
+                val stampX: Float = stampXRel
+                val stampY: Float = stampYRel
                 val density = LocalDensity.current
-                val xDp = with(density) { (stampXRel * containerSize.width).toDp() }
-                val yDp = with(density) { (stampYRel * containerSize.height).toDp() }
+                val xDp = with(density) { (stampX * containerSize.width).toDp() }
+                val yDp = with(density) { (stampY * containerSize.height).toDp() }
                 Box(
                     Modifier
                         .absoluteOffset(x = xDp - 22.dp, y = yDp - 14.dp)
@@ -112,8 +116,8 @@ private fun PdfPageView(
                                 // Acumular localmente para no perder posición entre eventos
                                 // de arrastre (si se re-lanzara con cada onMove, el gesto
                                 // se cancelaría a mitad de camino).
-                                var curX = stampXRel
-                                var curY = stampYRel
+                                var curX = stampX
+                                var curY = stampY
                                 detectDragGestures { change, dragAmount ->
                                     change.consume()
                                     if (containerSize.width > 0 && containerSize.height > 0) {
