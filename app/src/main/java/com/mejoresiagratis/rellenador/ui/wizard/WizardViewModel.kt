@@ -256,21 +256,41 @@ class WizardViewModel @Inject constructor(
      *
      * Índice = página 0-based. Valores: Triple(xRel centro, yRel centro, widthRel).
      */
-    private val calibratedStamps: Map<Int, Triple<Float, Float, Float>> = mapOf(
-        23 to Triple(0.275f, 0.463f, 0.256f),   // Página 24 — izquierda
-        29 to Triple(0.722f, 0.261f, 0.256f),   // Página 30 — derecha
-        32 to Triple(0.220f, 0.940f, 0.256f),   // Página 33 — izquierda, muy abajo
-        44 to Triple(0.222f, 0.853f, 0.256f),   // Página 45 — izquierda
-        53 to Triple(0.183f, 0.886f, 0.256f)    // Página 54 — izquierda
+    /**
+     * Coordenadas calibradas contra `contrato-relleno-a1.pdf` (contrato real ya firmado).
+     * Medidas con pdfplumber: para cada página se localizó el rótulo "EL DISTRIBUIDOR" y
+     * la imagen de firma inmediatamente asociada a él (más cercana en Y, alineada en X),
+     * y se convirtió su posición a CENTRO relativo (xRel/yRel esperan centro, no esquina —
+     * ver AcroFormFiller). Esto reemplaza el valor fijo anterior (0.30/0.82 para todas)
+     * que colocaba la firma a un lado en vez de justo debajo y centrada al rótulo.
+     *
+     * Nota importante: el rótulo "EL DISTRIBUIDOR" NO está siempre a la izquierda de la
+     * página. En las páginas 30 y 33 el bloque del distribuidor está a la DERECHA (Xfera
+     * a la izquierda, distribuidor a la derecha); en 24, 45 y 54 está a la izquierda.
+     *
+     * heightRel (0.114 ≈ 90/792) es la caja MÁXIMA disponible en el hueco real del
+     * contrato — la firma se escala para caber dentro de widthRel×heightRel sin
+     * deformarse (letterbox), en vez de forzar su altura a partir del aspect ratio
+     * de la imagen de origen (eso causaba el recorte/ampliación en exceso del PDF final).
+     *
+     * Índice = página 0-based. Valores: (xRel centro, yRel centro, widthRel, heightRel).
+     */
+    private data class Calib(val x: Float, val y: Float, val w: Float, val h: Float)
+    private val calibratedStamps: Map<Int, Calib> = mapOf(
+        23 to Calib(0.275f, 0.463f, 0.256f, 0.114f),   // Página 24 — izquierda
+        29 to Calib(0.722f, 0.261f, 0.256f, 0.114f),   // Página 30 — derecha
+        32 to Calib(0.220f, 0.940f, 0.256f, 0.114f),   // Página 33 — izquierda, muy abajo
+        44 to Calib(0.222f, 0.853f, 0.256f, 0.114f),   // Página 45 — izquierda
+        53 to Calib(0.183f, 0.886f, 0.256f, 0.114f)    // Página 54 — izquierda
     )
 
     /** Devuelve el stamp para una página: usa calibración si existe, si no cae al ancla detectada. */
     private fun stampFor(pageIdx: Int, anchors: Map<Int, Float>): SignatureStamp {
-        calibratedStamps[pageIdx]?.let { (x, y, w) ->
-            return SignatureStamp(pageIndex = pageIdx, xRel = x, yRel = y, widthRel = w)
+        calibratedStamps[pageIdx]?.let { c ->
+            return SignatureStamp(pageIndex = pageIdx, xRel = c.x, yRel = c.y, widthRel = c.w, heightRel = c.h)
         }
         val yr = anchors[pageIdx]?.let { (it + 0.06f).coerceAtMost(0.95f) } ?: 0.82f
-        return SignatureStamp(pageIndex = pageIdx, xRel = 0.30f, yRel = yr, widthRel = 0.28f)
+        return SignatureStamp(pageIndex = pageIdx, xRel = 0.30f, yRel = yr, widthRel = 0.28f, heightRel = 0.114f)
     }
 
     /** Detecta las páginas de firma del contrato activo (Tanda B). */
@@ -438,13 +458,19 @@ class WizardViewModel @Inject constructor(
     private fun defaultStamp() = SignatureStamp(
         pageIndex = 23,       // página 24 (bloque EL DISTRIBUIDOR)
         // Coordenadas calibradas contra contrato-relleno-a1.pdf (centro real)
-        xRel = 0.275f, yRel = 0.463f, widthRel = 0.256f
+        xRel = 0.275f, yRel = 0.463f, widthRel = 0.256f, heightRel = 0.114f
     )
 
-    /** Ajuste manual de la colocación (posición/tamaño relativos). */
+    /** Ajuste manual de la colocación (posición/tamaño relativos). Mantiene heightRel
+     *  proporcional al ancho para que el slider de "Tamaño" siga escalando la caja
+     *  completa (no solo el ancho) y no vuelva a producir deformación. */
     fun updateStamp(xRel: Float, yRel: Float, widthRel: Float) {
+        val prevStamp = _state.value.stamps.firstOrNull()
+        // Mantiene la proporción ancho/alto de la caja calibrada al reescalar con el slider.
+        val ratio = if (prevStamp != null && prevStamp.widthRel > 0f)
+            prevStamp.heightRel / prevStamp.widthRel else 0.114f / 0.256f
         _state.value = _state.value.copy(
-            stamps = listOf(SignatureStamp(23, xRel, yRel, widthRel))
+            stamps = listOf(SignatureStamp(23, xRel, yRel, widthRel, widthRel * ratio))
         )
     }
 
@@ -515,11 +541,12 @@ class WizardViewModel @Inject constructor(
     /** Mueve la firma de una página a una posición relativa (por arrastre/toque). */
     fun moveStamp(pageIdx: Int, xRel: Float, yRel: Float) {
         val cur = _state.value.stamps.firstOrNull { it.pageIndex == pageIdx }
-        val width = cur?.widthRel ?: 0.28f
+        val width = cur?.widthRel ?: 0.256f
+        val height = cur?.heightRel ?: 0.114f
         val others = _state.value.stamps.filterNot { it.pageIndex == pageIdx }
         _state.value = _state.value.copy(
             stamps = others + com.mejoresiagratis.rellenador.data.model.SignatureStamp(
-                pageIdx, xRel.coerceIn(0f, 1f), yRel.coerceIn(0f, 1f), width
+                pageIdx, xRel.coerceIn(0f, 1f), yRel.coerceIn(0f, 1f), width, height
             )
         )
     }

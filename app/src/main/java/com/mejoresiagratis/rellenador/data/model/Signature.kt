@@ -9,7 +9,8 @@ data class SignatureStamp(
     val pageIndex: Int,          // 0-indexed
     val xRel: Float,             // 0..1 centro X
     val yRel: Float,             // 0..1 centro Y (0 = arriba)
-    val widthRel: Float = 0.28f  // ancho relativo al ancho de página
+    val widthRel: Float = 0.28f, // ancho MÁXIMO relativo al ancho de página (caja disponible)
+    val heightRel: Float = 0.114f // alto MÁXIMO relativo al alto de página (caja disponible)
 )
 
 /** La firma preparada: PNG en bytes + relación de aspecto (alto/ancho). */

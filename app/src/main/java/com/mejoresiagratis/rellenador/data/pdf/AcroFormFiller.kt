@@ -92,9 +92,32 @@ class AcroFormFiller @Inject constructor() {
                     val page = doc.getPage(st.pageIndex)
                     val pw = page.mediaBox.width
                     val ph = page.mediaBox.height
-                    val w = st.widthRel * pw
-                    val h = w * signature.aspectRatio
-                    // xRel,yRel = centro; yRel 0 = arriba → convertir a coords PDF (0 abajo)
+
+                    // Caja disponible en el contrato (calibrada contra el hueco real,
+                    // NO el tamaño de la firma). La firma se escala para CABER dentro
+                    // de esta caja sin deformarse (letterbox), en vez de forzar su
+                    // altura a partir del aspect ratio de la imagen de origen — eso
+                    // era lo que causaba el recorte/ampliación en exceso: una firma
+                    // con trazo muy ancho y fino, o muy vertical, deformaba la caja
+                    // real del hueco de firma del contrato.
+                    val boxW = st.widthRel * pw
+                    val boxH = st.heightRel * ph
+                    val boxAspect = boxH / boxW              // relación de la CAJA
+                    val sigAspect = signature.aspectRatio    // relación de la FIRMA real
+
+                    val w: Float; val h: Float
+                    if (sigAspect > boxAspect) {
+                        // La firma es más "alta" que la caja → limita por altura.
+                        h = boxH
+                        w = h / sigAspect
+                    } else {
+                        // La firma es más "ancha" que la caja (o igual) → limita por ancho.
+                        w = boxW
+                        h = w * sigAspect
+                    }
+
+                    // xRel,yRel = centro de la CAJA; yRel 0 = arriba → convertir a coords PDF (0 abajo).
+                    // La firma queda centrada dentro de esa caja aunque sea más pequeña que ella.
                     val x = st.xRel * pw - w / 2f
                     val y = (1f - st.yRel) * ph - h / 2f
                     PDPageContentStream(
