@@ -199,6 +199,32 @@ Componentes:
   en el TopAppBar del WizardScreen.
 - FillStep muestra el nombre real configurado (no la constante) en el chip automático.
 
+## FUSIÓN con trabajo paralelo detectado (commit 8d611c5, "v0.2.2-stamp-letterbox")
+Se detectó trabajo de OTRA sesión/herramienta (probablemente Claude Code en el propio
+Codespace, a juzgar por el CHANGELOG.md y los diffs quirúrgicos) directamente sobre el
+repo, en paralelo a esta conversación. Incluía una versión intermedia "0.2.1-firma-fix"
+de la que no hay rastro, y "0.2.2-stamp-letterbox" (commit 8d611c5), fusionada aquí:
+
+- **Signature.kt**: SignatureStamp ganó `heightRel` (antes solo `widthRel`; la altura se
+  derivaba del aspect ratio de la firma, deformando/recortando en el hueco real).
+- **AcroFormFiller.generate()**: encaje tipo "letterbox" — calcula una caja
+  (widthRel×heightRel) y escala la firma DENTRO de ella preservando su propio aspect
+  ratio (sin deformar), centrada. Antes: `h = w * signature.aspectRatio` (incorrecto).
+- **WizardViewModel**: `calibratedStamps`/`stampFor()` — coordenadas REALES calibradas
+  con pdfplumber contra un contrato ya firmado (`contrato-relleno-a1.pdf`) para las 5
+  páginas de firma (24, 30, 33, 45, 54). Descubrimiento importante: en páginas 30 y 33
+  el bloque "EL DISTRIBUIDOR" está a la DERECHA, no a la izquierda. Reemplaza la
+  heurística genérica (ancla+0.06, x=0.30 fijo) que antes usaban detectSignaturePages/
+  stampAllPages/stampOnePage. updateStamp() y moveStamp() ahora preservan heightRel.
+- **IMPORTANTE — .github/workflows/android.yml**: el repo real tiene un workflow
+  modificado (extrae versionName de build.gradle.kts, nombra el APK/artefacto con él)
+  que Claude NUNCA ha tocado. Los ZIPs de Claude EXCLUYEN este archivo a propósito
+  (con `-x` en el zip) para no sobrescribirlo. Si en el futuro hace falta tocar el
+  workflow, pedir a Pablo que pegue su contenido actual primero.
+- versionCode/versionName bumped a 5 / "0.3.0-ajustes-letterbox" para reflejar la fusión.
+- Lección para el futuro: verificar SIEMPRE con `git log --oneline --all` si hay commits
+  no reconocidos antes de generar un ZIP completo nuevo, para no repetir este problema.
+
 ## Pendiente (siguiente tanda)
 - **Firma**: captura manuscrita en Canvas + task "locate_signature" (ya soportada por
   el proxy) para ubicar el hueco + inserción en página 24 + generar PDF final con
