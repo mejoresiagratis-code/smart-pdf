@@ -202,8 +202,10 @@ class WizardViewModel @Inject constructor(
                 busy = false, step = Step.REVISION,
                 proposals = result.proposals, packages = result.packages,
                 tipoIdentificacion = result.tipoIdentificacion, enginesOk = result.enginesOk,
+                engineFailures = result.engineFailures,
                 fieldValues = prefill,
-                error = result.errors.takeIf { it.isNotEmpty() }?.joinToString("\n")
+                // Sin snack rojo con el listado — el detalle vive en ReviewStep.
+                error = null
             )
         }
     }
@@ -229,17 +231,38 @@ class WizardViewModel @Inject constructor(
         _state.value.userContractUri?.let { context.contentResolver.openInputStream(it)!! }
             ?: context.assets.open("contrato-base.pdf")
 
+    /**
+     * Coordenadas calibradas manualmente sobre el contrato real (`contrato-relleno-a1.pdf`).
+     * Índice = página 0-based; valores extraídos con pdfplumber de un contrato firmado.
+     *
+     * Formato: pageIndex → Triple(xRel, yRel, widthRel).
+     * yRel es TOP-LEFT (compatible con pdfbox-android al estampar).
+     */
+    private val calibratedStamps: Map<Int, Triple<Float, Float, Float>> = mapOf(
+        23 to Triple(0.147f, 0.406f, 0.256f),   // Página 24 — bloque "EL DISTRIBUIDOR" abajo-izquierda
+        29 to Triple(0.594f, 0.204f, 0.256f),   // Página 30 — rótulo a la DERECHA (verificado vs contrato real)
+        32 to Triple(0.092f, 0.883f, 0.256f),   // Página 33
+        44 to Triple(0.093f, 0.796f, 0.256f),   // Página 45
+        53 to Triple(0.055f, 0.829f, 0.256f)    // Página 54
+    )
+
+    /** Devuelve el stamp para una página: usa calibración si existe, si no cae al ancla detectada. */
+    private fun stampFor(pageIdx: Int, anchors: Map<Int, Float>): SignatureStamp {
+        calibratedStamps[pageIdx]?.let { (x, y, w) ->
+            return SignatureStamp(pageIndex = pageIdx, xRel = x, yRel = y, widthRel = w)
+        }
+        val yr = anchors[pageIdx]?.let { (it + 0.06f).coerceAtMost(0.95f) } ?: 0.82f
+        return SignatureStamp(pageIndex = pageIdx, xRel = 0.30f, yRel = yr, widthRel = 0.28f)
+    }
+
     /** Detecta las páginas de firma del contrato activo (Tanda B). */
     fun detectSignaturePages() {
         viewModelScope.launch {
             val det = withContext(Dispatchers.IO) {
                 runCatching { openContract().use { pageDetector.detect(it) } }.getOrNull()
             } ?: return@launch
-            // Colocación por defecto en cada página detectada, anclada bajo el rótulo.
-            val stamps = det.signPages.map { pageIdx ->
-                val yr = det.anchors[pageIdx]?.let { (it + 0.06f).coerceAtMost(0.95f) } ?: 0.82f
-                SignatureStamp(pageIndex = pageIdx, xRel = 0.30f, yRel = yr, widthRel = 0.28f)
-            }
+            // Colocación por defecto: primero coordenadas calibradas, luego ancla del detector.
+            val stamps = det.signPages.map { stampFor(it, det.anchors) }
             _state.value = _state.value.copy(
                 signPages = det.signPages,
                 signAnchors = det.anchors,
@@ -265,24 +288,20 @@ class WizardViewModel @Inject constructor(
     }
 
     /** Estampado MASIVO: coloca la firma en TODAS las páginas de firma a la vez,
-     *  anclando bajo el rótulo detectado en cada una (fiel a bulkStamps de la web). */
+     *  anclando por coordenadas calibradas (contrato real) o por rótulo detectado si no. */
     fun stampAllPages() {
         val sig = _state.value.signature ?: return
-        val stamps = _state.value.signPages.map { pageIdx ->
-            val yr = _state.value.signAnchors[pageIdx]?.let { (it + 0.06f).coerceAtMost(0.95f) } ?: 0.82f
-            SignatureStamp(pageIndex = pageIdx, xRel = 0.30f, yRel = yr, widthRel = 0.28f)
-        }
+        val anchors = _state.value.signAnchors
+        val stamps = _state.value.signPages.map { stampFor(it, anchors) }
         _state.value = _state.value.copy(stamps = stamps)
     }
 
     /** Estampado en UNA página concreta (modo una a una). */
     fun stampOnePage(pageIdx: Int) {
         val sig = _state.value.signature ?: return
-        val yr = _state.value.signAnchors[pageIdx]?.let { (it + 0.06f).coerceAtMost(0.95f) } ?: 0.82f
+        val newStamp = stampFor(pageIdx, _state.value.signAnchors)
         val others = _state.value.stamps.filterNot { it.pageIndex == pageIdx }
-        _state.value = _state.value.copy(
-            stamps = others + SignatureStamp(pageIdx, 0.30f, yr, 0.28f)
-        )
+        _state.value = _state.value.copy(stamps = others + newStamp)
     }
 
     // ---- Paso 5: firma ----
@@ -322,13 +341,36 @@ class WizardViewModel @Inject constructor(
             val box = runCatching {
                 locator.locate(b64, _state.value.availableProviders)
             }.getOrNull()
-            val cropped = if (box != null) sigProcessor.crop(bmp, box) else bmp
-            val processed = sigProcessor.fromPhoto(cropped, _state.value.inkColor, _state.value.sigBackground)
-                ?: cropped
+
+            // Doble estrategia según si el locator devolvió caja o no:
+            //  - CON caja: recortamos con la caja de la IA y NO aplicamos bounding-crop en
+            //    processInk (evita el doble recorte que dejaba la firma como un puntito).
+            //  - SIN caja: no aplicamos processInk sobre la foto entera (sacaba bounding boxes
+            //    en cualquier sombra), sino que dejamos la foto tal cual — es peor calidad
+            //    pero al menos se ve la firma. Se avisa al usuario.
+            val processed = if (box != null) {
+                val cropped = sigProcessor.crop(bmp, box)
+                sigProcessor.fromPhoto(
+                    src = cropped,
+                    tint = _state.value.inkColor,
+                    bg = _state.value.sigBackground,
+                    applyBoundingCrop = false     // ya viene recortado por el locator
+                ) ?: cropped
+            } else {
+                // Fallback razonable: procesar la foto entera SIN bounding-crop (para no
+                // dejar un puntito) y con fondo blanco para que sea legible en el PDF.
+                // La calidad no será ideal pero es infinitamente mejor que un cuadro vacío.
+                sigProcessor.fromPhoto(
+                    src = bmp,
+                    tint = _state.value.inkColor,
+                    bg = SignatureProcessor.Background.WHITE,
+                    applyBoundingCrop = false
+                ) ?: bmp
+            }
             val data = sigProcessor.toSignatureData(processed)
             _state.value = _state.value.copy(
                 locatingSignature = false, signature = data,
-                error = if (box == null) "No se localizó la firma automáticamente; usa la imagen completa." else null
+                error = if (box == null) "No se localizó la firma automáticamente; puede haber quedado con fondo. Ajusta el recuadro si hace falta." else null
             )
             if (_state.value.signPages.isNotEmpty()) stampAllPages()
             else _state.value = _state.value.copy(stamps = listOf(defaultStamp()))
@@ -337,7 +379,8 @@ class WizardViewModel @Inject constructor(
 
     private fun defaultStamp() = SignatureStamp(
         pageIndex = 23,       // página 24 (bloque EL DISTRIBUIDOR)
-        xRel = 0.30f, yRel = 0.82f, widthRel = 0.28f
+        // Coordenadas calibradas contra contrato-relleno-a1.pdf
+        xRel = 0.147f, yRel = 0.406f, widthRel = 0.256f
     )
 
     /** Ajuste manual de la colocación (posición/tamaño relativos). */

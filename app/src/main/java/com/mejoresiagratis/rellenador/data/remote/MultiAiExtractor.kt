@@ -34,7 +34,10 @@ class MultiAiExtractor @Inject constructor(
         val tipoIdentificacion: String?,
         val packages: List<Paquete>,
         val enginesOk: Set<String>,
-        val errors: List<String>
+        /** Compatibilidad: lista plana de "Motor: estado". */
+        val errors: List<String>,
+        /** Mismo contenido que `errors`, como mapa para el panel de detalles del UI. */
+        val engineFailures: Map<String, String>
     )
 
     /** Orden de prioridad. Los motores más fiables primero. */
@@ -193,6 +196,13 @@ class MultiAiExtractor @Inject constructor(
         // Errores agrupados: una línea por motor con problema, en vez de N líneas repetidas.
         val errors = perProviderStatus.map { (motor, estado) -> "$motor: $estado" }
 
-        return Result(proposals, tipoId, allPackages, enginesOk, errors)
+        return Result(
+            proposals = proposals,
+            tipoIdentificacion = tipoId,
+            packages = allPackages,
+            enginesOk = enginesOk,
+            errors = errors,
+            engineFailures = perProviderStatus.toMap()
+        )
     }
 }

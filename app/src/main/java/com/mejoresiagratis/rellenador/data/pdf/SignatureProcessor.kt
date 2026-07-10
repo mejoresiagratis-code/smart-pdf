@@ -76,10 +76,24 @@ class SignatureProcessor @Inject constructor() {
     }
 
     /**
-     * Tintado con alpha graduado + recorte a bounding box (fiel a processInk).
-     * @return el bitmap de firma listo, o null si no hay trazo.
+     * Tintado con alpha graduado + (opcional) recorte a bounding box.
+     *
+     * @param applyBoundingCrop  Si `true`, recorta a la caja mínima que contiene
+     *   los trazos detectados (comportamiento clásico de la web, útil cuando la
+     *   imagen es una foto entera del papel). Si `false`, mantiene el tamaño
+     *   original — recomendado cuando el bitmap ya viene recortado por el
+     *   locator o por el usuario, para evitar el DOBLE RECORTE que hacía que la
+     *   firma se viese como un puntito cuando el trazo era fino y la imagen
+     *   pequeña.
+     * @return el bitmap de firma listo, o `null` si no se detectó ningún trazo.
      */
-    fun processInk(src: Bitmap, threshold: Int, tint: Int, bg: Background): Bitmap? {
+    fun processInk(
+        src: Bitmap,
+        threshold: Int,
+        tint: Int,
+        bg: Background,
+        applyBoundingCrop: Boolean = true
+    ): Bitmap? {
         val w = src.width; val h = src.height
         val px = IntArray(w * h); src.getPixels(px, 0, w, 0, 0, w, h)
         val tr = Color.red(tint); val tg = Color.green(tint); val tb = Color.blue(tint)
@@ -99,12 +113,29 @@ class SignatureProcessor @Inject constructor() {
             }
         }
         if (!found) return null
-        val pad = 6
+
+        val full = createBitmap(w, h).apply { setPixels(px, 0, w, 0, 0, w, h) }
+
+        // Sin bounding-crop: devolver el bitmap tintado tal cual, preservando dimensiones.
+        if (!applyBoundingCrop) {
+            if (bg == Background.WHITE) {
+                val white = createBitmap(w, h)
+                white.eraseColor(Color.WHITE)
+                val canvas = android.graphics.Canvas(white)
+                canvas.drawBitmap(full, 0f, 0f, null)
+                full.recycle()
+                return white
+            }
+            return full
+        }
+
+        // Recorte a bounding box con un pad más generoso (antes: 6px, ahora: max(12, 4% del lado)).
+        // El pad pequeño hacía que en firmas finas o mal iluminadas el recorte se comiera detalles.
+        val pad = max(12, (min(w, h) * 0.04).toInt())
         minX = max(0, minX - pad); minY = max(0, minY - pad)
         maxX = min(w - 1, maxX + pad); maxY = min(h - 1, maxY + pad)
         val cw = maxX - minX + 1; val ch = maxY - minY + 1
 
-        val full = createBitmap(w, h).apply { setPixels(px, 0, w, 0, 0, w, h) }
         val cropped = Bitmap.createBitmap(full, minX, minY, cw, ch)
         full.recycle()
         if (bg == Background.WHITE) {
@@ -118,13 +149,24 @@ class SignatureProcessor @Inject constructor() {
         return cropped
     }
 
-    /** Pipeline completo desde una foto: aplanar → Otsu → tintar. */
-    fun fromPhoto(src: Bitmap, tint: Int = Color.rgb(20, 30, 90), bg: Background = Background.TRANSPARENT): Bitmap? {
+    /**
+     * Pipeline completo desde una foto: aplanar → Otsu → tintar.
+     *
+     * @param applyBoundingCrop  Ver [processInk]. Poner a `false` cuando el
+     *   bitmap ya viene recortado por el locator (evita el doble recorte que
+     *   dejaba la firma como un puntito).
+     */
+    fun fromPhoto(
+        src: Bitmap,
+        tint: Int = Color.rgb(20, 30, 90),
+        bg: Background = Background.TRANSPARENT,
+        applyBoundingCrop: Boolean = true
+    ): Bitmap? {
         val flat = flattenIllumination(src)
         val flatPx = IntArray(flat.width * flat.height)
         flat.getPixels(flatPx, 0, flat.width, 0, 0, flat.width, flat.height)
         val thr = otsuThreshold(flatPx)
-        val result = processInk(flat, thr, tint, bg)
+        val result = processInk(flat, thr, tint, bg, applyBoundingCrop)
         flat.recycle()
         return result
     }

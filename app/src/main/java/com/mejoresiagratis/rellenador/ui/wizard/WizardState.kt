@@ -43,6 +43,8 @@ data class WizardUiState(
     val packages: List<Paquete> = emptyList(),
     val tipoIdentificacion: String? = null,
     val enginesOk: Set<String> = emptySet(),
+    /** Motor -> último estado de fallo (para el panel "detalles"). Vacío si no hubo fallos. */
+    val engineFailures: Map<String, String> = emptyMap(),
 
     // Valores finales confirmados por el usuario (campo canónico -> valor)
     val fieldValues: Map<String, String> = emptyMap(),
