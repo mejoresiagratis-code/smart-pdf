@@ -6,6 +6,37 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.4.1-fallback-modelos-banner] — 2026-07-11
+
+### Añadido (ai-proxy.php — entregado aparte, vive en cPanel)
+- **Fallback de modelo por proveedor**: `callOpenAICompatSrv` ahora prueba modelos
+  ALTERNATIVOS (`ALT_MODELS`) en orden si el modelo principal falla con 400/403/404
+  (nombre no reconocido, bloqueado a nivel de proyecto, deprecado) — antes de rendirse
+  con ese motor. Poblado para `eurouter` (varias grafías plausibles de nombre, dado
+  que su catálogo no coincide 1:1 con el de Mistral directo), `grok` (grok-4.1-fast
+  como reserva del flagship 4.3) y `mistral` (mistral-medium-latest de reserva). NO se
+  reintenta en 429/503 (eso no es problema del NOMBRE del modelo, es cuota/demanda —
+  reintentar con otro modelo no ayuda ahí).
+- Diagnóstico real de esta sesión (capturas de Pablo) — la mayoría NO eran bugs:
+  - Groq 403 "qwen/qwen3.6-27b blocked at project level" → hay que habilitarlo en
+    console.groq.com/settings/project/limits (no hay otro modelo de visión disponible
+    en Groq ahora mismo — llama-4-scout está deprecado, qwen3.6-27b es la única opción).
+  - Claude 400 "credit balance too low" → cuenta de Anthropic sin saldo, no es bug.
+  - Gemini 503 "high demand" → sobrecarga temporal de Google, no es bug.
+  - Mistral "no se ha proporcionado ningún documento" → el formato de imagen enviado
+    es correcto (verificado); es el propio modelo alucinando que no hay imagen. No es
+    un problema de nombre de modelo — mistral-small-latest sigue siendo la elección
+    correcta (alias que Mistral actualiza automáticamente, confirmado en su doc oficial).
+
+### Cambiado (app Android)
+- El banner rojo genérico de error YA NO se muestra para fallos de extracción por
+  motor — esa información solo aparece ahora dentro de "Ver motores no disponibles"
+  (colapsable, oculto por defecto), evitando duplicar el mismo mensaje dos veces.
+  Otros errores no relacionados con la extracción (p.ej. exportar el PDF) siguen
+  mostrando el banner normalmente, ya que no tienen panel alternativo.
+
+---
+
 ## [0.4.0-proxy-robusto-modelos] — 2026-07-11
 
 ### Añadido (app Android)

@@ -225,7 +225,10 @@ class WizardViewModel @Inject constructor(
                 proposals = result.proposals, packages = result.packages,
                 tipoIdentificacion = result.tipoIdentificacion, enginesOk = result.enginesOk,
                 fieldValues = prefill,
-                error = result.errors.takeIf { it.isNotEmpty() }?.joinToString("\n"),
+                // NO se rellena `error` aquí a propósito: los fallos por motor ya se
+                // ven en el panel colapsable "Ver motores no disponibles" de ReviewStep
+                // (engineErrors). Duplicarlos en el banner rojo genérico era redundante
+                // y aparecía siempre visible aunque el usuario no quisiera verlo.
                 engineErrors = result.errors
             )
         }
