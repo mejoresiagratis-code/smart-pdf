@@ -29,6 +29,27 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.5.2-m3-expressive-tanda1-wizard-shell] — 2026-07-11
+
+### Añadido — Tanda 1 de rediseño visual: shell del wizard + Contrato
+- **`WizardScreen` (shell)**: `TopAppBar` con color propio (`primaryContainer`, antes
+  heredaba `surface` y se confundía con el fondo). Stepper con 3 estados reales
+  (pendiente/actual/completado) en vez del binario anterior — pendiente ahora es un
+  círculo con borde visible sobre el fondo cálido (antes `surfaceVariant` plano casi
+  invisible), completado suma un check, actual flota con elevación propia. El overlay
+  de carga usa `LoadingIndicator` (forma animada Expressive) dentro de una tarjeta
+  elevada en vez de flotar directo sobre el scrim.
+- **`ui/components/ExpressiveComponents.kt`** (nuevo): `ExpressiveSurface` y
+  `ExpressiveButton` — componentes compartidos con la forma/color unificados del
+  rediseño, para reutilizar en las siguientes pantallas sin repetir estilos sueltos.
+- **`ContractStep` rediseñado**: contenido en scroll con botón de acción anclado abajo
+  (antes quedaba un hueco vacío grande en pantallas altas); tarjetas de opción que
+  cambian de color completo al seleccionar (no solo el radio button); `selectableGroup`
+  para accesibilidad; transición `AnimatedContent` hacia el editor de mapeo en vez de
+  un `return` abrupto que rompía el ciclo de vida de Compose.
+
+---
+
 ## [0.5.1-m3-expressive-downgrade-alpha] — 2026-07-11
 
 ### Corregido
