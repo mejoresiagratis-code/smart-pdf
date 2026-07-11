@@ -76,10 +76,14 @@ class SignatureProcessor @Inject constructor() {
     }
 
     /**
-     * Tintado con alpha graduado + recorte a bounding box (fiel a processInk).
+     * Tintado con alpha graduado + recorte a bounding box opcional (fiel a processInk).
+     * @param applyBoundingCrop si false, no recorta al bounding box del trazo — úsalo
+     *   cuando la imagen YA viene recortada de forma fiable (p.ej. por SignatureLocator),
+     *   porque recortar dos veces sobre una foto completa desviaba el resultado a una
+     *   esquina cuando cualquier píxel oscuro (sombra, arruga) se colaba como "trazo".
      * @return el bitmap de firma listo, o null si no hay trazo.
      */
-    fun processInk(src: Bitmap, threshold: Int, tint: Int, bg: Background): Bitmap? {
+    fun processInk(src: Bitmap, threshold: Int, tint: Int, bg: Background, applyBoundingCrop: Boolean = true): Bitmap? {
         val w = src.width; val h = src.height
         val px = IntArray(w * h); src.getPixels(px, 0, w, 0, 0, w, h)
         val tr = Color.red(tint); val tg = Color.green(tint); val tb = Color.blue(tint)
@@ -99,14 +103,18 @@ class SignatureProcessor @Inject constructor() {
             }
         }
         if (!found) return null
-        val pad = 6
-        minX = max(0, minX - pad); minY = max(0, minY - pad)
-        maxX = min(w - 1, maxX + pad); maxY = min(h - 1, maxY + pad)
-        val cw = maxX - minX + 1; val ch = maxY - minY + 1
 
         val full = createBitmap(w, h).apply { setPixels(px, 0, w, 0, 0, w, h) }
-        val cropped = Bitmap.createBitmap(full, minX, minY, cw, ch)
-        full.recycle()
+        val cropped = if (applyBoundingCrop) {
+            val pad = 6
+            minX = max(0, minX - pad); minY = max(0, minY - pad)
+            maxX = min(w - 1, maxX + pad); maxY = min(h - 1, maxY + pad)
+            val cw = maxX - minX + 1; val ch = maxY - minY + 1
+            val c = Bitmap.createBitmap(full, minX, minY, cw, ch)
+            full.recycle()
+            c
+        } else full
+        val cw = cropped.width; val ch = cropped.height
         if (bg == Background.WHITE) {
             val white = createBitmap(cw, ch)
             white.eraseColor(Color.WHITE)
@@ -118,13 +126,20 @@ class SignatureProcessor @Inject constructor() {
         return cropped
     }
 
-    /** Pipeline completo desde una foto: aplanar → Otsu → tintar. */
-    fun fromPhoto(src: Bitmap, tint: Int = Color.rgb(20, 30, 90), bg: Background = Background.TRANSPARENT): Bitmap? {
+    /** Pipeline completo desde una foto: aplanar → Otsu → tintar.
+     *  @param applyBoundingCrop ver processInk() — desactívalo si la imagen ya viene
+     *    recortada de forma fiable (p.ej. por SignatureLocator). */
+    fun fromPhoto(
+        src: Bitmap,
+        tint: Int = Color.rgb(20, 30, 90),
+        bg: Background = Background.TRANSPARENT,
+        applyBoundingCrop: Boolean = true
+    ): Bitmap? {
         val flat = flattenIllumination(src)
         val flatPx = IntArray(flat.width * flat.height)
         flat.getPixels(flatPx, 0, flat.width, 0, 0, flat.width, flat.height)
         val thr = otsuThreshold(flatPx)
-        val result = processInk(flat, thr, tint, bg)
+        val result = processInk(flat, thr, tint, bg, applyBoundingCrop)
         flat.recycle()
         return result
     }

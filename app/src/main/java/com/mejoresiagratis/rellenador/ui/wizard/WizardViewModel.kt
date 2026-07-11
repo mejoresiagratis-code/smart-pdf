@@ -225,7 +225,8 @@ class WizardViewModel @Inject constructor(
                 proposals = result.proposals, packages = result.packages,
                 tipoIdentificacion = result.tipoIdentificacion, enginesOk = result.enginesOk,
                 fieldValues = prefill,
-                error = result.errors.takeIf { it.isNotEmpty() }?.joinToString("\n")
+                error = result.errors.takeIf { it.isNotEmpty() }?.joinToString("\n"),
+                engineErrors = result.errors
             )
         }
     }
@@ -339,7 +340,15 @@ class WizardViewModel @Inject constructor(
 
     // ---- Paso 5: firma ----
     /** Firma dibujada en el lienzo: bitmap -> PNG transparente. */
+    /** Bitmap "crudo" (antes de tintar) de la última firma preparada, para poder
+     *  reprocesar en vivo al cambiar color/fondo sin volver a llamar a la IA de
+     *  localización. isPhoto indica qué pipeline usar al reprocesar. */
+    private var rawSignatureBitmap: Bitmap? = null
+    private var rawSignatureIsPhoto: Boolean = false
+
     fun setDrawnSignature(bmp: Bitmap) {
+        rawSignatureBitmap = bmp
+        rawSignatureIsPhoto = false
         // Trazo dibujado: tintar (color elegido) sobre transparente con Otsu.
         val px = IntArray(bmp.width * bmp.height)
         bmp.getPixels(px, 0, bmp.width, 0, 0, bmp.width, bmp.height)
@@ -374,10 +383,28 @@ class WizardViewModel @Inject constructor(
             val box = runCatching {
                 locator.locate(b64, _state.value.availableProviders)
             }.getOrNull()
-            val cropped = if (box != null) sigProcessor.crop(bmp, box) else bmp
-            val processed = sigProcessor.fromPhoto(cropped, _state.value.inkColor, _state.value.sigBackground)
-                ?: cropped
-            val data = sigProcessor.toSignatureData(processed)
+            // Fallback razonable (0.2.0): si ningún motor localiza la firma, NO se aplica
+            // processInk a la foto ENTERA (eso sacaba resultados basura: cualquier sombra
+            // o arruga se colaba como "trazo"). Se ofrece la foto original tal cual y se
+            // avisa al usuario, en vez de forzar un procesado ciego. Tampoco se guarda como
+            // "bitmap crudo reprocesable": cambiar color/fondo no tendría sentido sobre una
+            // foto sin recortar ni tintar.
+            val data: com.mejoresiagratis.rellenador.data.model.SignatureData
+            if (box != null) {
+                val cropped = sigProcessor.crop(bmp, box)
+                // applyBoundingCrop = false: el locator ya recortó de forma fiable;
+                // recortar de nuevo por bounding-box de tinta desviaba el resultado
+                // a una esquina si una sombra/arruga se colaba como "trazo".
+                val processed = sigProcessor.fromPhoto(
+                    cropped, _state.value.inkColor, _state.value.sigBackground, applyBoundingCrop = false
+                ) ?: cropped
+                rawSignatureBitmap = cropped
+                rawSignatureIsPhoto = true
+                data = sigProcessor.toSignatureData(processed)
+            } else {
+                rawSignatureBitmap = null
+                data = sigProcessor.toSignatureData(bmp)
+            }
             _state.value = _state.value.copy(
                 locatingSignature = false, signature = data,
                 error = if (box == null) "No se localizó la firma automáticamente; usa la imagen completa." else null
@@ -483,11 +510,28 @@ class WizardViewModel @Inject constructor(
     }
 
     /** Cambia el color de la tinta de la firma (re-procesa si hay firma cruda). */
+    /** Cambia el color de la tinta y reprocesa en vivo desde el bitmap crudo (sin
+     *  volver a llamar a la IA de localización). */
     fun setInkColor(color: Int) {
         _state.value = _state.value.copy(inkColor = color)
+        reprocessSignatureFromRaw()
     }
     fun setSigBackground(bg: com.mejoresiagratis.rellenador.data.pdf.SignatureProcessor.Background) {
         _state.value = _state.value.copy(sigBackground = bg)
+        reprocessSignatureFromRaw()
+    }
+
+    private fun reprocessSignatureFromRaw() {
+        val raw = rawSignatureBitmap ?: return
+        val processed = if (rawSignatureIsPhoto) {
+            sigProcessor.fromPhoto(raw, _state.value.inkColor, _state.value.sigBackground, applyBoundingCrop = false) ?: raw
+        } else {
+            val px = IntArray(raw.width * raw.height)
+            raw.getPixels(px, 0, raw.width, 0, 0, raw.width, raw.height)
+            val thr = sigProcessor.otsuThreshold(px)
+            sigProcessor.processInk(raw, thr, _state.value.inkColor, _state.value.sigBackground) ?: raw
+        }
+        _state.value = _state.value.copy(signature = sigProcessor.toSignatureData(processed))
     }
 
     /** Guarda la firma actual para reutilizarla (persistida en PrefsRepository). */

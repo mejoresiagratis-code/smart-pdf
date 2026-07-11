@@ -6,6 +6,64 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.3.2-restaura-0.2.x] — 2026-07-11
+
+### Corregido — restaura la regresión documentada en 0.3.1
+La fusión "Ajustes + letterbox real" (commit "Fusion...") había mezclado la pantalla de
+Ajustes con una versión de `MultiAiExtractor.kt`/`SignatureLocator.kt`/`ReviewStep.kt`/
+`SignaturePageDetector.kt` anterior a 0.2.0, revirtiendo sin querer varias mejoras. Todas
+reconstruidas ahora usando el CHANGELOG (0.2.0/0.2.1) como especificación exacta:
+
+- **MultiAiExtractor**: short-circuit por motor (`dead` set — un motor que falla 4xx/5xx
+  no se reintenta en la sesión), backoff cooperativo de 2,5 s en 429, orden fiable
+  (Groq → Mistral → Claude → Gemini → Scaleway → EUrouter), errores agrupados por motor
+  (una línea con el último estado, no una por documento). Aprovecha `HttpException.
+  realErrorMessage()` (0.3.1) para que el detalle incluya el mensaje real del proveedor.
+- **SignaturePageDetector**: la página 24 (índice 23) se fuerza como candidata siempre
+  que el documento tenga ≥24 páginas — no tiene ningún campo AcroForm propio, así que la
+  detección estructural nunca podía encontrarla por ese camino.
+- **SignatureLocator**: reordenado a Mistral → Scaleway → Claude → Gemini → Grok (Groq
+  excluido: no tiene visión real, es un motor de texto que "especularía" el JSON).
+- **Actualización en vivo de tinta/fondo**: se guarda el bitmap "crudo" (antes de tintar)
+  tanto para fotos como para dibujos a mano; cambiar color o fondo reprocesa de inmediato
+  sin volver a llamar a la IA de localización (`reprocessSignatureFromRaw()`).
+- **Fallback razonable cuando el locator falla**: si ningún motor localiza la firma en una
+  foto, ya NO se aplica `processInk` a la foto entera (sacaba resultados basura); se
+  ofrece la foto original tal cual sin tintar.
+- **`applyBoundingCrop` opcional** en `processInk`/`fromPhoto`: desactivado cuando la
+  imagen ya viene recortada de forma fiable por `SignatureLocator`, evitando el doble
+  recorte que desviaba el resultado a una esquina.
+- **Panel de detalle de motor caído** restaurado en `ReviewStep` (colapsable, bajo un
+  botón "Ver motores no disponibles (N)"), con el mensaje real de cada motor.
+- **Chip informativo**: "Firma cargada ✓ · lista para N páginas" sustituye al chip mudo.
+- **Previsualización de firma reubicada**: justo tras elegir Dibujar/Extraer, antes de
+  las opciones de color/fondo.
+
+---
+
+## [0.3.1-diag-errorbody] — 2026-07-10
+
+### Añadido
+- **Instrumentación de diagnóstico para 400/404/500 de cualquier motor** (investigación Gemini): `ai-proxy.php` ya reenvía el mensaje real del proveedor upstream (`{"ok":false,"error":"Gemini: <mensaje real de Google>"}`) con el código HTTP real de Google/Anthropic/etc. — pero Retrofit, al ver un código no-2xx, lanza `HttpException` sin deserializar ese body, y nadie lo leía (`e.message` por defecto solo da algo genérico tipo "HTTP 500 Internal Server Error"). Nuevo `HttpException.realErrorMessage()` en `MultiAiExtractor.kt` lee `errorBody()` a mano y extrae el campo `error`. Se usa en:
+  - `MultiAiExtractor.kt`: el banner de error de `WizardScreen` ahora incluye el mensaje real además del código HTTP.
+  - `SignatureLocator.kt`: antes se tragaba cualquier fallo en silencio (`runCatching{}.getOrNull() ?: continue`, sin log); ahora loguea motor + código + mensaje real con `Log.w`.
+- Verificado contra la documentación oficial de Gemini (jul 2026) que el payload que arma `callGeminiSrv()` en el proxy es correcto: modelo `gemini-3.5-flash` es GA vigente, `thinkingConfig.thinkingLevel` (sin `thinkingBudget` a la vez, evitando el 400 documentado) y formato `inline_data`/`mime_type` coinciden con los ejemplos oficiales de `generativelanguage.googleapis.com`. No se encontró ningún parámetro mal formado por inspección estática — el paso obligado ahora es leer el mensaje real que esta build ya expone.
+
+### ⚠️ Regresión detectada en 0.3.0 (sin corregir en esta build — pendiente de decisión)
+El commit "Fusion: Ajustes + letterbox real" mezcló la nueva pantalla de Ajustes con una
+versión **anterior a 0.2.0** de `MultiAiExtractor.kt`/`SignatureLocator.kt`/`ReviewStep.kt`,
+revirtiendo sin querer:
+- El short-circuit por motor caído y el backoff cooperativo en 429 (`dead`/`perProviderStatus` de 0.2.0) — un motor roto vuelve a fallar una vez por cada documento en vez de una sola vez.
+- El panel de detalle "Motores no disponibles" en Revisión IA (`ReviewStep.kt`) desapareció por completo — solo queda el banner genérico de `state.error`.
+- El orden del `SignatureLocator` volvió a `[Claude, Gemini, Groq, Grok, Mistral]` (Claude/Gemini primero pese a estar caídos hoy; Groq de vuelta en la lista pese a no tener visión real — ver nota en 0.2.1).
+- `CHANGELOG.md` no se actualizó para 0.3.0 (versionName saltó de 0.2.2 a "0.3.0-ajustes-letterbox" sin entrada aquí).
+No se corrige aquí para no mezclar con el objetivo único de esta build (instrumentación Gemini). Restaurar si se confirma que se quiere.
+
+### Pendiente (siguiente paso de la investigación Gemini)
+- Con esta build, reproducir el fallo de Gemini y capturar el mensaje real en el banner de error (o en logcat, tag `MultiAiExtractor`/`SignatureLocator`) para aislar la causa exacta (cuota, billing, argumento inválido, etc.) y proponer el fix quirúrgico correspondiente — en el PHP o en el cliente, según lo que diga Google.
+
+---
+
 ## [0.2.2-stamp-letterbox] — 2026-07-10
 
 ### Corregido

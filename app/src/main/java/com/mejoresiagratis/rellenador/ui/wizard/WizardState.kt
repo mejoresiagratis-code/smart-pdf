@@ -39,6 +39,7 @@ data class WizardUiState(
     val busy: Boolean = false,
     val busyMsg: String = "",
     val error: String? = null,
+    val engineErrors: List<String> = emptyList(),  // detalle por motor (panel Revisión IA)
 
     // Resultado de la extracción
     val proposals: List<FieldProposal> = emptyList(),

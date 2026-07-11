@@ -24,6 +24,7 @@ import com.mejoresiagratis.rellenador.data.model.Paquete
  */
 @Composable
 fun ReviewStep(state: WizardUiState, vm: WizardViewModel) {
+    var showEngineDetail by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("Paso 3 · Revisa lo detectado por la IA", style = MaterialTheme.typography.titleMedium)
@@ -32,6 +33,26 @@ fun ReviewStep(state: WizardUiState, vm: WizardViewModel) {
                 style = MaterialTheme.typography.bodySmall)
             Text("Aplica un bloque completo o confirma campo a campo.",
                 style = MaterialTheme.typography.bodySmall)
+
+            // Panel de detalle de motor caído: muestra el estado real de cada motor que
+            // falló (código HTTP + mensaje real reenviado por el proxy), en vez de solo
+            // el banner genérico. Ayuda a diagnosticar 400/500/429 sin adb logcat.
+            if (state.engineErrors.isNotEmpty()) {
+                TextButton(onClick = { showEngineDetail = !showEngineDetail }) {
+                    Text(if (showEngineDetail) "Ocultar motores no disponibles ▲"
+                         else "Ver motores no disponibles (${state.engineErrors.size}) ▼")
+                }
+                if (showEngineDetail) {
+                    ElevatedCard {
+                        Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            state.engineErrors.forEach { line ->
+                                Text(line, style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error)
+                            }
+                        }
+                    }
+                }
+            }
         }
         HorizontalDivider()
 

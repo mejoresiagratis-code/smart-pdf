@@ -98,6 +98,32 @@ fun SignatureStep(state: WizardUiState, vm: WizardViewModel) {
         }
 
 
+        // Previsualización de la firma ya procesada, reubicada aquí (justo tras elegir
+        // Dibujar/Extraer) para que se vea el resultado de inmediato, sin tener que
+        // bajar hasta después de las opciones de color/fondo.
+        if (state.signature != null) {
+            val sigBmp = remember(state.signature) {
+                state.signature?.let {
+                    BitmapFactory.decodeByteArray(it.pngBytes, 0, it.pngBytes.size)
+                }
+            }
+            if (sigBmp != null) {
+                Box(
+                    Modifier.fillMaxWidth().height(120.dp)
+                        .background(Color(0xFFE0E0E0)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Image(sigBmp.asImageBitmap(), contentDescription = "Firma procesada",
+                        modifier = Modifier.height(100.dp))
+                }
+            }
+            val nPages = state.signPages.size.coerceAtLeast(state.stamps.size)
+            AssistChip(onClick = {}, label = {
+                Text(if (nPages > 0) "Firma cargada ✓ · lista para $nPages página${if (nPages == 1) "" else "s"}"
+                     else "Firma cargada ✓")
+            })
+        }
+
         // --- Opciones avanzadas de firma (Tanda E) ---
         ElevatedCard {
             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -141,24 +167,6 @@ fun SignatureStep(state: WizardUiState, vm: WizardViewModel) {
         }
 
         if (state.signature != null) {
-            // Previsualización de la firma ya procesada (recorte/tinta/fondo aplicados).
-            val sigBmp = remember(state.signature) {
-                state.signature?.let {
-                    BitmapFactory.decodeByteArray(it.pngBytes, 0, it.pngBytes.size)
-                }
-            }
-            if (sigBmp != null) {
-                Box(
-                    Modifier.fillMaxWidth().height(120.dp)
-                        .background(Color(0xFFE0E0E0)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Image(sigBmp.asImageBitmap(), contentDescription = "Firma procesada",
-                        modifier = Modifier.height(100.dp))
-                }
-            }
-            AssistChip(onClick = {}, label = { Text("Firma preparada ✓") })
-
             // --- Páginas de firma detectadas (Tanda B) ---
             HorizontalDivider(Modifier.padding(vertical = 4.dp))
             Text("Páginas de firma detectadas: ${state.signPages.size}",

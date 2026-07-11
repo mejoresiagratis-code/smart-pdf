@@ -1,10 +1,12 @@
 package com.mejoresiagratis.rellenador.data.remote
 
+import android.util.Log
 import com.mejoresiagratis.rellenador.data.model.AiProvider
 import com.mejoresiagratis.rellenador.data.model.DocPayload
 import com.mejoresiagratis.rellenador.data.model.ProxyRequest
 import com.mejoresiagratis.rellenador.data.model.SignatureBox
 import kotlinx.serialization.json.Json
+import retrofit2.HttpException
 import javax.inject.Inject
 
 /**
@@ -21,8 +23,10 @@ class SignatureLocator @Inject constructor(
         "{\"x\":<%>,\"y\":<%>,\"w\":<%>,\"h\":<%>} (0-100). " +
         "Si toda la imagen es la firma: {\"x\":0,\"y\":0,\"w\":100,\"h\":100}."
 
+    // Orden fiable (0.2.1): Claude/Gemini pueden estar caídos según el día, y Groq no
+    // tiene visión real (motor de texto que "especula" el JSON) — se excluye del todo.
     private val order = listOf(
-        AiProvider.CLAUDE, AiProvider.GEMINI, AiProvider.GROQ, AiProvider.GROK, AiProvider.MISTRAL
+        AiProvider.MISTRAL, AiProvider.SCALEWAY, AiProvider.CLAUDE, AiProvider.GEMINI, AiProvider.GROK
     )
 
     private fun parseBox(raw: String?): SignatureBox? {
@@ -41,7 +45,15 @@ class SignatureLocator @Inject constructor(
                 provider = p.id, prompt = PROMPT, task = "locate_signature",
                 maxTokens = 300, docs = listOf(DocPayload(mime = "image/jpeg", b64 = imageB64))
             )
-            val resp = runCatching { api.call(req) }.getOrNull() ?: continue
+            val resp = try {
+                api.call(req)
+            } catch (e: HttpException) {
+                Log.w("SignatureLocator", "${p.displayName} HTTP ${e.code()}: ${e.realErrorMessage() ?: "(sin body legible)"}")
+                continue
+            } catch (e: Exception) {
+                Log.w("SignatureLocator", "${p.displayName} exception: ${e.message}")
+                continue
+            }
             if (!resp.ok) continue
             parseBox(resp.text)?.let { return it }
         }
