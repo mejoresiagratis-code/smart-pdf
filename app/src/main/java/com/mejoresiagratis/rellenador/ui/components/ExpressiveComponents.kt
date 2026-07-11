@@ -13,7 +13,7 @@ val ExpressiveShape = RoundedCornerShape(28.dp)
 @Composable
 fun ExpressiveSurface(
     modifier: Modifier = Modifier,
-    content: @Composable ColumnScope.() -> Unit
+    content: @Composable () -> Unit // <-- LA CORRECCIÓN ESTÁ AQUÍ (se eliminó ColumnScope.)
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
