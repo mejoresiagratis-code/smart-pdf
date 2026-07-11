@@ -2,59 +2,183 @@ package com.mejoresiagratis.rellenador.ui.wizard
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.UploadFile
 import androidx.compose.material3.*
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ContractStep(state: WizardUiState, vm: WizardViewModel) {
     var showMapping by remember { mutableStateOf(false) }
+    
+    // Evaluamos el estado de forma limpia
+    val isMappingState = showMapping && state.needsMapping && state.userFieldNames.isNotEmpty()
 
-    // Si el usuario aportó su PDF y hay que mapear, mostrar el editor.
-    if (showMapping && state.needsMapping && state.userFieldNames.isNotEmpty()) {
-        MappingEditor(state, vm, onDone = { vm.rememberTemplateMapping(); showMapping = false; vm.next() })
-        return
+    // 1. Transición Fluida: Evitamos el "return" abrupto que rompe el ciclo de vida de Compose
+    AnimatedContent(
+        targetState = isMappingState,
+        transitionSpec = { fadeIn() togetherWith fadeOut() },
+        label = "ContractStepTransition"
+    ) { isMapping ->
+        if (isMapping) {
+            MappingEditor(
+                state = state,
+                vm = vm,
+                onDone = {
+                    vm.rememberTemplateMapping()
+                    showMapping = false
+                    vm.next()
+                }
+            )
+        } else {
+            ContractSelectionContent(
+                state = state,
+                vm = vm,
+                onReviewMapping = { showMapping = true }
+            )
+        }
     }
+}
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ContractSelectionContent(
+    state: WizardUiState,
+    vm: WizardViewModel,
+    onReviewMapping: () -> Unit
+) {
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri -> uri?.let(vm::chooseUserContract) }
 
-    Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Paso 1 · Elige el contrato a rellenar", style = MaterialTheme.typography.titleMedium)
-        Text("Usa el contrato oficial de distribución MASORANGE incluido, o aporta tu propio PDF.",
-            style = MaterialTheme.typography.bodyMedium)
+    // 2. Layout Estructural: Separamos el área de scroll del botón de acción anclado
+    Column(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp, vertical = 20.dp), // Márgenes M3 más generosos
+            verticalArrangement = Arrangement.spacedBy(20.dp)
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = "Paso 1 · Elige el contrato a rellenar",
+                    style = MaterialTheme.typography.headlineSmall, // Mayor jerarquía que titleMedium
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "Usa el contrato oficial de distribución MASORANGE incluido, o aporta tu propio PDF.",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
 
-        ElevatedCard(onClick = vm::chooseDefaultContract) {
-            ListItem(
-                headlineContent = { Text("Contrato por defecto") },
-                supportingContent = { Text("Contrato de distribución PdV (54 páginas)") },
-                leadingContent = { RadioButton(selected = state.contractSource == ContractSource.DEFAULT, onClick = vm::chooseDefaultContract) }
-            )
-        }
-        ElevatedCard(onClick = { picker.launch(arrayOf("application/pdf")) }) {
-            ListItem(
-                headlineContent = { Text("Aportar mi PDF") },
-                supportingContent = {
-                    Text(state.userContractUri?.lastPathSegment?.substringAfterLast('/')
-                        ?: "Seleccionar un PDF del dispositivo")
-                },
-                leadingContent = { RadioButton(selected = state.contractSource == ContractSource.USER, onClick = { picker.launch(arrayOf("application/pdf")) }) }
-            )
+            // 3. Semántica de Grupo: Le dice a los servicios de accesibilidad que esto es un grupo de opciones
+            Column(
+                modifier = Modifier.selectableGroup(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                val isDefault = state.contractSource == ContractSource.DEFAULT
+                ContractOptionCard(
+                    selected = isDefault,
+                    onClick = vm::chooseDefaultContract,
+                    headline = "Contrato por defecto",
+                    supporting = "Contrato de distribución PdV (54 páginas)",
+                    icon = { Icon(Icons.Outlined.Description, contentDescription = null) }
+                )
+
+                val isUser = state.contractSource == ContractSource.USER
+                val fileName = state.userContractUri?.lastPathSegment?.substringAfterLast('/')
+                    ?: "Seleccionar un PDF del dispositivo"
+
+                ContractOptionCard(
+                    selected = isUser,
+                    onClick = { picker.launch(arrayOf("application/pdf")) },
+                    headline = "Aportar mi PDF",
+                    supporting = fileName,
+                    icon = { Icon(Icons.Outlined.UploadFile, contentDescription = null) }
+                )
+            }
         }
 
-        Spacer(Modifier.weight(1f))
-        Button(
-            onClick = {
-                if (state.contractSource == ContractSource.USER && state.needsMapping) showMapping = true
-                else vm.next()
+        // 4. Acción Primaria Anclada: Fundamental en flujos tipo "Wizard"
+        Surface(
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 3.dp, // Sutil elevación para separarlo del contenido scrolleable
+            shadowElevation = 4.dp
+        ) {
+            Box(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                Button(
+                    onClick = {
+                        if (state.contractSource == ContractSource.USER && state.needsMapping) {
+                            onReviewMapping()
+                        } else {
+                            vm.next()
+                        }
+                    },
+                    enabled = state.canAdvanceFromContrato,
+                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(16.dp) // Áreas de toque más grandes (Expressive)
+                ) {
+                    Text(
+                        text = if (state.contractSource == ContractSource.USER && state.needsMapping) "Revisar mapeo" else "Continuar",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ContractOptionCard(
+    selected: Boolean,
+    onClick: () -> Unit,
+    headline: String,
+    supporting: String,
+    icon: @Composable () -> Unit
+) {
+    // 5. Feedback Visual Expressive: Toda la tarjeta cambia de estado, no solo el radio button
+    val containerColor = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface
+    val borderColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+
+    Card(
+        onClick = onClick,
+        colors = CardDefaults.cardColors(containerColor = containerColor),
+        border = BorderStroke(1.dp, borderColor),
+        shape = MaterialTheme.shapes.large
+    ) {
+        ListItem(
+            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+            headlineContent = { 
+                Text(headline, style = MaterialTheme.typography.titleMedium, color = if (selected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface) 
             },
-            enabled = state.canAdvanceFromContrato,
-            modifier = Modifier.fillMaxWidth()
-        ) { Text(if (state.contractSource == ContractSource.USER && state.needsMapping) "Revisar mapeo" else "Continuar") }
+            supportingContent = { 
+                Text(supporting, style = MaterialTheme.typography.bodyMedium, color = if (selected) MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurfaceVariant) 
+            },
+            leadingContent = {
+                RadioButton(
+                    selected = selected,
+                    onClick = null // 6. Fix de Interacción: Evita conflictos de Ripple y doble evento con la Card
+                )
+            },
+            trailingContent = icon
+        )
     }
 }
