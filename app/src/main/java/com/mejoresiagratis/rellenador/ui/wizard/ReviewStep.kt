@@ -1,8 +1,8 @@
-package com.mejoresiagratis.rellenador.ui.screens.wizard
+package com.mejoresiagratis.rellenador.ui.wizard
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -12,17 +12,11 @@ import com.mejoresiagratis.rellenador.ui.components.ExpressiveSurface
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun ReviewStep(
-    viewModel: WizardViewModel
-) {
-    val state by viewModel.state.collectAsState()
-    val scrollState = rememberScrollState()
-
+fun ReviewStep(state: WizardUiState, vm: WizardViewModel) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp)
-            .verticalScroll(scrollState),
+            .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         ExpressiveSurface {
@@ -31,27 +25,20 @@ fun ReviewStep(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Text(
-                    text = "Campos Detectados",
-                    style = MaterialTheme.typography.headlineMedium
+                    text = "Revisión IA",
+                    style = MaterialTheme.typography.headlineSmall
                 )
-                
-                state.detectedFields.forEach { field ->
-                    OutlinedTextField(
-                        value = field.value,
-                        onValueChange = { newValue -> 
-                            viewModel.updateField(field.id, newValue)
-                        },
-                        label = { Text(field.label) },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
+                Text(
+                    text = "Confirma los campos detectados.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
             }
         }
 
         Spacer(modifier = Modifier.weight(1f))
 
         ExpressiveButton(
-            onClick = { viewModel.nextStep() },
+            onClick = { vm.next() },
             text = "Confirmar y Continuar",
             modifier = Modifier.padding(bottom = 16.dp)
         )
