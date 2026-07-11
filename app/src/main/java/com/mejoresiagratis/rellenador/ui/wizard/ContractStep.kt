@@ -7,11 +7,14 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.UploadFile
 import androidx.compose.material3.*
@@ -124,6 +127,10 @@ private fun ContractSelectionContent(
                             icon = { Icon(Icons.Outlined.UploadFile, contentDescription = null) }
                         )
                     }
+
+                    com.mejoresiagratis.rellenador.ui.components.TipBanner(
+                        "Usa \"Aportar mi PDF\" solo si tienes una versión del contrato distinta a la incluida por defecto."
+                    )
                 }
             }
         }
@@ -145,7 +152,8 @@ private fun ContractSelectionContent(
                         }
                     },
                     enabled = state.canAdvanceFromContrato,
-                    text = if (state.contractSource == ContractSource.USER && state.needsMapping) "Revisar mapeo" else "Continuar"
+                    text = if (state.contractSource == ContractSource.USER && state.needsMapping) "Revisar mapeo" else "Continuar",
+                    trailingIcon = Icons.AutoMirrored.Filled.ArrowForward
                 )
             }
         }
@@ -161,31 +169,60 @@ private fun ContractOptionCard(
     supporting: String,
     icon: @Composable () -> Unit
 ) {
-    // 5. Feedback Visual Expressive: Toda la tarjeta cambia de estado, no solo el radio button
-    val containerColor = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface
-    val borderColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+    // Alineado al mockup: la tarjeta seleccionada pasa a `primaryContainer` (antes
+    // usaba `secondaryContainer`) — es el color de marca, no el neutro secundario.
+    val containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface
+    val borderColor = if (selected) androidx.compose.ui.graphics.Color.Transparent else MaterialTheme.colorScheme.outlineVariant
+    val onContainerColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
 
     Card(
         onClick = onClick,
         colors = CardDefaults.cardColors(containerColor = containerColor),
-        border = BorderStroke(1.dp, borderColor),
-        shape = MaterialTheme.shapes.large
+        border = BorderStroke(1.5.dp, borderColor),
+        shape = MaterialTheme.shapes.medium
     ) {
-        ListItem(
-            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-            headlineContent = { 
-                Text(headline, style = MaterialTheme.typography.titleMedium, color = if (selected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface) 
-            },
-            supportingContent = { 
-                Text(supporting, style = MaterialTheme.typography.bodyMedium, color = if (selected) MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurfaceVariant) 
-            },
-            leadingContent = {
-                RadioButton(
-                    selected = selected,
-                    onClick = null // 6. Fix de Interacción: Evita conflictos de Ripple y doble evento con la Card
+        Row(
+            Modifier.padding(16.dp).fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            // Icono en contenedor "blob" orgánico (fiel al mockup): relleno con
+            // `primary` cuando está seleccionado, `secondaryContainer` si no.
+            Surface(
+                shape = com.mejoresiagratis.rellenador.ui.components.blobShape(),
+                color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondaryContainer,
+                modifier = Modifier.size(44.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    CompositionLocalProvider(
+                        LocalContentColor provides if (selected) MaterialTheme.colorScheme.onPrimary
+                                                    else MaterialTheme.colorScheme.onSecondaryContainer
+                    ) { icon() }
+                }
+            }
+            Column(Modifier.weight(1f)) {
+                Text(headline, style = MaterialTheme.typography.titleMedium, color = onContainerColor)
+                Text(
+                    supporting, style = MaterialTheme.typography.bodySmall,
+                    color = if (selected) onContainerColor.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurfaceVariant
                 )
-            },
-            trailingContent = icon
-        )
+            }
+            // Marca de verificación circular — rellena si está seleccionada, solo
+            // contorno si no (mismo patrón que el ".check" del mockup).
+            if (selected) {
+                Surface(shape = androidx.compose.foundation.shape.CircleShape,
+                    color = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp)) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(Icons.Filled.Check, contentDescription = "Seleccionado",
+                            tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(13.dp))
+                    }
+                }
+            } else {
+                Box(
+                    Modifier.size(22.dp)
+                        .border(1.5.dp, MaterialTheme.colorScheme.outline, androidx.compose.foundation.shape.CircleShape)
+                )
+            }
+        }
     }
 }

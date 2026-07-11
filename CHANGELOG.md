@@ -29,6 +29,40 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.5.3-mockup-contrato-ajustes-sheet] — 2026-07-11
+
+### Añadido — implementación del mockup M3 Expressive (Contrato + Ajustes rápidos)
+Implementado a partir de un mockup HTML/CSS aportado, con notas de diseño explícitas:
+
+- **Formas orgánicas ("blob")**: nuevo `blobShape()` en `ExpressiveComponents.kt`
+  (aproximación con `RoundedCornerShape` de radios asimétricos por esquina — Compose
+  no soporta radios elípticos independientes por eje como el CSS del mockup, pero da
+  el mismo efecto "no es un círculo perfecto"). Aplicado al botón de ajustes y a los
+  iconos de las tarjetas de Contrato.
+- **`ContractOptionCard` rediseñada**: sustituido `ListItem`+`RadioButton` por icono
+  en blob + marca de verificación circular (rellena si está seleccionada) — la
+  selección se ve de un vistazo, no solo se lee. Color de selección cambiado a
+  `primaryContainer` (antes `secondaryContainer` — ahora es el color de marca).
+- **`TipBanner`** (nuevo, en `ExpressiveComponents.kt`): aviso con el color terciario
+  — primer uso real de ese rol fuera de la paleta base de Tanda 0.
+- **Botón "Continuar"** con icono de flecha (`ExpressiveButton` ahora acepta
+  `trailingIcon` opcional).
+- **Pulso en el paso actual del stepper**: animación infinita sutil de escala
+  (`rememberInfiniteTransition`) — se nota "vivo" sin tocar nada, fiel al mockup.
+- **Ajustes rápidos como bottom sheet**: el botón de ajustes ahora abre un
+  `ModalBottomSheet` con perfil comercial + motores IA (lo que más se cambia), en vez
+  de navegar directo a la pantalla completa. Un enlace "Más ajustes" dentro sigue
+  llevando a `AjustesScreen` para la URL del proxy y lo menos frecuente — nada se ha
+  quitado, solo se adelanta el acceso rápido a lo habitual.
+
+### Pendiente (sugerido en el propio mockup, para siguientes tandas)
+Chips de motor con icono/bandera de proveedor (Documentación), agrupar campos del
+formulario en secciones con `surfaceContainer` (Revisión/Relleno), cambiar el
+selector Dibujar/Extraer de foto de `TabRow` (deprecated) a segmented button (Firma),
+loading global mostrando qué motor trabaja en cada momento.
+
+---
+
 ## [0.5.2-m3-expressive-tanda1-wizard-shell] — 2026-07-11
 
 ### Añadido — Tanda 1 de rediseño visual: shell del wizard + Contrato
