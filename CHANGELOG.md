@@ -6,6 +6,31 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.3.6-maxtokens-mistral] — 2026-07-11
+
+### Corregido
+- **Mistral: "respuesta incompleta"** en la extracción — a diferencia de los otros
+  fallos (400/404/429/500), Mistral respondía HTTP 200 (éxito) pero el JSON no se podía
+  parsear. Causa probable: `maxTokens=2048` cortaba a mitad la respuesta para un JSON
+  completo (sugerencias + alternativas + paquetes puede ser verboso en contratos con
+  varios documentos). Subido a `maxTokens=4096`, el propio techo que ya aplica el proxy
+  (`min(4096, ...)`) — antes se usaba solo la mitad del margen permitido.
+- `locate_signature` (SignatureLocator) se deja en 300 tokens: no tiene este riesgo,
+  la respuesta esperada es solo un JSON pequeño de coordenadas.
+
+### Pendiente (diagnóstico en curso, no app-side)
+- **EUrouter 404** — "Model 'mistral-small-latest' not found or has no available
+  providers". Configuración del proxy PHP (`ai-proxy.config.php`), no de la app.
+- **Groq 429** — cuota de tokens/minuto casi agotada (28863/30000 usados). Externo,
+  no requiere cambio de código; se resuelve con tiempo o subiendo de plan en Groq.
+- **Gemini 500 sin mensaje real** — el diagnóstico de 0.3.1 (`realErrorMessage()`) no
+  encuentra body JSON legible para este fallo concreto, lo que apunta a un error de PHP
+  a nivel más bajo (excepción no capturada / timeout de cURL) antes de que el proxy
+  llegue a formatear la respuesta de error. Requiere revisar el log de errores del
+  servidor (cPanel) — no se puede diagnosticar más desde el cliente.
+
+---
+
 ## [0.3.5-restaura-umbral-otsu] — 2026-07-11
 
 ### Corregido — auditoría completa del historial (otro fix perdido, distinto de 0.3.2)

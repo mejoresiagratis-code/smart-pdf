@@ -89,7 +89,7 @@ class MultiAiExtractor @Inject constructor(
                     if (provider in dead) continue   // short-circuit: no reintentar un motor ya roto
                     val req = ProxyRequest(
                         provider = provider.id, prompt = prompt, task = "extract",
-                        maxTokens = 2048, seq = i, geminiMode = geminiMode, docs = listOf(doc)
+                        maxTokens = 4096, seq = i, geminiMode = geminiMode, docs = listOf(doc)
                     )
                     val resp = try {
                         api.call(req)
