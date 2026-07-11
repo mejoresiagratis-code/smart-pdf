@@ -6,6 +6,29 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [ai-proxy 2026-07-11-b] — mismo día, sin bump de versionName de app
+
+### Corregido (ai-proxy.php — solo servidor, no requiere nueva build de la app)
+- **Groq/Qwen 413 "Request too large"**: `qwen/qwen3.6-27b` tiene un TPM (tokens/minuto,
+  entrada+salida) muy ajustado de 8000 — con el techo global de 8192 tokens de salida
+  recién subido, una sola imagen ya empujaba el total por encima (visto: 8225/8000).
+  Fix: `callGroqSrv` ahora limita la salida a 1500 tokens SOLO para la llamada de
+  visión de Groq, dejando margen de sobra para la imagen de entrada.
+- **Gemini "respuesta no parseable" con JSON cortado a mitad de un valor** (visto en
+  producción: `"Provincia": "VALENC` sin cerrar): el suelo de `maxOutputTokens` para
+  modelos 3.x estaba en 4096, pero como el cliente ya manda 4096 por defecto,
+  `max(4096, 4096)` no subía nada — el "thinking" interno se comía el presupuesto antes
+  de llegar al texto visible. Subido el suelo a 8192, independiente de lo que pida el
+  cliente.
+- **Mistral "no se ha proporcionado ningún documento" pese a que SÍ había imagen**:
+  confirmado que es alucinación del modelo (formato de imagen ya verificado correcto),
+  no un fallo de nombre de modelo. Añadido detector heurístico + reintento automático
+  (hasta 2 intentos) cuando la respuesta con éxito (200 OK) parece indicar "no hay
+  documento" pese a haberse mandado una imagen — el muestreo no es determinista, un
+  segundo intento suele bastar.
+
+---
+
 ## [0.4.1-fallback-modelos-banner] — 2026-07-11
 
 ### Añadido (ai-proxy.php — entregado aparte, vive en cPanel)
