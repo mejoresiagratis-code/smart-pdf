@@ -1,7 +1,3 @@
-Este es un refactor excelente. Has estructurado la vista maravillosamente con el AnimatedContent y las tarjetas personalizadas.
-Para que este código quede **100% integrado con el sistema global Expressive** que hemos estado montando, solo hace falta envolver tu área de contenido principal con el ExpressiveSurface y cambiar el botón de la barra inferior por el ExpressiveButton.
-Aquí tienes el archivo definitivo con tus mejoras estructurales y nuestros componentes globales fusionados. Puedes copiarlo y pegarlo directamente:
-```kotlin
 package com.mejoresiagratis.rellenador.ui.wizard
 
 import androidx.activity.compose.rememberLauncherForActivityResult
