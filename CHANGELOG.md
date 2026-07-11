@@ -29,6 +29,41 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.5.0-m3-expressive-tanda0] — 2026-07-11
+
+### Añadido — Fundación M3 Expressive (Tanda 0 de la fase de diseño visual)
+Primera tanda del rediseño visual completo (M3 Expressive, https://m3.material.io/blog/
+building-with-m3-expressive), aceptado en alpha a petición explícita — no toca ninguna
+pantalla todavía, solo la base sobre la que se construirán las siguientes tandas.
+
+- **Dependencia**: `material3` fijado explícitamente a `1.5.0-alpha22` (17-jun-2026),
+  por encima de lo que fija el BOM estable (2024.12.01) — ya incluye
+  `MaterialExpressiveTheme`, `MotionScheme.expressive()`, `MaterialShapes`,
+  `LoadingIndicator`, `FloatingToolbar` (recién graduado a estable), etc.
+- **Paleta de color completa**: antes solo se sobreescribía `primary` (todo lo demás
+  quedaba en el morado por defecto de M3). Ahora TODOS los roles se derivan del
+  naranja de marca (primary/secondary/tertiary + sus containers, superficies con
+  tinte cálido, outline) — con un terciario azul-verdoso frío como contrapunto de
+  color (principio Expressive: paleta más rica para marcar jerarquía).
+- **Escala de formas** más generosa (8/12/16/24/32dp vs. los radios base de M3) —
+  las formas empiezan a "dirigir la atención", no solo decorar.
+- **Tipografía** con más peso en títulos (SemiBold/Bold) para dar jerarquía visual
+  con personalidad.
+- **`MotionScheme.expressive()`**: física de resortes con rebote en vez de easing/
+  duración fijos — las interacciones (ya existentes, sin tocar ninguna pantalla)
+  deberían notarse más vivas de inmediato en botones, cambios de estado, etc.
+- `RellenadorTheme` pasa de `MaterialTheme` a `MaterialExpressiveTheme` — cambio
+  aislado en `ui/theme/Theme.kt`, verificado que ningún otro archivo del proyecto
+  rompe (todos los usos de `MaterialTheme.colorScheme/.typography/.shapes` siguen
+  funcionando igual, ya que Expressive expone los mismos CompositionLocals).
+
+### Pendiente (siguientes tandas, pantalla por pantalla)
+Wizard shell (barra superior + stepper) → Contrato → Documentación → Revisión IA →
+Relleno → Firma → Ajustes/Historial/Mapeo. Cada una en su propia tanda verificable,
+como el resto de esta migración.
+
+---
+
 ## [0.4.1-fallback-modelos-banner] — 2026-07-11
 
 ### Añadido (ai-proxy.php — entregado aparte, vive en cPanel)
