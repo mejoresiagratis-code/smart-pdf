@@ -29,6 +29,25 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.5.1-m3-expressive-downgrade-alpha] — 2026-07-11
+
+### Corregido
+- **Build roto por `material3:1.5.0-alpha22`**: arrastra una dependencia transitiva
+  (`androidx.compose.animation:animation-core-android:1.12.0-alpha03`) que exige
+  `compileSdk 37` (no público todavía) y Android Gradle Plugin `9.1.0` (el proyecto
+  usa 8.7.3) — un salto de todo el toolchain, no solo de la librería de temas.
+  Bajado a `material3:1.4.0-alpha16`, que ya trae `MaterialExpressiveTheme`,
+  `MotionScheme.expressive()` y `MaterialShapes` (la API Expressive es estable desde
+  aprox. alpha14) sin ese arrastre.
+- **Nota de incertidumbre honesta**: no hay forma de verificar la compilación real
+  sin SDK disponible aquí; esta versión es una elección razonada (más conservadora,
+  varias versiones por detrás de la que falló) pero no 100% garantizada. Si esta
+  build también fallara por otra incompatibilidad de versión, el siguiente paso
+  sería bajar aún más (p.ej. 1.4.0-alpha10) o considerar subir compileSdk/AGP como
+  alternativa, según lo que diga el log.
+
+---
+
 ## [0.5.0-m3-expressive-tanda0] — 2026-07-11
 
 ### Añadido — Fundación M3 Expressive (Tanda 0 de la fase de diseño visual)

@@ -15,8 +15,8 @@ android {
         applicationId = "com.mejoresiagratis.rellenador"
         minSdk = 26
         targetSdk = 35
-        versionCode = 17
-        versionName = "0.5.0-m3-expressive-tanda0"
+        versionCode = 18
+        versionName = "0.5.1-m3-expressive-downgrade-alpha"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // Base URL of your PHP proxy. Override per build type.
@@ -65,10 +65,13 @@ dependencies {
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
     // M3 Expressive: se fija una versión explícita por encima de lo que sugiere el BOM
-    // (que solo pin-ea estable). 1.5.0-alpha22 (17-jun-2026) ya tiene MaterialExpressiveTheme,
-    // MotionScheme.expressive(), MaterialShapes, LoadingIndicator, etc. Es alpha a propósito
-    // (decisión consciente, aceptando el riesgo de romper con futuras actualizaciones).
-    implementation("androidx.compose.material3:material3:1.5.0-alpha22")
+    // (que solo pin-ea estable). NOTA: se probó primero 1.5.0-alpha22, pero esa versión
+    // arrastra una dependencia transitiva (animation-core 1.12.0-alpha03) que exige
+    // compileSdk 37 (ni siquiera público todavía) y Android Gradle Plugin 9.1.0 — un
+    // salto de todo el toolchain, no solo del tema. Se usa 1.4.0-alpha16 en su lugar:
+    // ya tiene MaterialExpressiveTheme/MotionScheme.expressive()/MaterialShapes (la API
+    // Expressive es estable desde ~alpha14), pero sin ese arrastre de compileSdk/AGP.
+    implementation("androidx.compose.material3:material3:1.4.0-alpha16")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.navigation:navigation-compose:2.8.5")
 
