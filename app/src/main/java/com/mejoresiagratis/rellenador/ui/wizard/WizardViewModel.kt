@@ -407,12 +407,26 @@ class WizardViewModel @Inject constructor(
                 rawSignatureIsPhoto = true
                 data = sigProcessor.toSignatureData(processed)
             } else {
-                rawSignatureBitmap = null
-                data = sigProcessor.toSignatureData(bmp)
+                // Sin caja fiable del locator: en vez de dejar la foto cruda sin
+                // procesar (que no se ve como una firma limpia), se aplica el MISMO
+                // pipeline completo (aplanado + Otsu + recorte a bounding-box) a la
+                // foto entera. Funciona muy bien si la foto ya es solo la firma
+                // aislada sobre fondo claro (caso frecuente), y es un mejor punto de
+                // partida que la foto sin tocar incluso si hay más contenido alrededor.
+                val processedWhole = sigProcessor.fromPhoto(bmp, _state.value.inkColor, _state.value.sigBackground)
+                if (processedWhole != null) {
+                    rawSignatureBitmap = bmp
+                    rawSignatureIsPhoto = true
+                    data = sigProcessor.toSignatureData(processedWhole)
+                } else {
+                    // Ni siquiera se detectó tinta en toda la foto: ofrecer tal cual.
+                    rawSignatureBitmap = null
+                    data = sigProcessor.toSignatureData(bmp)
+                }
             }
             _state.value = _state.value.copy(
                 locatingSignature = false, signature = data,
-                error = if (box == null) "No se localizó la firma automáticamente; usa la imagen completa." else null
+                error = if (box == null) "No se localizó automáticamente el área exacta; se procesó la imagen completa." else null
             )
             if (_state.value.signPages.isNotEmpty()) stampAllPages()
             else _state.value = _state.value.copy(stamps = listOf(defaultStamp()))

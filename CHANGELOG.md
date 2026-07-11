@@ -6,6 +6,25 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.3.4-fix-localizacion-firma] — 2026-07-11
+
+### Corregido
+- **Firma extraída de foto irreconocible (fragmento diminuto sin relación con el trazo
+  real)**: comparando la firma real (foto aportada) contra el resultado en la app, el
+  recorte capturaba solo una esquina minúscula. Causa: `SignatureBox.valid` aceptaba
+  cualquier caja con w>2%,h>2% — demasiado permisivo; un error de localización de la IA
+  (fragmento equivocado, pequeño) pasaba como "válido" y el recorte a bounding-box
+  (0.3.3) lo acotaba aún más sobre esa región ya errónea.
+- **Fix 1**: `SignatureBox.valid` ahora exige w>15%,h>8% — descarta cajas demasiado
+  pequeñas para ser una firma real localizada con fiabilidad.
+- **Fix 2**: cuando no hay caja fiable (`box == null`), ya NO se ofrece la foto cruda
+  sin procesar. Se aplica el mismo pipeline completo (aplanado + Otsu + recorte a
+  bounding-box) a la foto ENTERA. Esto resuelve muy bien el caso de una foto que YA es
+  solo la firma aislada sobre fondo claro (sin documento alrededor) — no hace falta que
+  la IA "localice" nada dentro de una imagen que ya es solo la firma.
+
+---
+
 ## [0.3.3-fix-crop-firma] — 2026-07-11
 
 ### Corregido

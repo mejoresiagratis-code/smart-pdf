@@ -28,5 +28,7 @@ data class SignatureData(
 data class SignatureBox(
     val x: Float, val y: Float, val w: Float, val h: Float
 ) {
-    val valid get() = w > 2f && h > 2f
+    // Umbral más exigente que antes (w>2,h>2): una caja diminuta suele ser un error
+    // de localización (fragmento equivocado), no una firma real recortada de cerca.
+    val valid get() = w > 15f && h > 8f
 }
