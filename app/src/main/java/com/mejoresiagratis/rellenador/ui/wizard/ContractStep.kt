@@ -1,3 +1,7 @@
+Este es un refactor excelente. Has estructurado la vista maravillosamente con el AnimatedContent y las tarjetas personalizadas.
+Para que este código quede **100% integrado con el sistema global Expressive** que hemos estado montando, solo hace falta envolver tu área de contenido principal con el ExpressiveSurface y cambiar el botón de la barra inferior por el ExpressiveButton.
+Aquí tienes el archivo definitivo con tus mejoras estructurales y nuestros componentes globales fusionados. Puedes copiarlo y pegarlo directamente:
+```kotlin
 package com.mejoresiagratis.rellenador.ui.wizard
 
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -20,6 +24,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+
+// Importamos nuestros componentes globales
+import com.mejoresiagratis.rellenador.ui.components.ExpressiveButton
+import com.mejoresiagratis.rellenador.ui.components.ExpressiveSurface
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -72,47 +80,55 @@ private fun ContractSelectionContent(
             modifier = Modifier
                 .weight(1f)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp, vertical = 20.dp), // Márgenes M3 más generosos
-            verticalArrangement = Arrangement.spacedBy(20.dp)
+                .padding(16.dp), // Espaciado exterior para que el Surface respire
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    text = "Paso 1 · Elige el contrato a rellenar",
-                    style = MaterialTheme.typography.headlineSmall, // Mayor jerarquía que titleMedium
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = "Usa el contrato oficial de distribución MASORANGE incluido, o aporta tu propio PDF.",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            // Aplicamos el contenedor orgánico M3 Expressive
+            ExpressiveSurface {
+                Column(
+                    modifier = Modifier.padding(24.dp), // Márgenes internos
+                    verticalArrangement = Arrangement.spacedBy(20.dp)
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = "Paso 1 · Elige el contrato a rellenar",
+                            style = MaterialTheme.typography.headlineSmall, // Mayor jerarquía
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Usa el contrato oficial de distribución MASORANGE incluido, o aporta tu propio PDF.",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
 
-            // 3. Semántica de Grupo: Le dice a los servicios de accesibilidad que esto es un grupo de opciones
-            Column(
-                modifier = Modifier.selectableGroup(),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                val isDefault = state.contractSource == ContractSource.DEFAULT
-                ContractOptionCard(
-                    selected = isDefault,
-                    onClick = vm::chooseDefaultContract,
-                    headline = "Contrato por defecto",
-                    supporting = "Contrato de distribución PdV (54 páginas)",
-                    icon = { Icon(Icons.Outlined.Description, contentDescription = null) }
-                )
+                    // 3. Semántica de Grupo: Le dice a los servicios de accesibilidad que esto es un grupo de opciones
+                    Column(
+                        modifier = Modifier.selectableGroup(),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        val isDefault = state.contractSource == ContractSource.DEFAULT
+                        ContractOptionCard(
+                            selected = isDefault,
+                            onClick = vm::chooseDefaultContract,
+                            headline = "Contrato por defecto",
+                            supporting = "Contrato de distribución PdV (54 páginas)",
+                            icon = { Icon(Icons.Outlined.Description, contentDescription = null) }
+                        )
 
-                val isUser = state.contractSource == ContractSource.USER
-                val fileName = state.userContractUri?.lastPathSegment?.substringAfterLast('/')
-                    ?: "Seleccionar un PDF del dispositivo"
+                        val isUser = state.contractSource == ContractSource.USER
+                        val fileName = state.userContractUri?.lastPathSegment?.substringAfterLast('/')
+                            ?: "Seleccionar un PDF del dispositivo"
 
-                ContractOptionCard(
-                    selected = isUser,
-                    onClick = { picker.launch(arrayOf("application/pdf")) },
-                    headline = "Aportar mi PDF",
-                    supporting = fileName,
-                    icon = { Icon(Icons.Outlined.UploadFile, contentDescription = null) }
-                )
+                        ContractOptionCard(
+                            selected = isUser,
+                            onClick = { picker.launch(arrayOf("application/pdf")) },
+                            headline = "Aportar mi PDF",
+                            supporting = fileName,
+                            icon = { Icon(Icons.Outlined.UploadFile, contentDescription = null) }
+                        )
+                    }
+                }
             }
         }
 
@@ -123,7 +139,8 @@ private fun ContractSelectionContent(
             shadowElevation = 4.dp
         ) {
             Box(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-                Button(
+                // Usamos nuestro botón global estandarizado
+                ExpressiveButton(
                     onClick = {
                         if (state.contractSource == ContractSource.USER && state.needsMapping) {
                             onReviewMapping()
@@ -132,14 +149,8 @@ private fun ContractSelectionContent(
                         }
                     },
                     enabled = state.canAdvanceFromContrato,
-                    modifier = Modifier.fillMaxWidth(),
-                    contentPadding = PaddingValues(16.dp) // Áreas de toque más grandes (Expressive)
-                ) {
-                    Text(
-                        text = if (state.contractSource == ContractSource.USER && state.needsMapping) "Revisar mapeo" else "Continuar",
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                }
+                    text = if (state.contractSource == ContractSource.USER && state.needsMapping) "Revisar mapeo" else "Continuar"
+                )
             }
         }
     }
