@@ -6,6 +6,34 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.3.5-restaura-umbral-otsu] — 2026-07-11
+
+### Corregido — auditoría completa del historial (otro fix perdido, distinto de 0.3.2)
+Revisando TODO el historial de commits con el conector de GitHub (list_commits/get_commit),
+se encontró un grupo de 8 commits de otra sesión en la noche del 07-09 (21:53-23:44) que
+nunca se habían incorporado — distintos de la regresión ya corregida en 0.3.2. La mayoría
+eran arreglos mecánicos de sus propios errores de compilación (llaves huérfanas, residuos
+de `toSignatureData`) o un experimento de upscale a 1500px que ELLOS MISMOS revirtieron
+(por eso no hace falta restaurarlo). Pero uno seguía siendo relevante y perdido:
+
+- **`processInk` umbral demasiado estricto**: la condición para descartar un píxel como
+  "fondo" era `lum > threshold`. Un commit de esa noche la relajó a `lum > threshold * 1.15`
+  para capturar el trazo completo — sin este margen, bordes antialiaseados o trazos algo
+  más claros de la tinta real se descartaban, dejando solo el núcleo más oscuro. Esto
+  encaja con el fragmento irreconocible reportado (0.3.4 solo arregló la localización y
+  el recorte; este es un tercer factor independiente sobre la MISMA foto de prueba).
+- Verificado con el conector de GitHub (no solo el CHANGELOG) leyendo el diff exacto del
+  commit `e2cbc7f` — cambio de una sola línea, restaurado sin reconstrucción de memoria.
+
+### Nota sobre el conector de GitHub
+Confirmado en esta sesión: el conector tiene permiso de LECTURA (`list_commits`,
+`get_commit`, `get_file_contents` — funcionan perfectamente, sin caché desactualizada) pero
+NO de escritura (`create_or_update_file` da 403 "Resource not accessible by integration").
+Se sigue usando ZIP + terminal de Pablo para aplicar cambios; el conector de lectura se usa
+para verificar el HEAD real y auditar el historial antes de generar cada entrega.
+
+---
+
 ## [0.3.4-fix-localizacion-firma] — 2026-07-11
 
 ### Corregido
