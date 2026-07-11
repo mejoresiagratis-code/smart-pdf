@@ -37,7 +37,7 @@ class DocumentLoader @Inject constructor(
         context.contentResolver.getType(uri) ?: "application/octet-stream"
 
     /** Renderiza todas las páginas de un PDF a JPEG (una imagen por página). */
-    private fun renderPdf(uri: Uri, targetLongSide: Int = 1600): List<ByteArray> {
+    private fun renderPdf(uri: Uri, targetLongSide: Int = 2000): List<ByteArray> {
         val out = mutableListOf<ByteArray>()
         val pfd: ParcelFileDescriptor =
             context.contentResolver.openFileDescriptor(uri, "r") ?: return out
@@ -62,7 +62,7 @@ class DocumentLoader @Inject constructor(
 
     /** Redimensiona si el lado mayor supera targetLongSide (evita 400/500 en las IAs
      *  por fotos de móvil a resolución completa; el proxy espera imágenes razonables). */
-    private fun downscaleIfNeeded(bmp: Bitmap, targetLongSide: Int = 1600): Bitmap {
+    private fun downscaleIfNeeded(bmp: Bitmap, targetLongSide: Int = 2000): Bitmap {
         val longSide = maxOf(bmp.width, bmp.height)
         if (longSide <= targetLongSide) return bmp
         val scale = targetLongSide.toFloat() / longSide

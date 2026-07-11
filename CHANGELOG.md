@@ -6,6 +6,32 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.4.0-proxy-robusto-modelos] — 2026-07-11
+
+### Añadido (app Android)
+- Resolución máxima de imagen enviada al proxy subida de 1600px a 2000px (en
+  DocumentLoader y en la extracción de firma), para aprovechar el nuevo techo del
+  servidor y mejorar el detalle/OCR sin cambiar el contrato de la API.
+
+### Nota — auditoría completa del ai-proxy.php (entregado aparte, vive en cPanel)
+Revisado el archivo completo. Cambios aplicados: límites subidos de forma coherente
+(set_time_limit 240s, CURLOPT_TIMEOUT 180s, MAX_BODY 20MB, MAX_DOCS 12, MAX_IMG_SIDE
+2000px, JPEG_QUALITY 85, RATE_MAX 60/10min, techo max_tokens 8192) y modelos
+actualizados con evidencia real: Claude → claude-sonnet-5, Groq texto → openai/gpt-oss-120b
+y Groq visión → qwen/qwen3.6-27b (llama-3.3-70b y llama-4-scout DEPRECADOS por Groq el
+17-jun-2026 — explica varios fallos históricos), Grok → grok-4.3 (Grok 2 era ya muy
+antiguo). Gemini y Mistral ya estaban correctos, sin cambios.
+
+Hallazgo importante: el proxy permite sobrescribir modelo/endpoint de los proveedores
+OpenAI-compatibles (grok/mistral/scaleway/ovh/nebius/eurouter) desde ai-proxy.config.php
+(`$CFG['models'][id]`, `$CFG['endpoints'][id]`) — SI existieran overrides antiguos ahí,
+anularían en silencio estos arreglos para esos 6 motores. Claude/Gemini/Groq NO tienen
+este riesgo (modelo fijo en el propio ai-proxy.php). ai-proxy.config.sample.php
+actualizado para incluir claves de scaleway/ovh/nebius/eurouter (antes solo mostraba
+claude/gemini/groq/grok/mistral) y documentar el mecanismo de override opcional.
+
+---
+
 ## [0.3.9-recorte-manual-firma] — 2026-07-11
 
 ### Añadido

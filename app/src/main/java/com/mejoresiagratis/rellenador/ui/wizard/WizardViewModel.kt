@@ -396,8 +396,8 @@ class WizardViewModel @Inject constructor(
             // DocumentLoader: fotos a resolución completa provocan 400/500 en las IAs).
             val forLocate = withContext(Dispatchers.Default) {
                 val longSide = maxOf(bmp.width, bmp.height)
-                if (longSide > 1600) {
-                    val scale = 1600f / longSide
+                if (longSide > 2000) {
+                    val scale = 2000f / longSide
                     bmp.scale((bmp.width * scale).toInt().coerceAtLeast(1), (bmp.height * scale).toInt().coerceAtLeast(1))
                 } else bmp
             }
