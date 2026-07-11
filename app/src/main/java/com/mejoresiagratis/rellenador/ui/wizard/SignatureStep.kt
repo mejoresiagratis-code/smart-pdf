@@ -1,191 +1,311 @@
 package com.mejoresiagratis.rellenador.ui.wizard
 
+import android.graphics.BitmapFactory
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.Color
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
-import com.mejoresiagratis.rellenador.data.model.ContractFields
-import com.mejoresiagratis.rellenador.data.model.FieldProposal
-import com.mejoresiagratis.rellenador.data.model.PackageApplier
-import com.mejoresiagratis.rellenador.data.model.Paquete
 
-/**
- * Paso 3 — Revisión IA. Arriba, los "paquetes" detectados se aplican en bloque
- * de un toque (dirección fiscal/comercio, empresa, persona, banco). Debajo, la
- * confirmación campo a campo con candidatos y consenso de motores.
- */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ReviewStep(state: WizardUiState, vm: WizardViewModel) {
-    var showEngineDetail by remember { mutableStateOf(false) }
-    Column(Modifier.fillMaxSize()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("Paso 3 · Revisa lo detectado por la IA", style = MaterialTheme.typography.titleMedium)
-            val engines = state.enginesOk.joinToString(", ").ifEmpty { "—" }
-            Text("Motores: $engines" + (state.tipoIdentificacion?.let { " · Tipo: $it" } ?: ""),
-                style = MaterialTheme.typography.bodySmall)
-            Text("Aplica un bloque completo o confirma campo a campo.",
-                style = MaterialTheme.typography.bodySmall)
+fun SignatureStep(state: WizardUiState, vm: WizardViewModel) {
+    val context = LocalContext.current
+    var mode by remember { mutableIntStateOf(0) }  // 0 = dibujar, 1 = extraer de foto
+    // Foto pendiente de recortar (null = diálogo de recorte cerrado).
+    var pickedPhotoForCrop by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
 
-            // Panel de detalle de motor caído: muestra el estado real de cada motor que
-            // falló (código HTTP + mensaje real reenviado por el proxy), en vez de solo
-            // el banner genérico. Ayuda a diagnosticar 400/500/429 sin adb logcat.
-            if (state.engineErrors.isNotEmpty()) {
-                TextButton(onClick = { showEngineDetail = !showEngineDetail }) {
-                    Text(if (showEngineDetail) "Ocultar motores no disponibles ▲"
-                         else "Ver motores no disponibles (${state.engineErrors.size}) ▼")
-                }
-                if (showEngineDetail) {
-                    ElevatedCard {
-                        Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            state.engineErrors.forEach { line ->
-                                Text(line, style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.error)
-                            }
-                        }
-                    }
+    // Generar preview y cargar firmas guardadas al entrar.
+    LaunchedEffect(Unit) { vm.buildPreview(); vm.refreshSavedSignatures() }
+
+    if (pickedPhotoForCrop != null) {
+        SignatureCropDialog(
+            photo = pickedPhotoForCrop!!,
+            onConfirm = { cropped -> vm.useManualSignatureCrop(cropped); pickedPhotoForCrop = null },
+            onUseWholePhoto = { vm.extractSignatureFromPhoto(pickedPhotoForCrop!!); pickedPhotoForCrop = null },
+            onCancel = { pickedPhotoForCrop = null }
+        )
+    }
+
+    val photoPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let {
+            context.contentResolver.openInputStream(it)?.use { ins ->
+                BitmapFactory.decodeStream(ins)?.let { bmp ->
+                    vm.rememberPickedPhoto(bmp)
+                    pickedPhotoForCrop = bmp   // abrir recorte manual antes de procesar nada
                 }
             }
         }
-        HorizontalDivider()
+    }
 
-        LazyColumn(Modifier.weight(1f).padding(horizontal = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-            contentPadding = PaddingValues(vertical = 10.dp)) {
+    // Lanzar el visor de compartir cuando el PDF esté listo
+    val shareLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { }
+    val saveLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/pdf")
+    ) { dest ->
+        val file = state.outputFile ?: return@rememberLauncherForActivityResult
+        dest?.let {
+            context.contentResolver.openOutputStream(it)?.use { os -> file.inputStream().use { it.copyTo(os) } }
+        }
+    }
 
-            if (state.packages.isNotEmpty()) {
-                item {
-                    Text("Bloques detectados", style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold)
-                }
-                itemsIndexed(state.packages, key = { i, _ -> "pkg_$i" }) { _, pk ->
-                    PackageCard(pk, onApply = { block2 -> vm.applyPackage(pk, block2) })
-                }
-                item { HorizontalDivider(Modifier.padding(vertical = 4.dp)) }
-            }
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text("Paso 5 · Firma", style = MaterialTheme.typography.titleMedium)
 
-            if (state.proposals.isEmpty()) {
-                item {
-                    Text("La IA no propuso campos sueltos. Puedes rellenar manualmente en el siguiente paso.",
-                        style = MaterialTheme.typography.bodyMedium)
-                }
-            } else {
-                item {
-                    Text("Campos", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                }
-                items(state.proposals, key = { it.fieldKey }) { fp ->
-                    ProposalCard(
-                        proposal = fp,
-                        selected = state.fieldValues[fp.fieldKey],
-                        onSelect = { v -> if (v == null) vm.clearField(fp.fieldKey) else vm.setFieldValue(fp.fieldKey, v) }
+        TabRow(selectedTabIndex = mode) {
+            Tab(selected = mode == 0, onClick = { mode = 0 }, text = { Text("Dibujar") })
+            Tab(selected = mode == 1, onClick = { mode = 1 }, text = { Text("Extraer de foto") })
+        }
+
+        when (mode) {
+            0 -> ElevatedCard {
+                Column(Modifier.padding(12.dp)) {
+                    Text("Dibuja la firma del distribuidor:", style = MaterialTheme.typography.bodyMedium)
+                    Spacer(Modifier.height(8.dp))
+                    SignatureCanvas(
+                        onBitmap = vm::setDrawnSignature,
+                        controls = { clear, done ->
+                            Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedButton(onClick = clear) { Text("Limpiar") }
+                                Button(onClick = done) { Text("Usar esta firma") }
+                            }
+                        }
                     )
                 }
             }
-        }
-
-        HorizontalDivider()
-        Row(Modifier.padding(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = vm::back) { Text("Atrás") }
-            Button(onClick = vm::next, modifier = Modifier.weight(1f)) { Text("Ir al relleno") }
-        }
-    }
-}
-
-@Composable
-private fun PackageCard(pk: Paquete, onApply: (block2: Boolean) -> Unit) {
-    ElevatedCard(shape = RoundedCornerShape(10.dp)) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                AssistChip(onClick = {}, label = { Text(tipoLabel(pk.tipo)) })
-                Spacer(Modifier.width(8.dp))
-                Text(pk.etiqueta.ifBlank { tipoLabel(pk.tipo) },
-                    fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
-            }
-            // Resumen de lo que rellena
-            val resumen = pk.datos.entries.joinToString(" · ") { "${it.key}: ${it.value}" }
-            Text(resumen, style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (pk.fuente.isNotBlank()) {
-                Text(pk.fuente, style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary)
-            }
-
-            if (PackageApplier.canTargetBlock2(pk)) {
-                // Dirección: el usuario elige bloque fiscal o comercio (_2)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = { onApply(false) }, modifier = Modifier.weight(1f)) {
-                        Text("A dirección fiscal")
+            1 -> ElevatedCard {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Sube una foto de un documento firmado; la IA localizará la firma.",
+                        style = MaterialTheme.typography.bodyMedium)
+                    OutlinedButton(onClick = { photoPicker.launch(arrayOf("image/*")) }) {
+                        Text("Elegir foto")
                     }
-                    OutlinedButton(onClick = { onApply(true) }, modifier = Modifier.weight(1f)) {
-                        Text("A comercio (_2)")
-                    }
-                }
-            } else {
-                Button(onClick = { onApply(false) }, modifier = Modifier.fillMaxWidth()) {
-                    Text("Aplicar bloque")
-                }
-            }
-        }
-    }
-}
-
-private fun tipoLabel(tipo: String): String = when (tipo) {
-    "direccion" -> "Dirección fiscal"
-    "direccion_comercio" -> "Dirección comercio"
-    "empresa" -> "Empresa"
-    "persona" -> "Representante"
-    "banco" -> "Banco"
-    else -> tipo
-}
-
-@Composable
-private fun ProposalCard(
-    proposal: FieldProposal,
-    selected: String?,
-    onSelect: (String?) -> Unit
-) {
-    ElevatedCard(shape = RoundedCornerShape(10.dp)) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(ContractFields.labelFor(proposal.fieldKey),
-                fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
-
-            proposal.candidates.forEach { c ->
-                val chosen = selected == c.value
-                Row(
-                    Modifier.fillMaxWidth().selectable(
-                        selected = chosen,
-                        // Fiel a la web: tocar el ya elegido lo desmarca (vuelve a sin elegir).
-                        onClick = { onSelect(if (chosen) null else c.value) }
-                    ),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    RadioButton(selected = chosen,
-                        onClick = { onSelect(if (chosen) null else c.value) })
-                    Column(Modifier.weight(1f)) {
-                        Text(c.value, style = MaterialTheme.typography.bodyMedium)
-                        if (c.sources.isNotEmpty()) {
-                            Text(c.sources.joinToString(" · "),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary)
+                    if (state.locatingSignature) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                            Spacer(Modifier.width(8.dp)); Text("Localizando firma…")
                         }
                     }
                 }
             }
-            Row(
-                Modifier.fillMaxWidth().selectable(selected = selected == null, onClick = { onSelect(null) }),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                RadioButton(selected = selected == null, onClick = { onSelect(null) })
-                Text("Dejar en blanco", style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+
+
+        // Previsualización de la firma ya procesada, reubicada aquí (justo tras elegir
+        // Dibujar/Extraer) para que se vea el resultado de inmediato, sin tener que
+        // bajar hasta después de las opciones de color/fondo.
+        if (state.signature != null) {
+            val sigBmp = remember(state.signature) {
+                state.signature?.let {
+                    BitmapFactory.decodeByteArray(it.pngBytes, 0, it.pngBytes.size)
+                }
+            }
+            if (sigBmp != null) {
+                Box(
+                    Modifier.fillMaxWidth().height(120.dp)
+                        .background(Color(0xFFE0E0E0)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Image(sigBmp.asImageBitmap(), contentDescription = "Firma procesada",
+                        modifier = Modifier.height(100.dp))
+                }
+            }
+            val nPages = state.signPages.size.coerceAtLeast(state.stamps.size)
+            AssistChip(onClick = {}, label = {
+                Text(if (nPages > 0) "Firma cargada ✓ · lista para $nPages página${if (nPages == 1) "" else "s"}"
+                     else "Firma cargada ✓")
+            })
+        }
+
+        // --- Opciones avanzadas de firma (Tanda E) ---
+        ElevatedCard {
+            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Color de tinta", style = MaterialTheme.typography.labelLarge)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val inks = listOf(
+                        "Azul" to android.graphics.Color.rgb(20, 30, 90),
+                        "Negro" to android.graphics.Color.rgb(20, 20, 20),
+                        "Azul claro" to android.graphics.Color.rgb(30, 80, 180)
+                    )
+                    inks.forEach { (label, color) ->
+                        FilterChip(
+                            selected = state.inkColor == color,
+                            onClick = { vm.setInkColor(color) },
+                            label = { Text(label) }
+                        )
+                    }
+                }
+                Text("Fondo", style = MaterialTheme.typography.labelLarge)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = state.sigBackground == com.mejoresiagratis.rellenador.data.pdf.SignatureProcessor.Background.TRANSPARENT,
+                        onClick = { vm.setSigBackground(com.mejoresiagratis.rellenador.data.pdf.SignatureProcessor.Background.TRANSPARENT) },
+                        label = { Text("Transparente") }
+                    )
+                    FilterChip(
+                        selected = state.sigBackground == com.mejoresiagratis.rellenador.data.pdf.SignatureProcessor.Background.WHITE,
+                        onClick = { vm.setSigBackground(com.mejoresiagratis.rellenador.data.pdf.SignatureProcessor.Background.WHITE) },
+                        label = { Text("Blanco") }
+                    )
+                }
+                if (state.savedSignatures.isNotEmpty()) {
+                    Text("Firmas guardadas", style = MaterialTheme.typography.labelLarge)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        state.savedSignatures.forEach { name ->
+                            AssistChip(onClick = { vm.useSavedSignature(name) }, label = { Text(name) })
+                        }
+                    }
+                }
             }
         }
+
+        if (state.signature != null) {
+            // --- Páginas de firma detectadas (Tanda B) ---
+            HorizontalDivider(Modifier.padding(vertical = 4.dp))
+            Text("Páginas de firma detectadas: ${state.signPages.size}",
+                style = MaterialTheme.typography.labelLarge)
+            if (state.signPages.isEmpty()) {
+                Text("No se detectaron huecos automáticamente. Añade páginas manualmente.",
+                    style = MaterialTheme.typography.bodySmall)
+            }
+            state.signPages.sorted().forEach { idx ->
+                ElevatedCard {
+                    ListItem(
+                        headlineContent = { Text("Página ${idx + 1}") },
+                        supportingContent = {
+                            val anchored = state.signAnchors.containsKey(idx)
+                            Text(if (anchored) "Firma anclada bajo «EL DISTRIBUIDOR»" else "Colocación por defecto")
+                        },
+                        trailingContent = {
+                            Row {
+                                TextButton(onClick = { vm.stampOnePage(idx) }) { Text("Colocar") }
+                                IconButton(onClick = { vm.removeSignPage(idx) }) {
+                                    Icon(Icons.Default.Close, contentDescription = "Quitar")
+                                }
+                            }
+                        }
+                    )
+                }
+            }
+            // Añadir página manual
+            var pageInput by remember { mutableStateOf("") }
+            Row(verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = pageInput,
+                    onValueChange = { pageInput = it.filter { c -> c.isDigit() } },
+                    label = { Text("Nº página") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.weight(1f)
+                )
+                OutlinedButton(onClick = {
+                    pageInput.toIntOrNull()?.let { vm.addSignPage(it) }; pageInput = ""
+                }) { Text("Añadir") }
+            }
+            // Estampado masivo
+            if (state.signPages.size > 1) {
+                Button(onClick = vm::stampAllPages, modifier = Modifier.fillMaxWidth()) {
+                    Text("Firmar todas las páginas (${state.signPages.size})")
+                }
+            }
+
+            // Ajuste manual de posición/tamaño en la página 24
+            val stamp = state.stamps.firstOrNull()
+            if (stamp != null) {
+                Text("Ajuste en la página 24 (posición y tamaño):",
+                    style = MaterialTheme.typography.labelLarge)
+                LabeledSlider("Horizontal", stamp.xRel) { vm.updateStamp(it, stamp.yRel, stamp.widthRel) }
+                LabeledSlider("Vertical", stamp.yRel) { vm.updateStamp(stamp.xRel, it, stamp.widthRel) }
+                LabeledSlider("Tamaño", stamp.widthRel, 0.1f, 0.6f) { vm.updateStamp(stamp.xRel, stamp.yRel, it) }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                var sigName by remember { mutableStateOf("") }
+                OutlinedTextField(
+                    value = sigName, onValueChange = { sigName = it },
+                    label = { Text("Nombre") }, singleLine = true,
+                    modifier = Modifier.weight(1f)
+                )
+                OutlinedButton(onClick = {
+                    if (sigName.isNotBlank()) vm.saveCurrentSignature(sigName.trim())
+                }) { Text("Guardar firma") }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (vm.lastPickedPhotoOrNull() != null) {
+                    OutlinedButton(onClick = { pickedPhotoForCrop = vm.lastPickedPhotoOrNull() }) {
+                        Text("Recortar de nuevo")
+                    }
+                }
+                OutlinedButton(onClick = vm::clearSignature) { Text("Quitar firma") }
+            }
+        }
+
+        HorizontalDivider()
+
+        // --- Previsualización del PDF (Tanda C) ---
+        Text("Previsualización", style = MaterialTheme.typography.titleSmall)
+        Text("54 páginas. Toca una página de firma para recolocar la firma ahí.",
+            style = MaterialTheme.typography.bodySmall)
+        OutlinedButton(onClick = vm::buildPreview, modifier = Modifier.fillMaxWidth()) {
+            Text("Actualizar previsualización")
+        }
+        if (state.previewReady) {
+            PdfPreview(state, vm, modifier = Modifier.fillMaxWidth().height(560.dp))
+        }
+
+        HorizontalDivider()
+
+        Button(
+            onClick = { vm.generatePdf() },
+            enabled = !state.busy,
+            modifier = Modifier.fillMaxWidth()
+        ) { Text("Generar PDF final") }
+
+        if (state.outputReady && state.outputFile != null) {
+            Text("PDF generado ✓", color = MaterialTheme.colorScheme.primary)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = { shareLauncher.launch(vm.shareIntentFor(state.outputFile!!)) },
+                    modifier = Modifier.weight(1f)
+                ) { Text("Compartir") }
+                OutlinedButton(
+                    onClick = { saveLauncher.launch("contrato-relleno.pdf") },
+                    modifier = Modifier.weight(1f)
+                ) { Text("Guardar") }
+            }
+        }
+
+        OutlinedButton(onClick = vm::back) { Text("Atrás") }
+    }
+}
+
+@Composable
+private fun LabeledSlider(
+    label: String, value: Float, min: Float = 0f, max: Float = 1f, onChange: (Float) -> Unit
+) {
+    Column {
+        Text(label, style = MaterialTheme.typography.labelSmall)
+        Slider(value = value, onValueChange = onChange, valueRange = min..max)
     }
 }
