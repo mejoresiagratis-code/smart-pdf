@@ -392,11 +392,16 @@ class WizardViewModel @Inject constructor(
             val data: com.mejoresiagratis.rellenador.data.model.SignatureData
             if (box != null) {
                 val cropped = sigProcessor.crop(bmp, box)
-                // applyBoundingCrop = false: el locator ya recortó de forma fiable;
-                // recortar de nuevo por bounding-box de tinta desviaba el resultado
-                // a una esquina si una sombra/arruga se colaba como "trazo".
+                // El recorte a bounding-box SIGUE activo aunque el locator ya recorte:
+                // el riesgo de "desviarse a una esquina" (0.2.0) solo aplica a fotos
+                // COMPLETAS sin recortar (ese caso ya no se procesa en absoluto, ver
+                // fallback abajo). Sobre una región ya acotada por el locator, recortar
+                // de nuevo al trazo real es seguro y necesario: sin esto, una caja del
+                // locator floja (con margen vacío) produce un lienzo grande casi en
+                // blanco que luego se amplía/recorta mal al encajarlo en el hueco del
+                // contrato (letterbox).
                 val processed = sigProcessor.fromPhoto(
-                    cropped, _state.value.inkColor, _state.value.sigBackground, applyBoundingCrop = false
+                    cropped, _state.value.inkColor, _state.value.sigBackground
                 ) ?: cropped
                 rawSignatureBitmap = cropped
                 rawSignatureIsPhoto = true
@@ -524,7 +529,7 @@ class WizardViewModel @Inject constructor(
     private fun reprocessSignatureFromRaw() {
         val raw = rawSignatureBitmap ?: return
         val processed = if (rawSignatureIsPhoto) {
-            sigProcessor.fromPhoto(raw, _state.value.inkColor, _state.value.sigBackground, applyBoundingCrop = false) ?: raw
+            sigProcessor.fromPhoto(raw, _state.value.inkColor, _state.value.sigBackground) ?: raw
         } else {
             val px = IntArray(raw.width * raw.height)
             raw.getPixels(px, 0, raw.width, 0, 0, raw.width, raw.height)

@@ -6,6 +6,25 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.3.3-fix-crop-firma] — 2026-07-11
+
+### Corregido
+- **Firma de foto se ampliaba y recortaba en exceso al aplicarla al PDF final**: la
+  0.3.2 desactivó el recorte a bounding-box (`applyBoundingCrop = false`) cuando el
+  locator ya daba una caja, pensando que evitaba un problema de 0.2.0 (desviarse a una
+  esquina por sombras). En la práctica, si la caja del locator viene floja (con margen
+  vacío alrededor del trazo real), el resultado es un lienzo grande casi en blanco con
+  el trazo diminuto en el centro — que luego el encaje "letterbox" (0.2.2) amplía para
+  llenar la caja calibrada del contrato, recortando/deformando el trazo real.
+- **Fix**: `applyBoundingCrop` vuelve a estar activo SIEMPRE tras el recorte del locator
+  (`extractSignatureFromPhoto` y `reprocessSignatureFromRaw`). El riesgo de "esquina
+  desviada" de 0.2.0 solo aplicaba a fotos COMPLETAS sin recortar — ese caso ya no se
+  procesa en absoluto (fallback de 0.2.0: se ofrece la foto tal cual sin tintar). Sobre
+  una región ya acotada por el locator, recortar de nuevo al trazo real es seguro y
+  necesario para que la firma final no quede minúscula dentro de un recuadro vacío.
+
+---
+
 ## [0.3.2-restaura-0.2.x] — 2026-07-11
 
 ### Corregido — restaura la regresión documentada en 0.3.1
