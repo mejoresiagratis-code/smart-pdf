@@ -6,6 +6,67 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.3.8-fix-gemini-mode-real] — 2026-07-11
+
+### Corregido — CAUSA RAÍZ REAL del 500 de Gemini encontrada (no era timeout)
+Confirmado con el log de errores de PHP real del servidor (no una hipótesis más):
+
+```
+PHP Warning: Undefined array key "gemini_mode" en ai-proxy.php línea 259
+PHP Fatal error: Uncaught TypeError: callGeminiSrv(): Argument #6 ($mode) must be
+of type string, null given
+```
+
+El proxy NUNCA recibía el campo `gemini_mode` en la petición del cliente Android, pese
+a que `ProxyRequest.geminiMode` tiene default `"g35"` y el código siempre lo manda con
+ese valor. Causa: el `Json` de Retrofit (`AppModule.kt`) no tenía `encodeDefaults = true`
+— y el default de kotlinx.serialization es `false` — así que CUALQUIER campo que valga
+exactamente su valor por defecto (como `geminiMode="g35"` casi siempre) se OMITE del
+JSON serializado por completo. El proxy PHP veía la clave inexistente, y un bug propio
+en la línea 259 (reutilizaba `$in['gemini_mode']` directamente en la rama "true" del
+ternario, sin el `?? 'g35'` de respaldo) convertía eso en `null`, que revienta contra
+la firma `string $mode` no-nulo de `callGeminiSrv()` (el archivo usa `strict_types=1`).
+
+Esto explica TODO lo observado: por qué solo Gemini fallaba (único motor con este
+parámetro no-nulo obligatorio), por qué era consistente y no intermitente (el bug de
+serialización no depende de tiempos ni cargas), y por qué el timeout de PHP (0.3.5/
+0.3.6, `max_execution_time`) no lo arreglaba — nunca fue un problema de tiempo.
+
+### Fix (dos lados, complementarios)
+- **Android** (`AppModule.kt`): `encodeDefaults = true` en el `Json` — ahora el JSON
+  enviado refleja de verdad los valores que el código dice que manda.
+- **PHP** (aplicar manualmente en `ai-proxy.php`, línea 259 — vive en el hosting de
+  Pablo, fuera de este repo): usar una variable intermedia para el valor con `??` de
+  respaldo, en vez de re-consultar `$in['gemini_mode']` sin respaldo en el ternario.
+  Esto protege al proxy de cualquier cliente (presente o futuro) que omita el campo.
+
+---
+
+## [0.3.7-diag-mistral-snippet] — 2026-07-11
+
+### Corregido
+- **`maxTokens=4096` (0.3.6) NO resolvió "Mistral: respuesta incompleta"** — confirmado
+  en una prueba real posterior con el mismo fallo. La hipótesis del corte por límite de
+  tokens queda descartada; la causa real de que `AiJsonParser.parse()` devuelva null es
+  otra, y sin ver el texto crudo no se puede saber cuál.
+- **Diagnóstico ampliado**: cuando el parseo del JSON falla, el mensaje agrupado ahora
+  incluye un fragmento del texto real que devolvió el motor (`"respuesta no parseable —
+  \"<primeros 180 caracteres>\""`), mismo principio que `realErrorMessage()` para errores
+  HTTP (0.3.1). Sin esto no se puede distinguir entre: JSON cortado a medias, texto plano
+  sin JSON, un mensaje de error del propio motor camuflado como éxito, o un formato
+  inesperado — cada causa necesitaría un fix distinto.
+
+### Investigación Gemini — el aumento de max_execution_time a 240s NO resolvió el 500
+Confirmado en prueba real posterior al cambio en cPanel: Gemini sigue devolviendo HTTP 500
+sin cuerpo. Esto apunta a que el límite real no es (solo) el `max_execution_time` de PHP
+— sospecha siguiente: **timeout de proxy/FastCGI de Apache o LiteSpeed**, que en muchos
+hostings cPanel es un ajuste SEPARADO del PHP y con su propio tope, no necesariamente
+visible ni modificable desde el MultiPHP INI Editor. Pendiente: revisar el log de errores
+de cPanel para la prueba más reciente (post-240s) y, si no aparece ya el mensaje de tiempo
+excedido, consultar con soporte del hosting sobre el timeout de proxy/FastCGI del dominio.
+
+---
+
 ## [0.3.6-maxtokens-mistral] — 2026-07-11
 
 ### Corregido

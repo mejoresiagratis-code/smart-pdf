@@ -113,7 +113,15 @@ class MultiAiExtractor @Inject constructor(
 
                     val parsed = AiJsonParser.parse(resp.text)
                     if (parsed == null) {
-                        perProviderStatus[provider.displayName] = "respuesta incompleta"; continue
+                        // Diagnóstico real (mismo principio que realErrorMessage() para
+                        // errores HTTP): mostrar un fragmento de lo que el motor mandó de
+                        // verdad, en vez de solo "no se pudo parsear". Sin esto, "respuesta
+                        // incompleta" no dice si el motor cortó el JSON a medias, devolvió
+                        // texto plano, un mensaje de error propio, o algo con formato
+                        // inesperado — cada causa necesita un fix distinto.
+                        val snippet = resp.text?.trim()?.take(180)?.replace("\n", " ") ?: "(vacío)"
+                        perProviderStatus[provider.displayName] = "respuesta no parseable — \"$snippet\""
+                        continue
                     }
                     // Groq (texto plano) especula: quedarse solo con sugerencias.
                     val ex = if (provider == AiProvider.GROQ)

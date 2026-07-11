@@ -24,6 +24,12 @@ object AppModule {
         ignoreUnknownKeys = true
         isLenient = true
         explicitNulls = false
+        // CRÍTICO: sin esto, kotlinx.serialization OMITE del JSON cualquier campo que
+        // tenga su valor por defecto (p.ej. geminiMode="g35", que casi siempre vale
+        // exactamente eso). El proxy PHP entonces ve la clave "gemini_mode" inexistente
+        // en vez de "g35", y en el caso de Gemini eso provoca un TypeError fatal
+        // (parámetro no-nulo recibiendo null) — confirmado en el log real del servidor.
+        encodeDefaults = true
     }
 
     @Provides @Singleton
