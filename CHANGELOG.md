@@ -6,6 +6,33 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.3.9-recorte-manual-firma] — 2026-07-11
+
+### Añadido
+- **Recorte MANUAL de la firma al subir una foto**: tras elegir "Elegir foto" en
+  "Extraer de foto", se abre un recorte a pantalla completa donde el usuario arrastra
+  el dedo para marcar exactamente la zona de la firma, antes de procesar nada. Sustituye
+  la dependencia total en la localización automática por IA, que en dos rondas de ajuste
+  (0.3.4 umbral de caja, 0.3.5 relajación Otsu×1.15) seguía perdiendo trazos o recortando
+  mal en algunas fotos. El recorte manual NO pasa por la IA de localización — va directo
+  al pipeline de tinta (aplanar + Otsu + recorte a bounding-box) sobre la región elegida.
+  Botón "Foto completa" para quien prefiera el camino automático de siempre.
+- **"Recortar de nuevo"**: si el resultado no convence, un botón junto a la firma
+  cargada reabre el recorte sobre la MISMA foto ya elegida, sin tener que volver a
+  subirla. La foto original se recuerda mientras dura la sesión.
+- El recorte manual se integra con el resto de funciones ya existentes: cambiar color
+  de tinta o fondo después reprocesa en vivo igual que con el flujo automático.
+
+### Nota de build
+Comprobado contra el HEAD real del repo (vía conector de lectura de GitHub) que el
+fragmento de diagnóstico de Groq/Mistral (0.3.7) y el fix de Gemini (0.3.8) SÍ están
+presentes en el código actual, pese a no aparecer como commits individuales en el
+historial (se aplicaron como parte de entregas acumulativas). Si en una prueba no se ve
+el fragmento de texto real en "respuesta no parseable", puede que el APK instalado en
+el móvil sea de un build anterior — reinstalar la última versión del workflow.
+
+---
+
 ## [0.3.8-fix-gemini-mode-real] — 2026-07-11
 
 ### Corregido — CAUSA RAÍZ REAL del 500 de Gemini encontrada (no era timeout)

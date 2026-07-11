@@ -364,7 +364,32 @@ class WizardViewModel @Inject constructor(
     }
 
     /** Firma extraída de una foto: localiza con IA, recorta y limpia. */
+    /** Guarda la última foto elegida en "Extraer de foto", para poder recortarla de
+     *  nuevo sin tener que volver a seleccionarla. */
+    private var lastPickedPhoto: Bitmap? = null
+
+    fun rememberPickedPhoto(bmp: Bitmap) { lastPickedPhoto = bmp }
+    fun lastPickedPhotoOrNull(): Bitmap? = lastPickedPhoto
+
+    /**
+     * Recorte MANUAL confirmado por el usuario: NO pasa por la IA de localización —
+     * el usuario ya decidió la región exacta arrastrando el dedo. Se ejecuta
+     * directamente el pipeline de tinta (aplanar + Otsu + recorte a bounding-box)
+     * sobre esa región, igual que cuando el locator sí acierta.
+     */
+    fun useManualSignatureCrop(cropped: Bitmap) {
+        val processed = sigProcessor.fromPhoto(cropped, _state.value.inkColor, _state.value.sigBackground)
+            ?: cropped
+        rawSignatureBitmap = cropped
+        rawSignatureIsPhoto = true
+        val data = sigProcessor.toSignatureData(processed)
+        _state.value = _state.value.copy(signature = data, error = null)
+        if (_state.value.signPages.isNotEmpty()) stampAllPages()
+        else _state.value = _state.value.copy(stamps = listOf(defaultStamp()))
+    }
+
     fun extractSignatureFromPhoto(bmp: Bitmap) {
+        lastPickedPhoto = bmp
         viewModelScope.launch {
             _state.value = _state.value.copy(locatingSignature = true, error = null)
             // Redimensionar antes de mandar a locate_signature (mismo motivo que en

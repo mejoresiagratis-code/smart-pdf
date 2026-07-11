@@ -26,16 +26,30 @@ import androidx.compose.ui.unit.dp
 fun SignatureStep(state: WizardUiState, vm: WizardViewModel) {
     val context = LocalContext.current
     var mode by remember { mutableIntStateOf(0) }  // 0 = dibujar, 1 = extraer de foto
+    // Foto pendiente de recortar (null = diálogo de recorte cerrado).
+    var pickedPhotoForCrop by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
 
     // Generar preview y cargar firmas guardadas al entrar.
     LaunchedEffect(Unit) { vm.buildPreview(); vm.refreshSavedSignatures() }
+
+    if (pickedPhotoForCrop != null) {
+        SignatureCropDialog(
+            photo = pickedPhotoForCrop!!,
+            onConfirm = { cropped -> vm.useManualSignatureCrop(cropped); pickedPhotoForCrop = null },
+            onUseWholePhoto = { vm.extractSignatureFromPhoto(pickedPhotoForCrop!!); pickedPhotoForCrop = null },
+            onCancel = { pickedPhotoForCrop = null }
+        )
+    }
 
     val photoPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
         uri?.let {
             context.contentResolver.openInputStream(it)?.use { ins ->
-                BitmapFactory.decodeStream(ins)?.let(vm::extractSignatureFromPhoto)
+                BitmapFactory.decodeStream(ins)?.let { bmp ->
+                    vm.rememberPickedPhoto(bmp)
+                    pickedPhotoForCrop = bmp   // abrir recorte manual antes de procesar nada
+                }
             }
         }
     }
@@ -237,7 +251,14 @@ fun SignatureStep(state: WizardUiState, vm: WizardViewModel) {
                     if (sigName.isNotBlank()) vm.saveCurrentSignature(sigName.trim())
                 }) { Text("Guardar firma") }
             }
-            OutlinedButton(onClick = vm::clearSignature) { Text("Quitar firma") }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (vm.lastPickedPhotoOrNull() != null) {
+                    OutlinedButton(onClick = { pickedPhotoForCrop = vm.lastPickedPhotoOrNull() }) {
+                        Text("Recortar de nuevo")
+                    }
+                }
+                OutlinedButton(onClick = vm::clearSignature) { Text("Quitar firma") }
+            }
         }
 
         HorizontalDivider()
