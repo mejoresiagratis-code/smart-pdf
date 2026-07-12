@@ -26,7 +26,6 @@ import androidx.compose.ui.unit.dp
 
 // Importamos nuestros componentes globales
 import com.mejoresiagratis.rellenador.ui.components.ExpressiveButton
-import com.mejoresiagratis.rellenador.ui.components.ExpressiveSurface
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -73,66 +72,62 @@ private fun ContractSelectionContent(
         ActivityResultContracts.OpenDocument()
     ) { uri -> uri?.let(vm::chooseUserContract) }
 
-    // 2. Layout Estructural: Separamos el área de scroll del botón de acción anclado
+    // 2. Layout Estructural: Separamos el área de scroll del botón de acción anclado.
+    // Densidad ajustada 1:1 al mockup — SIN envoltorio ExpressiveSurface (ese
+    // Surface extra metía 24dp de padding interno sobre los 16dp del Column, es
+    // decir 40dp perdidos por lado en vez de los 20dp del mockup: por eso todo
+    // se veía más estrecho y más alto de lo debido, y hacía falta scroll).
     Column(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
                 .weight(1f)
                 .verticalScroll(rememberScrollState())
-                .padding(16.dp), // Espaciado exterior para que el Surface respire
+                .padding(horizontal = 20.dp, vertical = 16.dp), // 20dp por lado, como el mockup
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Aplicamos el contenedor orgánico M3 Expressive
-            ExpressiveSurface {
-                Column(
-                    modifier = Modifier.padding(24.dp), // Márgenes internos
-                    verticalArrangement = Arrangement.spacedBy(20.dp)
-                ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(
-                            text = "Paso 1 · Elige el contrato a rellenar",
-                            style = MaterialTheme.typography.headlineSmall, // Mayor jerarquía
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = "Usa el contrato oficial de distribución MASORANGE incluido, o aporta tu propio PDF.",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-
-                    // 3. Semántica de Grupo: Le dice a los servicios de accesibilidad que esto es un grupo de opciones
-                    Column(
-                        modifier = Modifier.selectableGroup(),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        val isDefault = state.contractSource == ContractSource.DEFAULT
-                        ContractOptionCard(
-                            selected = isDefault,
-                            onClick = vm::chooseDefaultContract,
-                            headline = "Contrato por defecto",
-                            supporting = "Contrato de distribución PdV (54 páginas)",
-                            icon = { Icon(Icons.Outlined.Description, contentDescription = null) }
-                        )
-
-                        val isUser = state.contractSource == ContractSource.USER
-                        val fileName = state.userContractUri?.lastPathSegment?.substringAfterLast('/')
-                            ?: "Seleccionar un PDF del dispositivo"
-
-                        ContractOptionCard(
-                            selected = isUser,
-                            onClick = { picker.launch(arrayOf("application/pdf")) },
-                            headline = "Aportar mi PDF",
-                            supporting = fileName,
-                            icon = { Icon(Icons.Outlined.UploadFile, contentDescription = null) }
-                        )
-                    }
-
-                    com.mejoresiagratis.rellenador.ui.components.TipBanner(
-                        "Usa \"Aportar mi PDF\" solo si tienes una versión del contrato distinta a la incluida por defecto."
-                    )
-                }
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    text = "Paso 1 · Elige el contrato a rellenar",
+                    style = MaterialTheme.typography.titleLarge, // antes headlineSmall — más grande de lo que marca el mockup
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "Usa el contrato oficial de distribución MASORANGE incluido, o aporta tu propio PDF.",
+                    style = MaterialTheme.typography.bodyMedium, // antes bodyLarge
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
+
+            // 3. Semántica de Grupo: Le dice a los servicios de accesibilidad que esto es un grupo de opciones
+            Column(
+                modifier = Modifier.selectableGroup(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                val isDefault = state.contractSource == ContractSource.DEFAULT
+                ContractOptionCard(
+                    selected = isDefault,
+                    onClick = vm::chooseDefaultContract,
+                    headline = "Contrato por defecto",
+                    supporting = "Contrato de distribución PdV (54 páginas)",
+                    icon = { Icon(Icons.Outlined.Description, contentDescription = null) }
+                )
+
+                val isUser = state.contractSource == ContractSource.USER
+                val fileName = state.userContractUri?.lastPathSegment?.substringAfterLast('/')
+                    ?: "Seleccionar un PDF del dispositivo"
+
+                ContractOptionCard(
+                    selected = isUser,
+                    onClick = { picker.launch(arrayOf("application/pdf")) },
+                    headline = "Aportar mi PDF",
+                    supporting = fileName,
+                    icon = { Icon(Icons.Outlined.UploadFile, contentDescription = null) }
+                )
+            }
+
+            com.mejoresiagratis.rellenador.ui.components.TipBanner(
+                "Usa \"Aportar mi PDF\" solo si tienes una versión del contrato distinta a la incluida por defecto."
+            )
         }
 
         // 4. Acción Primaria Anclada: Fundamental en flujos tipo "Wizard"
@@ -141,7 +136,7 @@ private fun ContractSelectionContent(
             tonalElevation = 3.dp, // Sutil elevación para separarlo del contenido scrolleable
             shadowElevation = 4.dp
         ) {
-            Box(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+            Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp)) {
                 // Usamos nuestro botón global estandarizado
                 ExpressiveButton(
                     onClick = {
@@ -215,6 +210,17 @@ private fun ContractOptionCard(
                     Box(contentAlignment = Alignment.Center) {
                         Icon(Icons.Filled.Check, contentDescription = "Seleccionado",
                             tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(13.dp))
+                    }
+                }
+            } else {
+                Box(
+                    Modifier.size(22.dp)
+                        .border(1.5.dp, MaterialTheme.colorScheme.outline, androidx.compose.foundation.shape.CircleShape)
+                )
+            }
+        }
+    }
+}rialTheme.colorScheme.onPrimary, modifier = Modifier.size(13.dp))
                     }
                 }
             } else {
