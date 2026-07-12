@@ -6,6 +6,45 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.5.4-tanda2-documentacion-motor-activo] — 2026-07-12
+
+### Añadido — identidad visual por proveedor + progreso en vivo (Tanda 2 M3 Expressive)
+- **`AiProvider`** (`AiModels.kt`) ampliado con `brandColor` (color oficial de marca,
+  público en brand guidelines), `initial` (glyph fallback de 1–2 caracteres) y
+  `drawableName` (recurso `res/drawable/ic_provider_*`).
+- **9 drawables placeholder** (`ic_provider_claude.xml`, `ic_provider_gemini.xml`,
+  `ic_provider_groq.xml`, `ic_provider_grok.xml`, `ic_provider_mistral.xml`,
+  `ic_provider_scaleway.xml`, `ic_provider_ovh.xml`, `ic_provider_nebius.xml`,
+  `ic_provider_eurouter.xml`): disco con el color de marca, listos para sustituir por
+  el SVG oficial de cada proveedor sin tocar código (mismo nombre de recurso). Ver
+  `LOGOS_TODO.md` para las URLs de los brand kits oficiales.
+- **`ExpressiveComponents.kt`**: nuevos `ProviderGlyph` (círculo + inicial, fallback
+  total), `ProviderLogo` (drawable + inicial superpuesta, con fallback automático a
+  `ProviderGlyph` si el recurso no existiera), `EngineChip` (filter chip con logo,
+  badge 🇪🇺, halo pulsante cuando el motor está trabajando) y
+  `MotorLoadingIndicator` (sustituye el `busyMsg` de texto plano: logo grande del
+  motor activo + `LoadingIndicator` Expressive + fila de estado por motor
+  pendiente/actual/hecho con tick).
+- **`MultiAiExtractor.extract()`**: nuevos parámetros opcionales `onProviderStart` /
+  `onProviderFinish` (defaults no-op, sin romper llamadores existentes), invocados
+  alrededor de cada llamada al proxy — permiten reflejar en vivo qué motor concreto
+  está procesando en cada momento.
+- **`WizardUiState`**: nuevos campos `activeProvider` y `finishedProviders` para el
+  progreso en vivo; `WizardViewModel.runExtraction()` los actualiza vía los
+  callbacks del extractor y los limpia al terminar (éxito o error).
+- **`DocumentsStep.kt`** rediseñado: tarjeta Expressive de estado de subida (icono en
+  blob), chips de motor (`EngineChip`) con logo real, `TipBanner` sobre proveedores
+  🇪🇺, y `MotorLoadingIndicator` contextual durante la extracción en vez del texto
+  genérico "Analizando con IA…". Paddings alineados al criterio ya fijado en
+  `ContractStep` (20dp horizontal / 16dp vertical exterior, 20dp/14dp en la barra de
+  acción anclada).
+
+### Pendiente (no código, tarea de Pablo)
+- Sustituir los 9 drawables placeholder por los SVG oficiales de cada proveedor
+  (ver `LOGOS_TODO.md`).
+
+---
+
 ## [ai-proxy 2026-07-11-b] — mismo día, sin bump de versionName de app
 
 ### Corregido (ai-proxy.php — solo servidor, no requiere nueva build de la app)

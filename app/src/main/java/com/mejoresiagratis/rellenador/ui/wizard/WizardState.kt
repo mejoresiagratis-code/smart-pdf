@@ -41,6 +41,10 @@ data class WizardUiState(
     val error: String? = null,
     val engineErrors: List<String> = emptyList(),  // detalle por motor (panel Revisión IA)
 
+    // Tanda 2 — progreso en vivo de la extracción multi-motor (MotorLoadingIndicator)
+    val activeProvider: AiProvider? = null,
+    val finishedProviders: Set<AiProvider> = emptySet(),
+
     // Resultado de la extracción
     val proposals: List<FieldProposal> = emptyList(),
     val packages: List<Paquete> = emptyList(),

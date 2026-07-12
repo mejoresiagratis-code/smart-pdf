@@ -3,17 +3,35 @@ package com.mejoresiagratis.rellenador.data.model
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-/** Los 9 motores que multiplexa ai-proxy.php. */
-enum class AiProvider(val id: String, val displayName: String, val eu: Boolean = false) {
-    CLAUDE("claude", "Claude"),
-    GEMINI("gemini", "Gemini"),
-    GROQ("groq", "Groq"),
-    GROK("grok", "Grok"),
-    MISTRAL("mistral", "Mistral", eu = true),
-    SCALEWAY("scaleway", "Scaleway", eu = true),
-    OVH("ovh", "OVHcloud", eu = true),
-    NEBIUS("nebius", "Nebius", eu = true),
-    EUROUTER("eurouter", "EUrouter", eu = true);
+/**
+ * Los 9 motores que multiplexa ai-proxy.php.
+ *
+ * Tanda 2 — identidad visual por proveedor:
+ * - `brandColor`: color oficial de marca (Long ARGB) para el chip, halo del logo y
+ *   glyph fallback. Son colores públicos de brand guidelines, no reproducción de logo.
+ * - `initial`: 1–2 caracteres para el glyph fallback cuando el drawable oficial no
+ *   está disponible (o cuando se prefiere identidad neutra).
+ * - `drawableName`: nombre del recurso PNG/SVG en `res/drawable` (sin extensión ni
+ *   prefijo `R.drawable.`). El drawable existe siempre como placeholder desde el ZIP
+ *   de la Tanda 2 y se puede sustituir por el logo oficial más tarde sin tocar código.
+ */
+enum class AiProvider(
+    val id: String,
+    val displayName: String,
+    val eu: Boolean = false,
+    val brandColor: Long,
+    val initial: String,
+    val drawableName: String
+) {
+    CLAUDE  ("claude",   "Claude",    brandColor = 0xFFCC785C, initial = "C",  drawableName = "ic_provider_claude"),
+    GEMINI  ("gemini",   "Gemini",    brandColor = 0xFF1A73E8, initial = "G",  drawableName = "ic_provider_gemini"),
+    GROQ    ("groq",     "Groq",      brandColor = 0xFFF55036, initial = "Gq", drawableName = "ic_provider_groq"),
+    GROK    ("grok",     "Grok",      brandColor = 0xFF000000, initial = "X",  drawableName = "ic_provider_grok"),
+    MISTRAL ("mistral",  "Mistral",   eu = true, brandColor = 0xFFFA500A, initial = "M",  drawableName = "ic_provider_mistral"),
+    SCALEWAY("scaleway", "Scaleway",  eu = true, brandColor = 0xFF4F0599, initial = "S",  drawableName = "ic_provider_scaleway"),
+    OVH     ("ovh",      "OVHcloud",  eu = true, brandColor = 0xFF123F6D, initial = "O",  drawableName = "ic_provider_ovh"),
+    NEBIUS  ("nebius",   "Nebius",    eu = true, brandColor = 0xFF16A34A, initial = "N",  drawableName = "ic_provider_nebius"),
+    EUROUTER("eurouter", "EUrouter",  eu = true, brandColor = 0xFF003399, initial = "EU", drawableName = "ic_provider_eurouter");
 
     companion object {
         fun fromId(id: String) = entries.firstOrNull { it.id == id }

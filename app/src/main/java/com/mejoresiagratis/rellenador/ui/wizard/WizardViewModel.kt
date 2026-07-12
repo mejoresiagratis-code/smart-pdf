@@ -197,7 +197,10 @@ class WizardViewModel @Inject constructor(
         val s = _state.value
         if (!s.canAdvanceFromDocs) return
         viewModelScope.launch {
-            _state.value = s.copy(busy = true, busyMsg = "Preparando documentos…", error = null)
+            _state.value = s.copy(
+                busy = true, busyMsg = "Preparando documentos…", error = null,
+                activeProvider = null, finishedProviders = emptySet()
+            )
             val payloads = withContext(Dispatchers.IO) {
                 s.docUris.flatMap { runCatching { loader.load(it) }.getOrElse { emptyList() } }
             }
@@ -207,9 +210,24 @@ class WizardViewModel @Inject constructor(
             }
             _state.value = _state.value.copy(busyMsg = "Analizando con IA…")
             val result = runCatching {
-                extractor.extract(payloads, s.enabledProviders.toList())
+                extractor.extract(
+                    payloads, s.enabledProviders.toList(),
+                    // Tanda 2 — el motor activo se refleja en vivo en el chip/indicador;
+                    // al terminar un motor se marca como completado (queda con el tick
+                    // aunque otro empiece justo después, por eso se añade sin quitar).
+                    onProviderStart = { p -> _state.value = _state.value.copy(activeProvider = p) },
+                    onProviderFinish = { p ->
+                        _state.value = _state.value.copy(
+                            finishedProviders = _state.value.finishedProviders + p
+                        )
+                    }
+                )
             }.getOrElse {
-                _state.value = _state.value.copy(busy = false, error = it.message); return@launch
+                _state.value = _state.value.copy(
+                    busy = false, error = it.message,
+                    activeProvider = null, finishedProviders = emptySet()
+                )
+                return@launch
             }
             // Prerelleno inicial: valor de mayor consenso por campo.
             val prefill = result.proposals.associate { fp ->
@@ -229,7 +247,8 @@ class WizardViewModel @Inject constructor(
                 // ven en el panel colapsable "Ver motores no disponibles" de ReviewStep
                 // (engineErrors). Duplicarlos en el banner rojo genérico era redundante
                 // y aparecía siempre visible aunque el usuario no quisiera verlo.
-                engineErrors = result.errors
+                engineErrors = result.errors,
+                activeProvider = null, finishedProviders = emptySet()
             )
         }
     }

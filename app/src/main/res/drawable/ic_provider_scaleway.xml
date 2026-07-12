@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Placeholder Tanda 2. Reemplazar por logo oficial descargando el SVG de:
+     - Anthropic:   https://www.anthropic.com/brand
+     - Google AI:   https://ai.google.dev/gemini-api/docs/brand-guidelines
+     - Groq:        https://groq.com/press-kit/
+     - xAI (Grok):  https://x.ai/brand
+     - Mistral:     https://mistral.ai/news (footer brand assets)
+     - Scaleway:    https://www.scaleway.com/en/press-kit/
+     - OVHcloud:    https://corporate.ovhcloud.com/en/newsroom/media-library/
+     - Nebius:      https://nebius.com/press-kit
+     - Este mismo XML puede sustituirse por un VectorDrawable exportado desde el SVG oficial. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Disco pleno con el color de marca — sobre él Compose pintará la inicial en blanco. -->
+    <path
+        android:fillColor="#4F0599"
+        android:pathData="M12,2 C17.5228,2 22,6.4772 22,12 C22,17.5228 17.5228,22 12,22 C6.4772,22 2,17.5228 2,12 C2,6.4772 6.4772,2 12,2 Z" />
+</vector>

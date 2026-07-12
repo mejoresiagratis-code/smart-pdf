@@ -54,7 +54,12 @@ class MultiAiExtractor @Inject constructor(
         docs: List<DocPayload>,
         enabled: List<AiProvider>,
         geminiMode: String = "g35",
-        earlyStop: Boolean = true
+        earlyStop: Boolean = true,
+        // Tanda 2 — callbacks opcionales para reflejar en la UI qué motor está
+        // trabajando ahora mismo (chip activo + MotorLoadingIndicator). Defaults
+        // no-op: no cambia el comportamiento de ningún llamador existente.
+        onProviderStart: (AiProvider) -> Unit = {},
+        onProviderFinish: (AiProvider) -> Unit = {}
     ): Result {
         val prompt = ExtractionPrompt.build()
         // acumulador: campo -> (valor -> fuentes)
@@ -87,6 +92,7 @@ class MultiAiExtractor @Inject constructor(
             docs.forEachIndexed { i, doc ->
                 for (provider in orderedEnabled) {
                     if (provider in dead) continue   // short-circuit: no reintentar un motor ya roto
+                    onProviderStart(provider)
                     val req = ProxyRequest(
                         provider = provider.id, prompt = prompt, task = "extract",
                         maxTokens = 4096, seq = i, geminiMode = geminiMode, docs = listOf(doc)
@@ -103,6 +109,8 @@ class MultiAiExtractor @Inject constructor(
                         perProviderStatus[provider.displayName] = "${e.message}"
                         dead.add(provider)
                         null
+                    } finally {
+                        onProviderFinish(provider)
                     }
                     if (resp == null) continue
                     if (!resp.ok) {
