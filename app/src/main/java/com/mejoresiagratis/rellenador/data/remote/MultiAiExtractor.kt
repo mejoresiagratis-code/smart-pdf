@@ -102,8 +102,12 @@ class MultiAiExtractor @Inject constructor(
                     } catch (e: HttpException) {
                         val real = e.realErrorMessage()
                         perProviderStatus[provider.displayName] = "HTTP ${e.code()}" + (real?.let { " — $it" } ?: "")
+                        // Nota: antes había un delay(2500) aquí para el caso 429, pero
+                        // dead.add() se ejecuta justo arriba y es permanente para el resto
+                        // de esta extracción (no hay reintento posterior a este motor en
+                        // ningún documento siguiente) — el delay no servía para nada salvo
+                        // alargar la espera del usuario sin ningún beneficio. Eliminado.
                         dead.add(provider)
-                        if (e.code() == 429) kotlinx.coroutines.delay(2500)  // backoff cooperativo
                         null
                     } catch (e: Exception) {
                         perProviderStatus[provider.displayName] = "${e.message}"
