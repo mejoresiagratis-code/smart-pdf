@@ -220,15 +220,4 @@ private fun ContractOptionCard(
             }
         }
     }
-}rialTheme.colorScheme.onPrimary, modifier = Modifier.size(13.dp))
-                    }
-                }
-            } else {
-                Box(
-                    Modifier.size(22.dp)
-                        .border(1.5.dp, MaterialTheme.colorScheme.outline, androidx.compose.foundation.shape.CircleShape)
-                )
-            }
-        }
-    }
 }
