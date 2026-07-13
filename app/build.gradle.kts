@@ -16,7 +16,7 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = 23
-        versionName = "0.5.6-prompt-extraccion-refinado"
+        versionName = "0.5.6-actividad-checkbox-nie-prompt-refinado"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // Base URL of your PHP proxy. Override per build type.

@@ -41,7 +41,10 @@ data class Candidate(
     val note: String = ""
 )
 
-/** Campo canónico del contrato con su etiqueta legible (los 15 de la web). */
+/** Campo canónico del contrato con su etiqueta legible.
+ *  Verificado contra el AcroForm real (contrato-base.pdf, 54 págs, vía pypdf get_fields():
+ *  26 campos en total — 20 de aquí + CIF/NIF/undefined (checkboxes, gestionados aparte
+ *  vía checkboxStateFor) + Responsable Comercial MASORANGE (autorrelleno, vía RESPONSABLE_KEY)). */
 data class CanonField(val key: String, val label: String)
 
 object ContractFields {
@@ -64,6 +67,14 @@ object ContractFields {
         CanonField("Email Comercial", "Email comercial"),
         CanonField("Email  Facturación", "Email facturación"),
         CanonField("Datos bancarios del DISTRIBUIDOR", "IBAN"),
+        // Añadidos tras auditoría contra el AcroForm real (contrato-base.pdf):
+        // existían en el PDF y en el prompt de IA de ambas apps, pero no estaban
+        // conectados aquí — migración incompleta de la web a Android.
+        CanonField("Actividad principal del negocio", "Actividad principal (IAE)"),
+        CanonField(
+            "Profesión puestos de trabajo datos no económicos de nómina historial del trabajador",
+            "Profesión / puesto de trabajo"
+        ),
         CanonField("Fecha", "Fecha · día"),
         CanonField("de", "Fecha · mes"),
         CanonField("año", "Fecha · año"),
@@ -77,18 +88,28 @@ object ContractFields {
     // Checkboxes del tipo de identificación (valores reales del AcroForm).
     const val CHECKBOX_NIF = "NIF"
     const val CHECKBOX_CIF = "CIF"
+    // El contrato real SÍ tiene una tercera casilla para NIE, pero quedó sin nombre
+    // propio al exportar el AcroForm original — su campo real se llama literalmente
+    // "undefined" (verificado con pypdf get_fields() contra contrato-base.pdf; la app
+    // web ya lo detecta así: cbs.find(f=>norm(f.name)==="undefined")). No es un nombre
+    // que podamos cambiar aquí: para marcar esa casilla en el PDF real hay que usar
+    // exactamente ese valor, tal como CHECKBOX_CIF/CHECKBOX_NIF usan los suyos.
+    const val CHECKBOX_NIE = "undefined"
     const val CHECKBOX_ON = "/On"
     const val CHECKBOX_OFF = "/Off"
 
     /**
-     * Devuelve el estado de los checkboxes NIF/CIF según el tipo detectado por la IA.
-     * Solo marca si el tipo es concluyente (CIF o NIF). NIE no marca ninguno
-     * (el contrato solo tiene casillas NIF y CIF).
+     * Devuelve el estado de las 3 casillas de tipo de identificación (CIF/NIF/NIE)
+     * según el tipo detectado por la IA o corregido a mano por el usuario.
+     * Antes NIE no marcaba ninguna casilla (premisa incorrecta: "el contrato solo
+     * tiene casillas NIF y CIF") — el contrato real sí tiene una tercera casilla
+     * para NIE, solo que mal nombrada en el propio PDF.
      */
     fun checkboxStateFor(tipoIdentificacion: String?): Map<String, String> = when (tipoIdentificacion?.uppercase()) {
-        "CIF" -> mapOf(CHECKBOX_CIF to CHECKBOX_ON, CHECKBOX_NIF to CHECKBOX_OFF)
-        "NIF" -> mapOf(CHECKBOX_NIF to CHECKBOX_ON, CHECKBOX_CIF to CHECKBOX_OFF)
-        else -> emptyMap()   // NIE o desconocido: no marcar (dejar manual)
+        "CIF" -> mapOf(CHECKBOX_CIF to CHECKBOX_ON, CHECKBOX_NIF to CHECKBOX_OFF, CHECKBOX_NIE to CHECKBOX_OFF)
+        "NIF" -> mapOf(CHECKBOX_NIF to CHECKBOX_ON, CHECKBOX_CIF to CHECKBOX_OFF, CHECKBOX_NIE to CHECKBOX_OFF)
+        "NIE" -> mapOf(CHECKBOX_NIE to CHECKBOX_ON, CHECKBOX_CIF to CHECKBOX_OFF, CHECKBOX_NIF to CHECKBOX_OFF)
+        else -> emptyMap()   // tipo desconocido: no marcar ninguna (dejar manual)
     }
 
     fun labelFor(key: String): String =

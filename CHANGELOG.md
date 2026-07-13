@@ -6,29 +6,46 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
-## [0.5.6-prompt-extraccion-refinado] — 2026-07-13
+## [0.5.6-actividad-checkbox-nie-prompt-refinado] — 2026-07-13
 
-### Corregido/mejorado — `ExtractionPrompt.kt`, a partir de una auditoría con documentos
-### reales (escritura/CIF/TIE/IAE/censal/Modelo 036/certificado IBAN)
-- **Domicilio personal vs. fiscal**: nueva regla explícita — el domicilio que aparece en
-  el DNI/NIE/pasaporte de un representante NUNCA se propone como dirección fiscal de la
-  empresa cuando el tipo de identificación es CIF (antes no estaba dicho explícitamente;
-  hallazgo real al analizar un TIE cuyo domicilio personal no coincidía con el fiscal de
-  la empresa que representa).
-- **Modelo 036**: aviso explícito de que la página de "Actividades económicas y locales"
-  puede listar varias direcciones de local (PdV, almacén…) distintas de la fiscal — deben
-  tratarse como candidatas a dirección de comercio (`_2`), nunca como la fiscal directa.
-- **Reordenación de nombre**: añadido ejemplo de formato tarjeta de identidad con
-  etiquetas separadas ("APELLIDOS Nombres: HASAN Ali" → "Ali Hasan"), además del formato
-  con coma que ya existía.
-- **Escrituras de constitución**: aviso de posible domicilio desactualizado frente a
-  documentos más recientes de Hacienda; prioriza a quien figure como "Administrador
-  Único" para representante.
-- **"Actividad principal del negocio"**: mantenido (no eliminado) y reforzado — se aclara
-  que se extrae sobre todo del certificado de situación censal (IAE), con prioridad a la
-  actividad de alta más reciente si hay varias. **Pendiente**: aún no está enganchado a
-  `ContractFields.CANON` ni al relleno del PDF — falta confirmar la clave exacta del campo
-  en el AcroForm real antes de conectarlo (evita rellenar un campo inexistente en silencio).
+### Auditoría contra `contrato-base.pdf` real y `rellenador-pro.html` (web)
+Confirmado con `pypdf get_fields()` sobre el AcroForm real: 26 campos totales frente a
+los 20 de `ContractFields.CANON`. Comparado además con la construcción dinámica de la
+lista de campos en la web (`S.fields` leído del PDF cargado, no una lista fija).
+
+### Añadido
+- **`ContractFields.CANON`**: dos campos reales del PDF que faltaban por completo
+  (migración incompleta de la web a Android — ambos ya se mencionaban en el prompt de
+  IA de ambas apps, pero no estaban conectados a ningún campo real en Android):
+  - `"Actividad principal del negocio"` — confirmado como campo de texto real; se
+    extrae sobre todo del certificado de situación censal (IAE).
+  - `"Profesión puestos de trabajo datos no económicos de nómina historial del
+    trabajador"` — campo real pero de significado ambiguo; añadido a `CANON` para
+    relleno manual, SIN regla de extracción de IA dedicada (ninguno de los documentos
+    de referencia —escritura/CIF/DNI/IAE/censal/036/IBAN— contiene este dato de forma
+    evidente; pendiente de que Pablo aclare su uso real).
+  - Ambos añadidos a la sección "Empresa / Identificación" en `FillStep.kt` (Tanda 3).
+- **`ContractFields.CHECKBOX_NIE = "undefined"`**: nueva constante para la 3ª casilla
+  de tipo de identificación, que el AcroForm real tiene pero quedó sin nombre propio al
+  exportarse (literalmente `"undefined"` — confirmado con pypdf; la web ya la detecta
+  así: `cbs.find(f=>norm(f.name)==="undefined")`). No es un nombre que se pueda cambiar:
+  para marcar esa casilla en el PDF real hay que usar exactamente ese valor.
+
+### Corregido
+- **`checkboxStateFor()`**: antes NIE no marcaba ninguna casilla (premisa incorrecta:
+  "el contrato solo tiene casillas NIF y CIF"). Con un titular NIE, el contrato firmado
+  quedaba con el tipo de identificación sin marcar — bug real de corrección legal del
+  documento, no solo un hueco de datos. Ahora marca `CHECKBOX_NIE` a `/On` y las otras
+  dos a `/Off` cuando el tipo es NIE.
+
+### Prompt (`ExtractionPrompt.kt`) — reforzado a partir de auditoría con documentos reales
+(escritura/CIF/TIE/IAE/censal/Modelo 036/certificado IBAN):
+- Domicilio personal del representante (DNI/NIE) nunca se propone como dirección fiscal
+  de una empresa con CIF.
+- Modelo 036: direcciones de local (página de actividades) no son la fiscal directa.
+- Ejemplo de reordenación de nombre en formato tarjeta de identidad (sin coma).
+- Aviso de posible domicilio desactualizado en escrituras de constitución.
+- "Actividad principal del negocio": prioriza el certificado censal (IAE) como fuente.
 
 ---
 
