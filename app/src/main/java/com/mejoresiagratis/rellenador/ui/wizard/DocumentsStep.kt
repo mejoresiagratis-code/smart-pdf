@@ -62,13 +62,19 @@ fun DocumentsStep(state: WizardUiState, vm: WizardViewModel) {
     // "Pop" del blob hero cada vez que cambia el nº de documentos — motion physics real
     // de M3 Expressive (spring del MotionScheme del tema, no un tween manual): un pequeño
     // rebote de escala que refuerza que algo cambió, sin depender solo del texto.
+    // OJO: `MaterialTheme.motionScheme` es una propiedad @Composable (lee de un
+    // CompositionLocal) — hay que leerla AQUÍ, en contexto Composable, y pasarla ya
+    // resuelta al LaunchedEffect (función suspendida normal, no Composable). Leerla
+    // dentro del LaunchedEffect da error de compilación real (visto en CI: "@Composable
+    // invocations can only happen from the context of a @Composable function").
+    val motionScheme = MaterialTheme.motionScheme
     var docCountSeen by remember { mutableStateOf(state.docUris.size) }
     val blobScale = remember { Animatable(1f) }
     LaunchedEffect(state.docUris.size) {
         if (state.docUris.size != docCountSeen) {
             docCountSeen = state.docUris.size
-            blobScale.animateTo(1.15f, MaterialTheme.motionScheme.fastSpatialSpec())
-            blobScale.animateTo(1f, MaterialTheme.motionScheme.defaultSpatialSpec())
+            blobScale.animateTo(1.15f, motionScheme.fastSpatialSpec())
+            blobScale.animateTo(1f, motionScheme.defaultSpatialSpec())
         }
     }
 
