@@ -294,7 +294,13 @@ fun MotorLoadingIndicator(
     activeProvider: AiProvider?,
     finishedProviders: Set<AiProvider>,
     enabledProviders: List<AiProvider>,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    // Mezcla 2+3 — documento real en curso ("zeb1.pdf (pág. 2/4)") y progreso agregado
+    // documento × motor. progressTotal=0 oculta la barra (compatibilidad con llamadas
+    // que no pasen estos parámetros).
+    activeDocLabel: String? = null,
+    progressCurrent: Int = 0,
+    progressTotal: Int = 0
 ) {
     ExpressiveSurface(modifier = modifier) {
         Column(
@@ -319,6 +325,33 @@ fun MotorLoadingIndicator(
                     text = busyMsg.ifBlank { "Procesando…" },
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+
+            // Documento real en curso — solo si viene informado (compatibilidad con
+            // llamadores antiguos que no lo pasen).
+            if (activeDocLabel != null) {
+                Text(
+                    text = activeDocLabel,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            // Barra de progreso agregada documento × motor (Mezcla 2+3). Solo si el
+            // llamador pasa un total > 0 — si no, se comporta exactamente como antes.
+            if (progressTotal > 0) {
+                val fraction = (progressCurrent.toFloat() / progressTotal).coerceIn(0f, 1f)
+                LinearProgressIndicator(
+                    progress = { fraction },
+                    modifier = Modifier.fillMaxWidth().height(6.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                )
+                Text(
+                    text = "${(fraction * 100).toInt()}%",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 

@@ -6,6 +6,33 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.5.7-documentacion-blob-acordeon-progreso-vivo] — 2026-07-13
+
+### Añadido — mezcla de mockups 2+3 aplicada al `DocumentsStep.kt` real
+- **Blob hero grande** (Propuesta 3) como foco visual, sustituyendo la tarjeta de estado
+  más pequeña de la Tanda 2.
+- **Secciones "Documentos" y "Motores IA" como acordeones** en bloques tonales (Propuesta
+  2, `AccordionSection` reutilizable nueva en `DocumentsStep.kt`): plegadas por defecto en
+  cuanto ya hay documentos cargados al entrar en la pantalla (si está vacía, se despliega
+  sola para no esconder el botón de añadir). Chevron animado con `animateFloatAsState`.
+- **Progreso en vivo real documento × motor** en `MotorLoadingIndicator`: nuevos parámetros
+  `activeDocLabel`/`progressCurrent`/`progressTotal` (con defaults que preservan el
+  comportamiento anterior para cualquier otro llamador). Barra `LinearProgressIndicator`
+  + porcentaje.
+- **`MultiAiExtractor.extract()`**: nuevos parámetros `docNames` (nombres de archivo en
+  paralelo a los payloads, solo para UI — nunca se serializan ni se mandan al proxy) y
+  `onProgress(current, total)`. `onProviderStart` ahora también recibe la etiqueta del
+  documento real en curso.
+- **`WizardViewModel.runExtraction()`**: construye `docNames` en paralelo a los payloads
+  (un PDF de N páginas repite el nombre base + `"(pág. i/N)"`; una imagen usa su nombre
+  tal cual), y engancha los nuevos callbacks al estado.
+- **`WizardUiState`**: nuevos campos `activeDocLabel`, `progressCurrent`, `progressTotal`.
+- Motores y botón "Añadir documentos"/"Atrás" ahora deshabilitados durante `busy` (antes
+  se podían tocar a mitad de una extracción en curso, lo que podía confundir sobre a qué
+  tanda aplicaba el cambio).
+
+---
+
 ## [0.5.6-actividad-checkbox-nie-prompt-refinado] — 2026-07-13
 
 ### Auditoría contra `contrato-base.pdf` real y `rellenador-pro.html` (web)

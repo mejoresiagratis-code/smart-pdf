@@ -199,11 +199,24 @@ class WizardViewModel @Inject constructor(
         viewModelScope.launch {
             _state.value = s.copy(
                 busy = true, busyMsg = "Preparando documentos…", error = null,
-                activeProvider = null, finishedProviders = emptySet()
+                activeProvider = null, finishedProviders = emptySet(),
+                activeDocLabel = null, progressCurrent = 0, progressTotal = 0
             )
-            val payloads = withContext(Dispatchers.IO) {
-                s.docUris.flatMap { runCatching { loader.load(it) }.getOrElse { emptyList() } }
+            // Construye payloads y docNames EN PARALELO (mismo índice) — un PDF de varias
+            // páginas produce varios payloads con el mismo nombre base + "(pág. N/M)"; una
+            // imagen produce exactamente 1 payload con su nombre tal cual. docNames es
+            // puramente para la UI de progreso, nunca se manda al proxy.
+            val loadedPerUri = withContext(Dispatchers.IO) {
+                s.docUris.map { uri ->
+                    val displayName = uri.lastPathSegment?.substringAfterLast('/') ?: "documento"
+                    val pages = runCatching { loader.load(uri) }.getOrElse { emptyList() }
+                    val names = if (pages.size <= 1) List(pages.size) { displayName }
+                                else pages.indices.map { i -> "$displayName (pág. ${i + 1}/${pages.size})" }
+                    pages to names
+                }
             }
+            val payloads = loadedPerUri.flatMap { it.first }
+            val docNames = loadedPerUri.flatMap { it.second }
             if (payloads.isEmpty()) {
                 _state.value = _state.value.copy(busy = false, error = "No se pudieron leer los documentos.")
                 return@launch
@@ -211,21 +224,27 @@ class WizardViewModel @Inject constructor(
             _state.value = _state.value.copy(busyMsg = "Analizando con IA…")
             val result = runCatching {
                 extractor.extract(
-                    payloads, s.enabledProviders.toList(),
+                    payloads, s.enabledProviders.toList(), docNames = docNames,
                     // Tanda 2 — el motor activo se refleja en vivo en el chip/indicador;
                     // al terminar un motor se marca como completado (queda con el tick
                     // aunque otro empiece justo después, por eso se añade sin quitar).
-                    onProviderStart = { p -> _state.value = _state.value.copy(activeProvider = p) },
+                    onProviderStart = { docLabel, p ->
+                        _state.value = _state.value.copy(activeProvider = p, activeDocLabel = docLabel)
+                    },
                     onProviderFinish = { p ->
                         _state.value = _state.value.copy(
                             finishedProviders = _state.value.finishedProviders + p
                         )
+                    },
+                    onProgress = { current, total ->
+                        _state.value = _state.value.copy(progressCurrent = current, progressTotal = total)
                     }
                 )
             }.getOrElse {
                 _state.value = _state.value.copy(
                     busy = false, error = it.message,
-                    activeProvider = null, finishedProviders = emptySet()
+                    activeProvider = null, finishedProviders = emptySet(),
+                    activeDocLabel = null, progressCurrent = 0, progressTotal = 0
                 )
                 return@launch
             }
@@ -248,7 +267,8 @@ class WizardViewModel @Inject constructor(
                 // (engineErrors). Duplicarlos en el banner rojo genérico era redundante
                 // y aparecía siempre visible aunque el usuario no quisiera verlo.
                 engineErrors = result.errors,
-                activeProvider = null, finishedProviders = emptySet()
+                activeProvider = null, finishedProviders = emptySet(),
+                activeDocLabel = null, progressCurrent = 0, progressTotal = 0
             )
         }
     }

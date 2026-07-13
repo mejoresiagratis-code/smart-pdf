@@ -44,6 +44,11 @@ data class WizardUiState(
     // Tanda 2 — progreso en vivo de la extracción multi-motor (MotorLoadingIndicator)
     val activeProvider: AiProvider? = null,
     val finishedProviders: Set<AiProvider> = emptySet(),
+    // Mezcla 2+3 — progreso real documento × motor para el pop-up de carga con barra
+    // animada ("Documento 3/6 · zeb1.pdf"). progressTotal=0 mientras no hay extracción.
+    val activeDocLabel: String? = null,
+    val progressCurrent: Int = 0,
+    val progressTotal: Int = 0,
 
     // Resultado de la extracción
     val proposals: List<FieldProposal> = emptyList(),

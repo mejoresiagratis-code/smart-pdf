@@ -55,11 +55,22 @@ class MultiAiExtractor @Inject constructor(
         enabled: List<AiProvider>,
         geminiMode: String = "g35",
         earlyStop: Boolean = true,
+        // Nombres de archivo de origen, en paralelo a `docs` (mismo índice). Solo para
+        // mostrar progreso en la UI ("Documento 3/6 · zeb1.pdf") — NUNCA se manda al
+        // proxy (no forma parte de ProxyRequest). Un PDF de varias páginas produce varios
+        // payloads con el MISMO nombre base + "(pág. N/M)"; ver cómo se construye en
+        // WizardViewModel.runExtraction(). Si no se pasa, se cae a "documento N".
+        docNames: List<String> = emptyList(),
         // Tanda 2 — callbacks opcionales para reflejar en la UI qué motor está
         // trabajando ahora mismo (chip activo + MotorLoadingIndicator). Defaults
         // no-op: no cambia el comportamiento de ningún llamador existente.
-        onProviderStart: (AiProvider) -> Unit = {},
-        onProviderFinish: (AiProvider) -> Unit = {}
+        onProviderStart: (docLabel: String, provider: AiProvider) -> Unit = { _, _ -> },
+        onProviderFinish: (AiProvider) -> Unit = {},
+        // Progreso agregado (documento × motor) para la barra de la Propuesta 2+3:
+        // `current` es 1-based, `total` es el techo teórico (docs × motores activos) —
+        // con earlyStop puede quedarse corto del final, lo cual es correcto: si se para
+        // antes es porque ya no hacía falta seguir, no porque algo fallara.
+        onProgress: (current: Int, total: Int) -> Unit = { _, _ -> }
     ): Result {
         val prompt = ExtractionPrompt.build()
         // acumulador: campo -> (valor -> fuentes)
@@ -87,12 +98,15 @@ class MultiAiExtractor @Inject constructor(
         val orderedEnabled = enabled.sortedBy { p ->
             priorityOrder.indexOf(p).let { if (it < 0) priorityOrder.size else it }
         }
+        val totalSteps = docs.size * orderedEnabled.size
+        var stepCounter = 0
 
         run docsLoop@{
             docs.forEachIndexed { i, doc ->
+                val docLabel = docNames.getOrNull(i) ?: "documento ${i + 1}"
                 for (provider in orderedEnabled) {
                     if (provider in dead) continue   // short-circuit: no reintentar un motor ya roto
-                    onProviderStart(provider)
+                    onProviderStart(docLabel, provider)
                     val req = ProxyRequest(
                         provider = provider.id, prompt = prompt, task = "extract",
                         maxTokens = 4096, seq = i, geminiMode = geminiMode, docs = listOf(doc)
@@ -115,6 +129,7 @@ class MultiAiExtractor @Inject constructor(
                         null
                     } finally {
                         onProviderFinish(provider)
+                        onProgress(++stepCounter, totalSteps)
                     }
                     if (resp == null) continue
                     if (!resp.ok) {
