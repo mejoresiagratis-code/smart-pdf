@@ -6,6 +6,24 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.5.9-firma-segmented-button] — 2026-07-13
+
+### Cambiado
+- **`SignatureStep.kt` (Paso 5 · Firma)**: `TabRow`/`Tab` (marcado deprecated en el log de
+  build) → `SingleChoiceSegmentedButtonRow`/`SegmentedButton` M3 para elegir entre
+  Dibujar/Extraer de foto — mismo patrón ya usado en `FillStep.kt` para NIF/CIF/NIE. Resto
+  de la pantalla (recorte de firma, páginas, previsualización) sin tocar, a propósito:
+  pantalla grande, cambio acotado para no arriesgar nada más.
+
+### Quitado
+- **`ContractFields.CANON`**: eliminado `"Profesión puestos de trabajo datos no
+  económicos de nómina historial del trabajador"` — campo real del AcroForm pero sin uso
+  claro en este flujo (confirmado con Pablo). Queda solo `"Actividad principal del
+  negocio"` de los dos campos añadidos en la auditoría contra el PDF real. `CANON` pasa de
+  22 a 21 campos.
+
+---
+
 ## [0.5.8-documentacion-motion-physics-formas] — 2026-07-13
 
 ### Añadido — refuerzo Expressive real sobre la Mezcla 2+3, según

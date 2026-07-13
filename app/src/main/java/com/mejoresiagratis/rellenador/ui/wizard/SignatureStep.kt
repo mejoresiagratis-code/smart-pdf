@@ -73,9 +73,14 @@ fun SignatureStep(state: WizardUiState, vm: WizardViewModel) {
     ) {
         Text("Paso 5 · Firma", style = MaterialTheme.typography.titleMedium)
 
-        TabRow(selectedTabIndex = mode) {
-            Tab(selected = mode == 0, onClick = { mode = 0 }, text = { Text("Dibujar") })
-            Tab(selected = mode == 1, onClick = { mode = 1 }, text = { Text("Extraer de foto") })
+        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+            listOf("Dibujar", "Extraer de foto").forEachIndexed { i, label ->
+                SegmentedButton(
+                    shape = SegmentedButtonDefaults.itemShape(index = i, count = 2),
+                    selected = mode == i,
+                    onClick = { mode = i }
+                ) { Text(label) }
+            }
         }
 
         when (mode) {

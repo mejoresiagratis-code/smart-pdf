@@ -67,14 +67,11 @@ object ContractFields {
         CanonField("Email Comercial", "Email comercial"),
         CanonField("Email  Facturación", "Email facturación"),
         CanonField("Datos bancarios del DISTRIBUIDOR", "IBAN"),
-        // Añadidos tras auditoría contra el AcroForm real (contrato-base.pdf):
-        // existían en el PDF y en el prompt de IA de ambas apps, pero no estaban
-        // conectados aquí — migración incompleta de la web a Android.
+        // Añadido tras auditoría contra el AcroForm real (contrato-base.pdf): existía en
+        // el PDF y en el prompt de IA de ambas apps, pero no estaba conectado aquí —
+        // migración incompleta de la web a Android. ("Profesión puestos de trabajo..." se
+        // descartó a petición de Pablo: campo real del PDF pero sin uso en este flujo.)
         CanonField("Actividad principal del negocio", "Actividad principal (IAE)"),
-        CanonField(
-            "Profesión puestos de trabajo datos no económicos de nómina historial del trabajador",
-            "Profesión / puesto de trabajo"
-        ),
         CanonField("Fecha", "Fecha · día"),
         CanonField("de", "Fecha · mes"),
         CanonField("año", "Fecha · año"),

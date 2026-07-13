@@ -23,7 +23,7 @@ import com.mejoresiagratis.rellenador.data.validation.FieldNormalizer
 import com.mejoresiagratis.rellenador.data.validation.FieldValidator
 import com.mejoresiagratis.rellenador.ui.components.ExpressiveButton
 
-// Tanda 3 — agrupación de los 22 campos canónicos en secciones temáticas, fiel a
+// Tanda 3 — agrupación de los 21 campos canónicos en secciones temáticas, fiel a
 // ContractFields.CANON (ver Extraction.kt). "Fecha" se trata aparte porque sus 3
 // claves (Fecha/de/año) se muestran como una sola fila compacta día/mes/año, no
 // como 3 campos apilados sueltos.
@@ -34,10 +34,9 @@ private data class Section(val title: String, val keys: List<String>, val showCo
 private val SECTIONS = listOf(
     Section("Empresa / Identificación", listOf(
         "Nombre  Razón Social", "Nombre Comercial", "NIE", "Nombre representante", "NIF representante",
-        // Añadidos tras auditoría contra el AcroForm real y la web (existían en el PDF
-        // y en el prompt de IA, pero no estaban conectados en Android).
-        "Actividad principal del negocio",
-        "Profesión puestos de trabajo datos no económicos de nómina historial del trabajador"
+        // Añadido tras auditoría contra el AcroForm real y la web (existía en el PDF y
+        // en el prompt de IA, pero no estaba conectado en Android).
+        "Actividad principal del negocio"
     )),
     Section("Dirección fiscal", listOf("Dirección", "CP", "Población", "Provincia")),
     Section("Dirección comercio / PdV", listOf("Dirección_2", "CP_2", "Población_2", "Provincia_2"), showCopyFiscal = true),

@@ -15,8 +15,8 @@ android {
         applicationId = "com.mejoresiagratis.rellenador"
         minSdk = 26
         targetSdk = 35
-        versionCode = 25
-        versionName = "0.5.8-documentacion-motion-physics-formas"
+        versionCode = 26
+        versionName = "0.5.9-firma-segmented-button"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // Base URL of your PHP proxy. Override per build type.
