@@ -2,13 +2,18 @@ package com.mejoresiagratis.rellenador.ui.wizard
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -25,6 +30,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.unit.dp
 
 import com.mejoresiagratis.rellenador.ui.components.EngineChip
@@ -41,7 +47,7 @@ import com.mejoresiagratis.rellenador.ui.components.blobShape
  * (documento × motor) — wired a WizardUiState.activeDocLabel/progressCurrent/progressTotal
  * y a MultiAiExtractor.extract(docNames=..., onProgress=...).
  */
-@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun DocumentsStep(state: WizardUiState, vm: WizardViewModel) {
     val picker = rememberLauncherForActivityResult(
@@ -52,6 +58,19 @@ fun DocumentsStep(state: WizardUiState, vm: WizardViewModel) {
     // vacío); una vez el usuario lo pliega/despliega a mano, se respeta su elección.
     var docsExpanded by remember { mutableStateOf(state.docUris.isEmpty()) }
     var enginesExpanded by remember { mutableStateOf(false) }
+
+    // "Pop" del blob hero cada vez que cambia el nº de documentos — motion physics real
+    // de M3 Expressive (spring del MotionScheme del tema, no un tween manual): un pequeño
+    // rebote de escala que refuerza que algo cambió, sin depender solo del texto.
+    var docCountSeen by remember { mutableStateOf(state.docUris.size) }
+    val blobScale = remember { Animatable(1f) }
+    LaunchedEffect(state.docUris.size) {
+        if (state.docUris.size != docCountSeen) {
+            docCountSeen = state.docUris.size
+            blobScale.animateTo(1.15f, MaterialTheme.motionScheme.fastSpatialSpec())
+            blobScale.animateTo(1f, MaterialTheme.motionScheme.defaultSpatialSpec())
+        }
+    }
 
     Column(Modifier.fillMaxSize()) {
         Column(
@@ -84,7 +103,7 @@ fun DocumentsStep(state: WizardUiState, vm: WizardViewModel) {
                 Surface(
                     shape = blobShape(),
                     color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(72.dp)
+                    modifier = Modifier.size(72.dp).scale(blobScale.value)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
@@ -94,19 +113,29 @@ fun DocumentsStep(state: WizardUiState, vm: WizardViewModel) {
                         )
                     }
                 }
-                Text(
-                    if (state.docUris.isEmpty()) "Sin documentos todavía"
-                    else "${state.docUris.size} documento(s) añadido(s)",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+                AnimatedContent(
+                    targetState = state.docUris.size,
+                    transitionSpec = {
+                        (slideInVertically { h -> h } + fadeIn())
+                            .togetherWith(slideOutVertically { h -> -h } + fadeOut())
+                    },
+                    label = "docCount"
+                ) { n ->
+                    Text(
+                        if (n == 0) "Sin documentos todavía" else "$n documento(s) añadido(s)",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
             }
 
-            // Sección Documentos — acordeón tonal (Propuesta 2).
+            // Sección Documentos — acordeón tonal (Propuesta 2). Esquinas "medium": forma
+            // más contenida, coherente con las tarjetas de documento de dentro.
             AccordionSection(
                 title = "Documentos",
                 count = state.docUris.size,
                 icon = Icons.Outlined.Description,
+                shape = MaterialTheme.shapes.medium,
                 containerColor = MaterialTheme.colorScheme.secondaryContainer,
                 onContainerColor = MaterialTheme.colorScheme.onSecondaryContainer,
                 expanded = docsExpanded,
@@ -136,12 +165,15 @@ fun DocumentsStep(state: WizardUiState, vm: WizardViewModel) {
             }
 
             // Sección Motores IA — acordeón tonal (Propuesta 2), color terciario para
-            // distinguirla visualmente de Documentos (mismo criterio que FillStep/Fecha).
+            // distinguirla de Documentos. Esquinas "extraLarge": forma más redondeada y
+            // orgánica que la de Documentos, generando la "tensión visual" entre bloques
+            // que recomienda la guía Expressive (mezclar radios de esquina, no solo color).
             AccordionSection(
                 title = "Motores IA",
                 count = state.enabledProviders.size,
                 countSuffix = " activos",
                 icon = Icons.Outlined.Memory,
+                shape = MaterialTheme.shapes.extraLarge,
                 containerColor = MaterialTheme.colorScheme.tertiaryContainer,
                 onContainerColor = MaterialTheme.colorScheme.onTertiaryContainer,
                 expanded = enginesExpanded,
@@ -213,11 +245,13 @@ fun DocumentsStep(state: WizardUiState, vm: WizardViewModel) {
  * Bloque acordeón tonal reutilizado por Documentos y Motores IA: cabecera con icono,
  * título, contador y chevron que gira; cuerpo con expandVertically/shrinkVertically.
  */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun AccordionSection(
     title: String,
     count: Int,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
+    shape: androidx.compose.ui.graphics.Shape,
     containerColor: androidx.compose.ui.graphics.Color,
     onContainerColor: androidx.compose.ui.graphics.Color,
     expanded: Boolean,
@@ -225,9 +259,15 @@ private fun AccordionSection(
     countSuffix: String = "",
     content: @Composable ColumnScope.() -> Unit
 ) {
-    val chevronRotation by animateFloatAsState(if (expanded) 180f else 0f, label = "chevron")
+    // Motion physics real (M3 Expressive): el muelle del MotionScheme del tema, no un
+    // tween/easing manual — mismo principio que el "pop" del blob hero.
+    val chevronRotation by animateFloatAsState(
+        targetValue = if (expanded) 180f else 0f,
+        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+        label = "chevron"
+    )
     Surface(
-        shape = MaterialTheme.shapes.medium,
+        shape = shape,
         color = containerColor,
         modifier = Modifier.fillMaxWidth().animateContentSize()
     ) {
@@ -241,12 +281,19 @@ private fun AccordionSection(
             ) {
                 Icon(icon, contentDescription = null, tint = onContainerColor, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(8.dp))
-                Text(
-                    "$title · $count$countSuffix",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = onContainerColor,
-                    modifier = Modifier.weight(1f)
-                )
+                Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                    Text("$title · ", style = MaterialTheme.typography.titleSmall, color = onContainerColor)
+                    AnimatedContent(
+                        targetState = count,
+                        transitionSpec = {
+                            (slideInVertically { h -> h } + fadeIn())
+                                .togetherWith(slideOutVertically { h -> -h } + fadeOut())
+                        },
+                        label = "sectionCount"
+                    ) { c ->
+                        Text("$c$countSuffix", style = MaterialTheme.typography.titleSmall, color = onContainerColor)
+                    }
+                }
                 Icon(
                     Icons.Filled.KeyboardArrowDown, contentDescription = if (expanded) "Contraer" else "Expandir",
                     tint = onContainerColor,
@@ -255,8 +302,8 @@ private fun AccordionSection(
             }
             AnimatedVisibility(
                 visible = expanded,
-                enter = expandVertically(),
-                exit = shrinkVertically()
+                enter = expandVertically(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec()),
+                exit = shrinkVertically(animationSpec = MaterialTheme.motionScheme.fastSpatialSpec())
             ) {
                 Column(Modifier.padding(horizontal = 12.dp, vertical = 4.dp).padding(bottom = 12.dp)) {
                     content()

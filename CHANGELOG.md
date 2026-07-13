@@ -6,6 +6,27 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.5.8-documentacion-motion-physics-formas] — 2026-07-13
+
+### Añadido — refuerzo Expressive real sobre la Mezcla 2+3, según
+[m3.material.io/blog/building-with-m3-expressive](https://m3.material.io/blog/building-with-m3-expressive)
+- **Motion physics real** (no tween/easing manual): chevron de los acordeones, expandir/
+  contraer, y el "pop" del blob hero ahora usan `MaterialTheme.motionScheme.defaultSpatialSpec()`
+  / `fastSpatialSpec()` — el muelle configurado por `MotionScheme.expressive()` en `Theme.kt`,
+  no un spring hardcodeado por mi cuenta.
+- **"Pop" del blob hero** al añadir/quitar documentos: pequeño rebote de escala (`Animatable`
+  + `LaunchedEffect` sobre `docUris.size`) que refuerza el cambio sin depender solo del texto.
+- **Formas diferenciadas por sección** (táctica Expressive real: "combinar formas y radios de
+  esquina para generar tensión visual", no solo color): sección Documentos con
+  `shapes.medium`, sección Motores IA con `shapes.extraLarge` — más redondeada, marca
+  contraste entre bloques.
+- **Contadores animados** (`AnimatedContent` con slide+fade) en la cabecera de cada acordeón
+  y en el texto del blob hero, en vez de saltar el número sin transición.
+- Un solo "momento hero" en la pantalla (el blob) — la propia guía Expressive recomienda
+  limitar los focos así a 1-2 por pantalla para no diluir el impacto.
+
+---
+
 ## [0.5.7-documentacion-blob-acordeon-progreso-vivo] — 2026-07-13
 
 ### Añadido — mezcla de mockups 2+3 aplicada al `DocumentsStep.kt` real
