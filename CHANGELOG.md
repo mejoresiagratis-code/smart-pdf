@@ -6,6 +6,41 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.5.5-tanda3-revision-relleno-secciones] — 2026-07-12
+
+### Añadido — Revisión IA + Relleno agrupado en secciones (Tanda 3 M3 Expressive)
+- **`FillStep.kt` (Paso 4) rediseñado por completo**:
+  - Los 20 campos canónicos agrupados en 5 secciones temáticas sobre
+    `surfaceContainer` (Empresa/Identificación, Dirección fiscal, Dirección
+    comercio/PdV, Contacto, Datos bancarios) + una sección aparte para Fecha.
+  - Cada cabecera de sección muestra un tick de completitud cuando todos sus
+    campos están rellenos y pasan validación.
+  - **Tipo de identificación (NIF/CIF/NIE) ahora editable** vía
+    `SingleChoiceSegmentedButtonRow` — antes solo lo fijaba la IA extraída y no
+    había forma de corregirlo en la UI, pese a que determina qué casilla del PDF
+    se marca al firmar (hallazgo real de esta tanda, no cosmético).
+  - Barra de progreso real (`LinearProgressIndicator`, X/20 campos) sustituyendo
+    el texto plano anterior.
+  - Botón "Copiar fiscal" en la cabecera de Dirección comercio/PdV: copia los 4
+    campos de la dirección fiscal al bloque `_2` de un toque (no sobrescribe con
+    vacío). Nueva función `WizardViewModel.copyFiscalToComercio()`.
+  - Fecha (`Fecha`/`de`/`año`) ahora en una fila compacta de 3 campos día/mes/año
+    en vez de 3 campos apilados sueltos.
+  - "Responsable Comercial" con su propia mini-sección en vez de `AssistChip`
+    huérfano al final de la lista.
+  - Barra de acción inferior con el padding 20dp/14dp ya fijado como estándar en
+    `ContractStep`/`DocumentsStep`.
+- **`WizardViewModel.kt`**: nuevas funciones `setTipoIdentificacion(tipo)` y
+  `copyFiscalToComercio()`.
+- **`ReviewStep.kt` (Paso 3)** — ajustes de coherencia:
+  - Formas de tarjeta unificadas a `MaterialTheme.shapes.medium` (antes
+    `RoundedCornerShape(10.dp)` suelto).
+  - Candidatos de cada campo ahora como `FilterChip` seleccionables (antes lista
+    de `RadioButton`), con el logo real del motor que propuso cada valor
+    (`ProviderLogo` de la Tanda 2) en vez de solo el nombre en texto plano.
+
+---
+
 ## [0.5.4-tanda2-documentacion-motor-activo] — 2026-07-12
 
 ### Añadido — identidad visual por proveedor + progreso en vivo (Tanda 2 M3 Expressive)

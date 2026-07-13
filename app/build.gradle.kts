@@ -15,8 +15,8 @@ android {
         applicationId = "com.mejoresiagratis.rellenador"
         minSdk = 26
         targetSdk = 35
-        versionCode = 21
-        versionName = "0.5.4-tanda2-documentacion-motor-activo"
+        versionCode = 22
+        versionName = "0.5.5-tanda3-revision-relleno-secciones"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // Base URL of your PHP proxy. Override per build type.

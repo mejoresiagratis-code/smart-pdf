@@ -261,6 +261,32 @@ class WizardViewModel @Inject constructor(
         _state.value = _state.value.copy(fieldValues = _state.value.fieldValues - key)
     }
 
+    /**
+     * Tanda 3 — corrección manual del tipo de identificación (CIF/NIF/NIE).
+     * Hasta ahora `tipoIdentificacion` solo lo fijaba la IA en la extracción y no
+     * había forma de corregirlo si se equivocaba — un error aquí determina qué
+     * casilla del PDF se marca (NIF vs CIF) y no era detectable hasta la firma.
+     */
+    fun setTipoIdentificacion(tipo: String) {
+        _state.value = _state.value.copy(tipoIdentificacion = tipo)
+    }
+
+    /**
+     * Tanda 3 — copia los 4 campos de la dirección fiscal al bloque de comercio
+     * (_2) de un toque. Caso de uso frecuente: mismo domicilio fiscal y comercial.
+     * No sobrescribe con vacío: si el campo fiscal no está relleno, no toca el _2.
+     */
+    fun copyFiscalToComercio() {
+        val s = _state.value
+        val keys = listOf("Dirección", "CP", "Población", "Provincia")
+        val delta = keys.mapNotNull { k ->
+            s.fieldValues[k]?.takeIf { it.isNotBlank() }?.let { "${k}_2" to it }
+        }.toMap()
+        if (delta.isNotEmpty()) {
+            _state.value = s.copy(fieldValues = s.fieldValues + delta)
+        }
+    }
+
     /** Aplica un paquete en bloque (dirección/empresa/persona/banco).
      *  Para direcciones, targetBlock2=true lo manda al bloque de comercio (_2). */
     fun applyPackage(paquete: Paquete, targetBlock2: Boolean = false) {
