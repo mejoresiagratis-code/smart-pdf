@@ -6,6 +6,32 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.5.6-prompt-extraccion-refinado] — 2026-07-13
+
+### Corregido/mejorado — `ExtractionPrompt.kt`, a partir de una auditoría con documentos
+### reales (escritura/CIF/TIE/IAE/censal/Modelo 036/certificado IBAN)
+- **Domicilio personal vs. fiscal**: nueva regla explícita — el domicilio que aparece en
+  el DNI/NIE/pasaporte de un representante NUNCA se propone como dirección fiscal de la
+  empresa cuando el tipo de identificación es CIF (antes no estaba dicho explícitamente;
+  hallazgo real al analizar un TIE cuyo domicilio personal no coincidía con el fiscal de
+  la empresa que representa).
+- **Modelo 036**: aviso explícito de que la página de "Actividades económicas y locales"
+  puede listar varias direcciones de local (PdV, almacén…) distintas de la fiscal — deben
+  tratarse como candidatas a dirección de comercio (`_2`), nunca como la fiscal directa.
+- **Reordenación de nombre**: añadido ejemplo de formato tarjeta de identidad con
+  etiquetas separadas ("APELLIDOS Nombres: HASAN Ali" → "Ali Hasan"), además del formato
+  con coma que ya existía.
+- **Escrituras de constitución**: aviso de posible domicilio desactualizado frente a
+  documentos más recientes de Hacienda; prioriza a quien figure como "Administrador
+  Único" para representante.
+- **"Actividad principal del negocio"**: mantenido (no eliminado) y reforzado — se aclara
+  que se extrae sobre todo del certificado de situación censal (IAE), con prioridad a la
+  actividad de alta más reciente si hay varias. **Pendiente**: aún no está enganchado a
+  `ContractFields.CANON` ni al relleno del PDF — falta confirmar la clave exacta del campo
+  en el AcroForm real antes de conectarlo (evita rellenar un campo inexistente en silencio).
+
+---
+
 ## [0.5.5-tanda3-revision-relleno-secciones] — 2026-07-12
 
 ### Añadido — Revisión IA + Relleno agrupado en secciones (Tanda 3 M3 Expressive)
