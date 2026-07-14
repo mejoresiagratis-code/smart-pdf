@@ -90,7 +90,11 @@ fun WizardScreen(vm: WizardViewModel = hiltViewModel(), onOpenSettings: () -> Un
                     Step.RELLENO -> FillStep(state, vm)
                     Step.FIRMA -> SignatureStep(state, vm)
                 }
-                if (state.busy) {
+                if (state.busy && state.step != Step.DOCUMENTOS) {
+                    // El paso de Documentación tiene su propio Dialog rico con progreso
+                    // documento × motor (DocumentsStep.kt) — no queremos apilar ambos.
+                    // Los demás pasos usan este overlay genérico (guardar contrato,
+                    // procesar firma, etc. — operaciones cortas sin progreso por hitos).
                     Box(
                         Modifier
                             .fillMaxSize()

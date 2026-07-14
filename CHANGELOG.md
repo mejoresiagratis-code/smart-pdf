@@ -6,6 +6,43 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.6.1-doc-lleno-popup-limpio] — 2026-07-14
+
+### Corregido
+- **Dos pop-ups solapados al pulsar "Analizar con IA"**: el `WizardScreen` mostraba un
+  overlay genérico global (`busy` → `LoadingIndicator` + `busyMsg`) al mismo tiempo que
+  `DocumentsStep` mostraba su Dialog rico. Ahora el overlay genérico se salta cuando el
+  paso actual es `Step.DOCUMENTOS` — allí manda el Dialog con progreso doc × motor. En
+  los otros pasos (guardar contrato, procesar firma…) el genérico sigue activo, que era
+  la decisión de diseño de Pablo.
+
+### Cambiado
+- **Blob hero rediseñado en horizontal**: icono a la izquierda, texto de estado en dos
+  líneas ("6 documento(s)" + "Toca para añadir más") a la derecha, con `weight(1f)` para
+  ocupar el ancho disponible. Antes era vertical y con padding 24dp que dejaba el resto
+  de la pantalla comprimido — ahora es más compacto y coherente.
+- **Layout del scroll eliminado**: la pantalla ya no scrolea (con la lista de documentos
+  dentro de su propio acordeón plegable, el contenido siempre cabe). Se elimina el
+  `verticalScroll` del Column principal y se sustituye por distribución con
+  `Spacer(Modifier.weight(1f))` — así los elementos se empujan al top y no queda hueco
+  vacío entre "Motores IA" y la barra inferior (visto en captura en Honor 400 con 6
+  documentos).
+- **Lista de documentos con altura máxima y scroll propio** (`heightIn(max = 240.dp)`):
+  al añadir muchos documentos ya no empuja a la sección Motores IA fuera de pantalla.
+
+### Refinado (Pop-up de progreso, `MotorLoadingIndicator`)
+- **Retirados los círculos redundantes** que quedaban apilados debajo del progreso: el
+  `LoadingIndicator` squiggly de 32dp que salía cuando había motor activo (duplicaba
+  información con el logo de arriba) y la forma naranja pequeña.
+- **Barra de progreso + porcentaje en misma fila** (antes apilados): más compacto y
+  legible; la barra sube a 8dp de altura, el porcentaje a `labelLarge` con color primario.
+- **Fila de motores más limpia**: espaciado 10dp, sin el LoadingIndicator suelto encima.
+- Se retira el `Surface + Column` extra que envolvía el `MotorLoadingIndicator` dentro del
+  Dialog — redundantes porque el componente ya envuelve todo en su propio
+  `ExpressiveSurface` con padding.
+
+---
+
 ## [0.6.0-blob-cta-popup-modal-sin-titulos] — 2026-07-14
 
 ### Cambiado

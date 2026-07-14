@@ -84,13 +84,15 @@ fun DocumentsStep(state: WizardUiState, vm: WizardViewModel) {
         Column(
             modifier = Modifier
                 .weight(1f)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // Blob hero — foco visual grande y a la vez botón principal para subir docs.
             // Al tocar cualquier parte del bloque (icono + contador) se abre el selector.
             // Deshabilitado durante `busy` para no cambiar los inputs a mitad de análisis.
+            // Padding vertical proporcional al espacio de pantalla — antes era 24dp fijo
+            // y quedaba demasiado grande dejando huecos abajo; ahora respira dentro de
+            // su propia zona sin comerse el resto de la vista.
             Surface(
                 shape = blobShape(),
                 color = MaterialTheme.colorScheme.primary,
@@ -101,15 +103,15 @@ fun DocumentsStep(state: WizardUiState, vm: WizardViewModel) {
                     }
                     .scale(blobScale.value)
             ) {
-                Column(
-                    Modifier.padding(vertical = 24.dp, horizontal = 20.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                Row(
+                    Modifier.padding(vertical = 20.dp, horizontal = 24.dp).fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
                         Icons.Outlined.UploadFile, contentDescription = null,
                         tint = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.size(48.dp)
+                        modifier = Modifier.size(40.dp)
                     )
                     AnimatedContent(
                         targetState = state.docUris.size,
@@ -117,21 +119,26 @@ fun DocumentsStep(state: WizardUiState, vm: WizardViewModel) {
                             (slideInVertically { h -> h } + fadeIn())
                                 .togetherWith(slideOutVertically { h -> -h } + fadeOut())
                         },
-                        label = "docCount"
+                        label = "docCount",
+                        modifier = Modifier.weight(1f)
                     ) { n ->
-                        Text(
-                            if (n == 0) "Toca para añadir documentos" else "$n documento(s) — toca para añadir más",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onPrimary
-                        )
+                        Column {
+                            Text(
+                                if (n == 0) "Toca para añadir documentos" else "$n documento(s)",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onPrimary
+                            )
+                            Text(
+                                if (n == 0) "Fotos, PDF, DNI, escritura…" else "Toca para añadir más",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f)
+                            )
+                        }
                     }
                 }
             }
 
-            // Sección Documentos — solo se muestra si hay al menos uno. Con lista vacía,
-            // el blob de arriba queda solo como CTA claro. Al aparecer/desaparecer usa
-            // AnimatedVisibility para transición limpia. Esquinas "medium": forma más
-            // contenida, coherente con las tarjetas de documento de dentro.
+            // Sección Documentos — solo si hay al menos uno.
             AnimatedVisibility(
                 visible = state.docUris.isNotEmpty(),
                 enter = expandVertically(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec()) + fadeIn(),
@@ -147,7 +154,12 @@ fun DocumentsStep(state: WizardUiState, vm: WizardViewModel) {
                     expanded = docsExpanded,
                     onToggle = { docsExpanded = !docsExpanded }
                 ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    // Lista con scroll propio si crece — evita que empuje al Motores IA
+                    // fuera de la pantalla al añadir muchos documentos.
+                    Column(
+                        Modifier.heightIn(max = 240.dp).verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
                         state.docUris.forEach { uri ->
                             ElevatedCard(shape = MaterialTheme.shapes.medium) {
                                 ListItem(
@@ -167,10 +179,7 @@ fun DocumentsStep(state: WizardUiState, vm: WizardViewModel) {
                 }
             }
 
-            // Sección Motores IA — acordeón tonal (Propuesta 2), color terciario para
-            // distinguirla de Documentos. Esquinas "extraLarge": forma más redondeada y
-            // orgánica que la de Documentos, generando la "tensión visual" entre bloques
-            // que recomienda la guía Expressive (mezclar radios de esquina, no solo color).
+            // Sección Motores IA — acordeón terciario.
             AccordionSection(
                 title = "Motores IA",
                 count = state.enabledProviders.size,
@@ -194,8 +203,6 @@ fun DocumentsStep(state: WizardUiState, vm: WizardViewModel) {
                             provider = p,
                             selected = p in state.enabledProviders,
                             active = state.busy && state.activeProvider == p,
-                            // Bloqueado mientras se analiza: cambiar motores a mitad de una
-                            // extracción en curso podía confundir sobre a qué tanda aplica.
                             onClick = { if (!state.busy) vm.toggleProvider(p) }
                         )
                     }
@@ -204,9 +211,10 @@ fun DocumentsStep(state: WizardUiState, vm: WizardViewModel) {
                 TipBanner("Los motores marcados con 🇪🇺 procesan los datos en servidores europeos.")
             }
 
-            // (El indicador de progreso ya no vive aquí embebido en el scroll — antes
-            // aparecía duplicado con el pop-up de carga, tapándose entre sí. Ahora vive
-            // exclusivamente en un Dialog modal, definido al final del composable.)
+            // Spacer que empuja los acordeones hacia arriba cuando están plegados y no
+            // llenan por sí solos la pantalla — evita el hueco vacío entre "Motores IA"
+            // y la barra inferior que se veía antes.
+            Spacer(Modifier.weight(1f))
         }
 
         Surface(
@@ -231,10 +239,10 @@ fun DocumentsStep(state: WizardUiState, vm: WizardViewModel) {
     }
 
     // Pop-up modal de progreso — no descartable con tap fuera ni con botón "atrás" del
-    // sistema (properties = ... dismissOnBackPress/ClickOutside = false). La extracción
-    // no debería poder interrumpirse a mitad y dejar el estado a medias. El indicador
-    // vive AQUÍ, no dentro del scroll, para evitar el efecto visual de "dos pop-ups"
-    // solapados que se veía antes.
+    // sistema. La extracción no debería poder interrumpirse a mitad y dejar el estado a
+    // medias. MotorLoadingIndicator ya envuelve su propio ExpressiveSurface con padding,
+    // así que aquí solo hace falta el Dialog vacío alrededor — sin Surface ni Column
+    // extra (redundantes).
     if (state.busy) {
         Dialog(
             onDismissRequest = { /* no-op: no descartable */ },
@@ -243,28 +251,15 @@ fun DocumentsStep(state: WizardUiState, vm: WizardViewModel) {
                 dismissOnClickOutside = false
             )
         ) {
-            Surface(
-                shape = MaterialTheme.shapes.extraLarge,
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                tonalElevation = 6.dp,
-                shadowElevation = 8.dp
-            ) {
-                Column(
-                    modifier = Modifier.padding(24.dp).fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    MotorLoadingIndicator(
-                        busyMsg = state.busyMsg,
-                        activeProvider = state.activeProvider,
-                        finishedProviders = state.finishedProviders,
-                        enabledProviders = state.enabledProviders.toList(),
-                        activeDocLabel = state.activeDocLabel,
-                        progressCurrent = state.progressCurrent,
-                        progressTotal = state.progressTotal
-                    )
-                }
-            }
+            MotorLoadingIndicator(
+                busyMsg = state.busyMsg,
+                activeProvider = state.activeProvider,
+                finishedProviders = state.finishedProviders,
+                enabledProviders = state.enabledProviders.toList(),
+                activeDocLabel = state.activeDocLabel,
+                progressCurrent = state.progressCurrent,
+                progressTotal = state.progressTotal
+            )
         }
     }
 }
@@ -284,6 +279,7 @@ private fun AccordionSection(
     onContainerColor: androidx.compose.ui.graphics.Color,
     expanded: Boolean,
     onToggle: () -> Unit,
+    modifier: Modifier = Modifier,
     countSuffix: String = "",
     content: @Composable ColumnScope.() -> Unit
 ) {
@@ -297,7 +293,7 @@ private fun AccordionSection(
     Surface(
         shape = shape,
         color = containerColor,
-        modifier = Modifier.fillMaxWidth().animateContentSize()
+        modifier = modifier.fillMaxWidth().animateContentSize()
     ) {
         Column(Modifier.padding(4.dp)) {
             Row(

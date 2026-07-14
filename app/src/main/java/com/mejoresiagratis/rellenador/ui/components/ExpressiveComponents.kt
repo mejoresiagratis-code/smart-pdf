@@ -304,21 +304,23 @@ fun MotorLoadingIndicator(
 ) {
     ExpressiveSurface(modifier = modifier) {
         Column(
-            Modifier.padding(20.dp).fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            Modifier.padding(24.dp).fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Cabecera: logo del motor actual (si hay) o glyph genérico
+            // Cabecera: logo del motor actual (si hay) o LoadingIndicator squiggly.
+            // Solo UNO de los dos — antes se apilaban y quedaba estéticamente confuso
+            // dentro del Dialog (círculos naranjas sueltos debajo del progreso).
             if (activeProvider != null) {
-                ProviderLogo(provider = activeProvider, size = 48.dp)
+                ProviderLogo(provider = activeProvider, size = 56.dp)
                 Text(
-                    text = "Analizando con ${activeProvider.displayName}…",
+                    text = "Analizando con ${activeProvider.displayName}",
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface
                 )
             } else {
                 LoadingIndicator(
-                    modifier = Modifier.size(48.dp),
+                    modifier = Modifier.size(56.dp),
                     color = MaterialTheme.colorScheme.primary
                 )
                 Text(
@@ -328,45 +330,44 @@ fun MotorLoadingIndicator(
                 )
             }
 
-            // Documento real en curso — solo si viene informado (compatibilidad con
-            // llamadores antiguos que no lo pasen).
+            // Documento real en curso — solo si viene informado.
             if (activeDocLabel != null) {
                 Text(
                     text = activeDocLabel,
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
-            // Barra de progreso agregada documento × motor (Mezcla 2+3). Solo si el
-            // llamador pasa un total > 0 — si no, se comporta exactamente como antes.
+            // Barra de progreso agregada documento × motor con porcentaje al lado
+            // (más compacto y legible que apilado). Solo si el llamador pasa total > 0.
             if (progressTotal > 0) {
                 val fraction = (progressCurrent.toFloat() / progressTotal).coerceIn(0f, 1f)
-                LinearProgressIndicator(
-                    progress = { fraction },
-                    modifier = Modifier.fillMaxWidth().height(6.dp),
-                    color = MaterialTheme.colorScheme.primary,
-                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
-                )
-                Text(
-                    text = "${(fraction * 100).toInt()}%",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    LinearProgressIndicator(
+                        progress = { fraction },
+                        modifier = Modifier.weight(1f).height(8.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                    )
+                    Text(
+                        text = "${(fraction * 100).toInt()}%",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
             }
 
-            // Barra viva Expressive (siempre visible mientras el indicador esté en pantalla)
-            if (activeProvider != null) {
-                LoadingIndicator(
-                    modifier = Modifier.size(32.dp),
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-
-            // Fila de estado por motor: pendiente / actual / hecho
+            // Fila de estado por motor: pendiente / actual / hecho. Ya no hay
+            // LoadingIndicator suelto encima — la actividad la comunica el halo
+            // alrededor del motor activo y la propia barra de progreso.
             if (enabledProviders.isNotEmpty()) {
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     enabledProviders.forEach { p ->
@@ -375,7 +376,7 @@ fun MotorLoadingIndicator(
                         Box(contentAlignment = Alignment.BottomEnd) {
                             ProviderLogo(
                                 provider = p,
-                                size = 22.dp,
+                                size = 24.dp,
                                 modifier = Modifier.alpha(
                                     when {
                                         isActive -> 1f
