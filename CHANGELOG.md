@@ -6,6 +6,49 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.6.0-blob-cta-popup-modal-sin-titulos] — 2026-07-14
+
+### Cambiado
+- **Blob hero → CTA principal** (`DocumentsStep.kt`): el blob grande ahora es también el
+  botón que abre el selector de documentos, ocupa el ancho completo, texto adaptativo
+  ("Toca para añadir documentos" cuando está vacío / "N documento(s) — toca para añadir
+  más" cuando hay). Deshabilitado durante `busy` para no cambiar los inputs a mitad del
+  análisis.
+- **Sección "Documentos" condicional**: solo aparece si hay al menos un documento subido.
+  Cuando la lista está vacía, el blob queda solo como CTA claro sin ruido debajo. Al
+  aparecer/desaparecer usa `AnimatedVisibility` con motion physics real. Sirve para revisar
+  y quitar documentos ya subidos (caso de uso real y frecuente).
+- **Pop-up de progreso ahora es modal real** (`Dialog` no descartable): antes el indicador
+  vivía embebido en el scroll Y el sistema también mostraba una capa "Analizando con
+  IA...", dando efecto visual de dos pop-ups solapados. Ahora solo hay uno, con la barra
+  de progreso, el motor activo, y el documento en curso — todo dentro del Dialog. No se
+  puede descartar con tap fuera ni con botón "atrás" del sistema (la extracción no debería
+  interrumpirse a medias).
+- **Títulos "Paso N · ..." retirados en los 5 pasos** del wizard (Contrato, Documentación,
+  Revisión IA, Relleno, Firma): el stepper superior ya indica en qué paso estás. Las
+  descripciones auxiliares también se eliminan. En FillStep el contador "X de N campos"
+  sube a `titleMedium` para ocupar el hueco con información útil.
+
+### Refuerzo del prompt de extracción (`ExtractionPrompt.kt`)
+- Nueva regla explícita para **documento combinado**: si un mismo documento incluye
+  fotocopia de DNI/NIE/pasaporte de una persona física Y un CIF de una empresa (típico en
+  escrituras, poderes, compulsas), la persona es SIEMPRE el representante y la empresa el
+  distribuidor. Del CIF: razón social y nº empresa, y dirección fiscal solo si el documento
+  la muestra explícitamente para la empresa. Del DNI/NIE: nombre y NIF del representante.
+  Nunca usar la dirección personal del DNI como dirección fiscal.
+
+### Incluye también, para no perder cambios pendientes de subir a producción
+- **`ai-proxy.php` completo actualizado** en la raíz del ZIP (fuera de `app/`): incluye
+  todos los arreglos ya confirmados (modelos Gemini 3.5/3.1 correctos, EUrouter con
+  `mistral-small-4`/`mistral-large-2`, `thinkingLevel="low"` con techo 8192 tokens),
+  MÁS los tres nuevos ajustes tras revisión de Gemini Pro: `systemInstruction` de
+  refuerzo del rol y regla de oro anti-invención, `safetySettings` en `BLOCK_NONE` para
+  las 4 categorías (evita falsos positivos en documentos legales), y `responseMimeType:
+  "application/json"` (JSON puro sin markdown envolvente). Este archivo se sube por
+  FTP/cPanel a `mejoresiagratis.com/pdf/`, no vía git.
+
+---
+
 ## [0.5.9-firma-segmented-button] — 2026-07-13
 
 ### Cambiado

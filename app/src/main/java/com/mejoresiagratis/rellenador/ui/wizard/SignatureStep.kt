@@ -71,7 +71,7 @@ fun SignatureStep(state: WizardUiState, vm: WizardViewModel) {
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text("Paso 5 · Firma", style = MaterialTheme.typography.titleMedium)
+        // (Título "Paso 5 · Firma" retirado — el stepper ya indica el paso.)
 
         SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
             listOf("Dibujar", "Extraer de foto").forEachIndexed { i, label ->

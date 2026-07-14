@@ -29,11 +29,11 @@ fun ReviewStep(state: WizardUiState, vm: WizardViewModel) {
     var showEngineDetail by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("Paso 3 · Revisa lo detectado por la IA", style = MaterialTheme.typography.titleMedium)
+            // (Título "Paso 3 · ..." retirado — el stepper superior ya indica el paso.
+            // Mantengo la línea de motores/tipo abajo porque aporta información real
+            // que el usuario necesita a la hora de revisar los datos propuestos.)
             val engines = state.enginesOk.joinToString(", ").ifEmpty { "—" }
             Text("Motores: $engines" + (state.tipoIdentificacion?.let { " · Tipo: $it" } ?: ""),
-                style = MaterialTheme.typography.bodySmall)
-            Text("Aplica un bloque completo o confirma campo a campo.",
                 style = MaterialTheme.typography.bodySmall)
 
             // Panel de detalle de motor caído: muestra el estado real de cada motor que

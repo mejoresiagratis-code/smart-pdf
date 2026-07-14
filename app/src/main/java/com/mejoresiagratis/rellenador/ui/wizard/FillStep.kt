@@ -71,9 +71,11 @@ fun FillStep(state: WizardUiState, vm: WizardViewModel) {
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Paso 4 · Relleno", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-                Text("$filledFields/$totalFields", style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                // (Título "Paso 4 · Relleno" retirado — el stepper ya lo indica.
+                // El contador X/N sube a titleMedium para ocupar el hueco con info útil.)
+                Text("$filledFields de $totalFields campos",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f))
                 TextButton(onClick = { showHistory = true }) { Text("Historial") }
             }
             LinearProgressIndicator(

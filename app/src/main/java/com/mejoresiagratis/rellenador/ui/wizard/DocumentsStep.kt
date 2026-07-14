@@ -32,6 +32,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 
 import com.mejoresiagratis.rellenador.ui.components.EngineChip
 import com.mejoresiagratis.rellenador.ui.components.ExpressiveButton
@@ -86,75 +88,75 @@ fun DocumentsStep(state: WizardUiState, vm: WizardViewModel) {
                 .padding(horizontal = 20.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(
-                    "Paso 2 · Aporta la documentación del cliente",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    "Fotos o PDF (DNI, escritura, certificado bancario…). La IA extraerá los datos del distribuidor.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            // Blob hero — foco visual grande (Propuesta 3), sustituye a la tarjeta de
-            // estado más pequeña de la Tanda 2.
-            Column(
-                Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+            // Blob hero — foco visual grande y a la vez botón principal para subir docs.
+            // Al tocar cualquier parte del bloque (icono + contador) se abre el selector.
+            // Deshabilitado durante `busy` para no cambiar los inputs a mitad de análisis.
+            Surface(
+                shape = blobShape(),
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(enabled = !state.busy) {
+                        picker.launch(arrayOf("image/*", "application/pdf"))
+                    }
+                    .scale(blobScale.value)
             ) {
-                Surface(
-                    shape = blobShape(),
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(72.dp).scale(blobScale.value)
+                Column(
+                    Modifier.padding(vertical = 24.dp, horizontal = 20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            Icons.Outlined.UploadFile, contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.size(30.dp)
+                    Icon(
+                        Icons.Outlined.UploadFile, contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.size(48.dp)
+                    )
+                    AnimatedContent(
+                        targetState = state.docUris.size,
+                        transitionSpec = {
+                            (slideInVertically { h -> h } + fadeIn())
+                                .togetherWith(slideOutVertically { h -> -h } + fadeOut())
+                        },
+                        label = "docCount"
+                    ) { n ->
+                        Text(
+                            if (n == 0) "Toca para añadir documentos" else "$n documento(s) — toca para añadir más",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onPrimary
                         )
                     }
                 }
-                AnimatedContent(
-                    targetState = state.docUris.size,
-                    transitionSpec = {
-                        (slideInVertically { h -> h } + fadeIn())
-                            .togetherWith(slideOutVertically { h -> -h } + fadeOut())
-                    },
-                    label = "docCount"
-                ) { n ->
-                    Text(
-                        if (n == 0) "Sin documentos todavía" else "$n documento(s) añadido(s)",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
             }
 
-            // Sección Documentos — acordeón tonal (Propuesta 2). Esquinas "medium": forma
-            // más contenida, coherente con las tarjetas de documento de dentro.
-            AccordionSection(
-                title = "Documentos",
-                count = state.docUris.size,
-                icon = Icons.Outlined.Description,
-                shape = MaterialTheme.shapes.medium,
-                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                onContainerColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                expanded = docsExpanded,
-                onToggle = { docsExpanded = !docsExpanded }
+            // Sección Documentos — solo se muestra si hay al menos uno. Con lista vacía,
+            // el blob de arriba queda solo como CTA claro. Al aparecer/desaparecer usa
+            // AnimatedVisibility para transición limpia. Esquinas "medium": forma más
+            // contenida, coherente con las tarjetas de documento de dentro.
+            AnimatedVisibility(
+                visible = state.docUris.isNotEmpty(),
+                enter = expandVertically(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec()) + fadeIn(),
+                exit = shrinkVertically(animationSpec = MaterialTheme.motionScheme.fastSpatialSpec()) + fadeOut()
             ) {
-                if (state.docUris.isNotEmpty()) {
+                AccordionSection(
+                    title = "Documentos",
+                    count = state.docUris.size,
+                    icon = Icons.Outlined.Description,
+                    shape = MaterialTheme.shapes.medium,
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    onContainerColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    expanded = docsExpanded,
+                    onToggle = { docsExpanded = !docsExpanded }
+                ) {
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         state.docUris.forEach { uri ->
                             ElevatedCard(shape = MaterialTheme.shapes.medium) {
                                 ListItem(
                                     headlineContent = { Text(uri.lastPathSegment?.substringAfterLast('/') ?: "documento") },
                                     trailingContent = {
-                                        IconButton(onClick = { vm.removeDocument(uri) }) {
+                                        IconButton(
+                                            onClick = { vm.removeDocument(uri) },
+                                            enabled = !state.busy
+                                        ) {
                                             Icon(Icons.Default.Close, contentDescription = "Quitar")
                                         }
                                     }
@@ -162,12 +164,7 @@ fun DocumentsStep(state: WizardUiState, vm: WizardViewModel) {
                             }
                         }
                     }
-                    Spacer(Modifier.height(8.dp))
                 }
-                OutlinedButton(
-                    onClick = { picker.launch(arrayOf("image/*", "application/pdf")) },
-                    modifier = Modifier.fillMaxWidth()
-                ) { Text("Añadir documentos") }
             }
 
             // Sección Motores IA — acordeón tonal (Propuesta 2), color terciario para
@@ -207,22 +204,9 @@ fun DocumentsStep(state: WizardUiState, vm: WizardViewModel) {
                 TipBanner("Los motores marcados con 🇪🇺 procesan los datos en servidores europeos.")
             }
 
-            // Indicador contextual con progreso real documento × motor en vivo.
-            AnimatedVisibility(
-                visible = state.busy,
-                enter = fadeIn(),
-                exit = fadeOut()
-            ) {
-                MotorLoadingIndicator(
-                    busyMsg = state.busyMsg,
-                    activeProvider = state.activeProvider,
-                    finishedProviders = state.finishedProviders,
-                    enabledProviders = state.enabledProviders.toList(),
-                    activeDocLabel = state.activeDocLabel,
-                    progressCurrent = state.progressCurrent,
-                    progressTotal = state.progressTotal
-                )
-            }
+            // (El indicador de progreso ya no vive aquí embebido en el scroll — antes
+            // aparecía duplicado con el pop-up de carga, tapándose entre sí. Ahora vive
+            // exclusivamente en un Dialog modal, definido al final del composable.)
         }
 
         Surface(
@@ -242,6 +226,44 @@ fun DocumentsStep(state: WizardUiState, vm: WizardViewModel) {
                     trailingIcon = Icons.AutoMirrored.Filled.ArrowForward,
                     modifier = Modifier.weight(1f)
                 )
+            }
+        }
+    }
+
+    // Pop-up modal de progreso — no descartable con tap fuera ni con botón "atrás" del
+    // sistema (properties = ... dismissOnBackPress/ClickOutside = false). La extracción
+    // no debería poder interrumpirse a mitad y dejar el estado a medias. El indicador
+    // vive AQUÍ, no dentro del scroll, para evitar el efecto visual de "dos pop-ups"
+    // solapados que se veía antes.
+    if (state.busy) {
+        Dialog(
+            onDismissRequest = { /* no-op: no descartable */ },
+            properties = DialogProperties(
+                dismissOnBackPress = false,
+                dismissOnClickOutside = false
+            )
+        ) {
+            Surface(
+                shape = MaterialTheme.shapes.extraLarge,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                tonalElevation = 6.dp,
+                shadowElevation = 8.dp
+            ) {
+                Column(
+                    modifier = Modifier.padding(24.dp).fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    MotorLoadingIndicator(
+                        busyMsg = state.busyMsg,
+                        activeProvider = state.activeProvider,
+                        finishedProviders = state.finishedProviders,
+                        enabledProviders = state.enabledProviders.toList(),
+                        activeDocLabel = state.activeDocLabel,
+                        progressCurrent = state.progressCurrent,
+                        progressTotal = state.progressTotal
+                    )
+                }
             }
         }
     }

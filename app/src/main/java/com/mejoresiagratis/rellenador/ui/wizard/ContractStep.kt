@@ -85,19 +85,8 @@ private fun ContractSelectionContent(
                 .padding(horizontal = 20.dp, vertical = 16.dp), // 20dp por lado, como el mockup
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(
-                    text = "Paso 1 · Elige el contrato a rellenar",
-                    style = MaterialTheme.typography.titleLarge, // antes headlineSmall — más grande de lo que marca el mockup
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = "Usa el contrato oficial de distribución MASORANGE incluido, o aporta tu propio PDF.",
-                    style = MaterialTheme.typography.bodyMedium, // antes bodyLarge
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
+            // (Título "Paso 1 · ..." y descripción retirados: el stepper superior ya
+            // indica en qué paso estás; la pantalla puede respirar más sin el bloque.)
             // 3. Semántica de Grupo: Le dice a los servicios de accesibilidad que esto es un grupo de opciones
             Column(
                 modifier = Modifier.selectableGroup(),
