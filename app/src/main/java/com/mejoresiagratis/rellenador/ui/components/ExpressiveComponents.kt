@@ -308,27 +308,22 @@ fun MotorLoadingIndicator(
             verticalArrangement = Arrangement.spacedBy(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Cabecera: logo del motor actual (si hay) o LoadingIndicator squiggly.
-            // Solo UNO de los dos — antes se apilaban y quedaba estéticamente confuso
-            // dentro del Dialog (círculos naranjas sueltos debajo del progreso).
-            if (activeProvider != null) {
-                ProviderLogo(provider = activeProvider, size = 56.dp)
-                Text(
-                    text = "Analizando con ${activeProvider.displayName}",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            } else {
-                LoadingIndicator(
-                    modifier = Modifier.size(56.dp),
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Text(
-                    text = busyMsg.ifBlank { "Procesando…" },
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
+            // Cabecera: SIEMPRE el LoadingIndicator squiggly de M3 Expressive. El motor
+            // activo ya se ve destacado con halo en la fila de motores de abajo, no
+            // repetirlo aquí arriba — antes el logo grande + logo pequeño abajo daba
+            // sensación redundante de "dos avatares del mismo".
+            LoadingIndicator(
+                modifier = Modifier.size(56.dp),
+                color = MaterialTheme.colorScheme.primary
+            )
+            Text(
+                text = when {
+                    activeProvider != null -> "Analizando con ${activeProvider.displayName}"
+                    else -> busyMsg.ifBlank { "Procesando…" }
+                },
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
 
             // Documento real en curso — solo si viene informado.
             if (activeDocLabel != null) {

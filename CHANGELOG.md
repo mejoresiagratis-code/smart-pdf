@@ -6,6 +6,40 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.6.2-contexto-conjunto-docs-popup-squiggly] — 2026-07-14
+
+### Corregido — extracción CIF + DNI/NIE en documentos separados
+Bug real reportado: al subir el CIF de una empresa y el DNI/NIE del administrador en
+documentos separados, TODOS los motores clasificaban a la persona física como titular
+autónomo (poniendo su nombre en "Razón Social" y su NIE en "NIE empresa"), en vez de
+como representante de la empresa. Causa raíz confirmada: cada documento se procesa en
+llamada aislada — la IA nunca ve el CIF y el DNI en la misma petición. Sin contexto,
+un DNI/NIE aislado parece un autónomo por diseño (la propia regla del prompt lo
+clasifica así).
+
+Solución arquitectural:
+- **`ExtractionPrompt.build()`** ahora acepta `contextDocNames: List<String>` con los
+  nombres de TODOS los documentos aportados por el usuario en este análisis. Solo los
+  nombres — no se filtra contenido de otros documentos.
+- Cuando se pasan 2+ nombres, se inyecta un bloque nuevo "CONJUNTO DE DOCUMENTOS
+  APORTADOS" al principio del prompt con instrucciones explícitas para deducir el ROL
+  del documento actual dentro del conjunto: si hay un CIF/tarjeta NIF/censal/036/IAE
+  en el conjunto Y también un DNI/NIE de persona, la persona ES el representante.
+- **`MultiAiExtractor.extract()`** deduplica `docNames` quitando el sufijo "(pág. N/M)"
+  y los pasa como `contextDocNames`. No cambia nada del payload que viaja al proxy —
+  los nombres son puramente contexto para el prompt del cliente.
+- La regla "TITULAR AUTÓNOMO" del prompt principal se refuerza con el matiz: solo aplica
+  si NO hay documento de empresa en el conjunto.
+
+### Cambiado (pop-up de progreso)
+- **`MotorLoadingIndicator`**: la cabecera ahora muestra **siempre** el `LoadingIndicator`
+  squiggly de M3 Expressive, incluso cuando hay motor activo. Antes se mostraba el logo
+  grande del motor arriba y también su logo pequeño en la fila de motores debajo — el
+  duplicado hacía sensación de "dos avatares del mismo motor" en el mismo pop-up. La
+  actividad se sigue viendo perfectamente en la fila de motores con halo y tick.
+
+---
+
 ## [0.6.1-doc-lleno-popup-limpio] — 2026-07-14
 
 ### Corregido

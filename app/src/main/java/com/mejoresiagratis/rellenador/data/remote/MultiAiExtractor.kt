@@ -72,7 +72,13 @@ class MultiAiExtractor @Inject constructor(
         // antes es porque ya no hacía falta seguir, no porque algo fallara.
         onProgress: (current: Int, total: Int) -> Unit = { _, _ -> }
     ): Result {
-        val prompt = ExtractionPrompt.build()
+        // Nombres únicos de documentos aportados por el usuario (sin sufijo de página),
+        // en el orden en que llegan. Se pasan al prompt como contexto para que la IA
+        // pueda deducir el rol del documento actual dentro del conjunto — clave para el
+        // caso "CIF + DNI/NIE en documentos separados" (sin este contexto, cada
+        // documento se procesa en aislamiento y el DNI parece un autónomo).
+        val uniqueDocNames = docNames.map { it.substringBefore(" (pág.") }.distinct()
+        val prompt = ExtractionPrompt.build(contextDocNames = uniqueDocNames)
         // acumulador: campo -> (valor -> fuentes)
         val agg = LinkedHashMap<String, LinkedHashMap<String, MutableSet<String>>>()
         val perProviderStatus = LinkedHashMap<String, String>()  // último estado por motor (agrupado)
