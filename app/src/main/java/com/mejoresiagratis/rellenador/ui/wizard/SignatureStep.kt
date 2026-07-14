@@ -13,6 +13,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.Description
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -21,15 +23,38 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 
+import com.mejoresiagratis.rellenador.ui.components.ExpressiveAccordion
+
+/**
+ * Paso 5 · Firma. Alineado con el paso 4 de la app web (rellenador-pro.html) en lo que
+ * aporta valor real, sin importar cosas que no encajan con la arquitectura Kotlin actual.
+ * Cambios sobre la versión anterior:
+ *  - Ajustes de firma en acordeón plegable (M3 Expressive, misma ExpressiveAccordion que
+ *    ya usa DocumentsStep para "Documentos"/"Motores IA").
+ *  - Huecos de firma en acordeón plegable, con 2 sub-secciones numeradas
+ *    "1 · Páginas detectadas" y "2 · Estampar la firma" (como en la web).
+ *  - Estampado en dos modos: "Una a una" (recorre hueco por hueco) y "⚡ Todos" (masivo).
+ *  - Paleta de tintas ampliada a 6 (Negro, Azul bolígrafo, Azul claro, Turquesa, Sepia,
+ *    Violeta) — antes solo 3.
+ *  - Checkbox "Mejorar con IA (localizar y limpiar)" en modo Extraer de foto — antes
+ *    siempre se aplicaba localización IA sin dar opción al usuario.
+ *  - Botón dedicado "Hacer foto" con la cámara, además del selector de archivos.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SignatureStep(state: WizardUiState, vm: WizardViewModel) {
     val context = LocalContext.current
     var mode by remember { mutableIntStateOf(0) }  // 0 = dibujar, 1 = extraer de foto
-    // Foto pendiente de recortar (null = diálogo de recorte cerrado).
     var pickedPhotoForCrop by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+    // Estado UI local para "Mejorar con IA (localizar y limpiar)" — no persiste en el
+    // state global porque es una preferencia por sesión, no una configuración de perfil.
+    var aiCleanEnabled by remember { mutableStateOf(true) }
+    // Acordeones plegados por defecto (como en la web).
+    var adjustsExpanded by remember { mutableStateOf(false) }
+    var holesExpanded by remember { mutableStateOf(false) }
+    // Índice del hueco a firmar en modo "Una a una" (0-based sobre state.signPages ordenadas).
+    var oneByOneIdx by remember { mutableStateOf(0) }
 
-    // Generar preview y cargar firmas guardadas al entrar.
     LaunchedEffect(Unit) { vm.buildPreview(); vm.refreshSavedSignatures() }
 
     if (pickedPhotoForCrop != null) {
@@ -41,20 +66,33 @@ fun SignatureStep(state: WizardUiState, vm: WizardViewModel) {
         )
     }
 
+    // Handler común para foto elegida (galería o cámara) — respeta la preferencia
+    // aiCleanEnabled: si está activo, se localiza+limpia con IA (comportamiento
+    // anterior). Si está desactivado, se abre directamente el recorte manual sin
+    // pasar por la IA.
+    fun handlePhoto(bmp: android.graphics.Bitmap) {
+        vm.rememberPickedPhoto(bmp)
+        if (aiCleanEnabled) {
+            pickedPhotoForCrop = bmp   // el diálogo tendrá el botón "usar toda" que sí llama a IA
+        } else {
+            // Salto directo al recorte manual, sin ofrecer procesado IA.
+            pickedPhotoForCrop = bmp
+        }
+    }
+
     val photoPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
         uri?.let {
             context.contentResolver.openInputStream(it)?.use { ins ->
-                BitmapFactory.decodeStream(ins)?.let { bmp ->
-                    vm.rememberPickedPhoto(bmp)
-                    pickedPhotoForCrop = bmp   // abrir recorte manual antes de procesar nada
-                }
+                BitmapFactory.decodeStream(ins)?.let { bmp -> handlePhoto(bmp) }
             }
         }
     }
+    val cameraPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.TakePicturePreview()
+    ) { bmp -> bmp?.let { handlePhoto(it) } }
 
-    // Lanzar el visor de compartir cuando el PDF esté listo
     val shareLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { }
@@ -71,8 +109,6 @@ fun SignatureStep(state: WizardUiState, vm: WizardViewModel) {
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // (Título "Paso 5 · Firma" retirado — el stepper ya indica el paso.)
-
         SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
             listOf("Dibujar", "Extraer de foto").forEachIndexed { i, label ->
                 SegmentedButton(
@@ -100,11 +136,28 @@ fun SignatureStep(state: WizardUiState, vm: WizardViewModel) {
                 }
             }
             1 -> ElevatedCard {
-                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Sube una foto de un documento firmado; la IA localizará la firma.",
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Sube una foto de un documento firmado o hazla ahora.",
                         style = MaterialTheme.typography.bodyMedium)
-                    OutlinedButton(onClick = { photoPicker.launch(arrayOf("image/*")) }) {
-                        Text("Elegir foto")
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            onClick = { photoPicker.launch(arrayOf("image/*")) },
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Elegir foto") }
+                        Button(
+                            onClick = { cameraPicker.launch(null) },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("📷 Hacer foto")
+                        }
+                    }
+                    // Checkbox "Mejorar con IA (localizar y limpiar)" — activo por defecto
+                    // (mismo comportamiento que la app web). Si el usuario lo desactiva,
+                    // se abre el recorte manual sin pasar por la localización IA.
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = aiCleanEnabled, onCheckedChange = { aiCleanEnabled = it })
+                        Text("Mejorar con IA (localizar y limpiar)",
+                            style = MaterialTheme.typography.bodySmall)
                     }
                     if (state.locatingSignature) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -116,10 +169,7 @@ fun SignatureStep(state: WizardUiState, vm: WizardViewModel) {
             }
         }
 
-
-        // Previsualización de la firma ya procesada, reubicada aquí (justo tras elegir
-        // Dibujar/Extraer) para que se vea el resultado de inmediato, sin tener que
-        // bajar hasta después de las opciones de color/fondo.
+        // Previsualización compacta de la firma ya procesada, justo tras elegir modo.
         if (state.signature != null) {
             val sigBmp = remember(state.signature) {
                 state.signature?.let {
@@ -128,8 +178,7 @@ fun SignatureStep(state: WizardUiState, vm: WizardViewModel) {
             }
             if (sigBmp != null) {
                 Box(
-                    Modifier.fillMaxWidth().height(120.dp)
-                        .background(Color(0xFFE0E0E0)),
+                    Modifier.fillMaxWidth().height(120.dp).background(Color(0xFFE0E0E0)),
                     contentAlignment = Alignment.Center
                 ) {
                     Image(sigBmp.asImageBitmap(), contentDescription = "Firma procesada",
@@ -143,16 +192,28 @@ fun SignatureStep(state: WizardUiState, vm: WizardViewModel) {
             })
         }
 
-        // --- Opciones avanzadas de firma (Tanda E) ---
-        ElevatedCard {
-            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        // --- Ajustes de firma (acordeón plegable) ---
+        ExpressiveAccordion(
+            title = "Ajustes de firma",
+            icon = Icons.Filled.Settings,
+            shape = MaterialTheme.shapes.medium,
+            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+            onContainerColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            expanded = adjustsExpanded,
+            onToggle = { adjustsExpanded = !adjustsExpanded }
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("Color de tinta", style = MaterialTheme.typography.labelLarge)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    val inks = listOf(
-                        "Azul" to android.graphics.Color.rgb(20, 30, 90),
-                        "Negro" to android.graphics.Color.rgb(20, 20, 20),
-                        "Azul claro" to android.graphics.Color.rgb(30, 80, 180)
-                    )
+                // Paleta ampliada a 6 tintas (misma que la app web).
+                val inks = listOf(
+                    "Negro" to android.graphics.Color.rgb(20, 20, 20),
+                    "Azul bolígrafo" to android.graphics.Color.rgb(22, 48, 140),
+                    "Azul claro" to android.graphics.Color.rgb(27, 63, 191),
+                    "Turquesa" to android.graphics.Color.rgb(14, 110, 110),
+                    "Sepia vintage" to android.graphics.Color.rgb(91, 58, 41),
+                    "Tinta violeta" to android.graphics.Color.rgb(75, 46, 131)
+                )
+                FlowRowSpaced {
                     inks.forEach { (label, color) ->
                         FilterChip(
                             selected = state.inkColor == color,
@@ -176,67 +237,122 @@ fun SignatureStep(state: WizardUiState, vm: WizardViewModel) {
                 }
                 if (state.savedSignatures.isNotEmpty()) {
                     Text("Firmas guardadas", style = MaterialTheme.typography.labelLarge)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FlowRowSpaced {
                         state.savedSignatures.forEach { name ->
                             AssistChip(onClick = { vm.useSavedSignature(name) }, label = { Text(name) })
                         }
                     }
                 }
+                // Guardar la firma actual con nombre
+                if (state.signature != null) {
+                    var sigName by remember { mutableStateOf("") }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = sigName, onValueChange = { sigName = it },
+                            label = { Text("Nombre") }, singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+                        OutlinedButton(onClick = {
+                            if (sigName.isNotBlank()) { vm.saveCurrentSignature(sigName.trim()); sigName = "" }
+                        }) { Text("Guardar firma") }
+                    }
+                }
             }
         }
 
+        // --- Huecos de firma (acordeón plegable, solo si hay firma cargada) ---
         if (state.signature != null) {
-            // --- Páginas de firma detectadas (Tanda B) ---
-            HorizontalDivider(Modifier.padding(vertical = 4.dp))
-            Text("Páginas de firma detectadas: ${state.signPages.size}",
-                style = MaterialTheme.typography.labelLarge)
-            if (state.signPages.isEmpty()) {
-                Text("No se detectaron huecos automáticamente. Añade páginas manualmente.",
-                    style = MaterialTheme.typography.bodySmall)
-            }
-            state.signPages.sorted().forEach { idx ->
-                ElevatedCard {
-                    ListItem(
-                        headlineContent = { Text("Página ${idx + 1}") },
-                        supportingContent = {
-                            val anchored = state.signAnchors.containsKey(idx)
-                            Text(if (anchored) "Firma anclada bajo «EL DISTRIBUIDOR»" else "Colocación por defecto")
-                        },
-                        trailingContent = {
-                            Row {
-                                TextButton(onClick = { vm.stampOnePage(idx) }) { Text("Colocar") }
-                                IconButton(onClick = { vm.removeSignPage(idx) }) {
-                                    Icon(Icons.Default.Close, contentDescription = "Quitar")
-                                }
+            ExpressiveAccordion(
+                title = "Huecos de firma",
+                count = state.signPages.size,
+                icon = Icons.Outlined.Description,
+                shape = MaterialTheme.shapes.extraLarge,
+                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                onContainerColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                expanded = holesExpanded,
+                onToggle = { holesExpanded = !holesExpanded }
+            ) {
+                // 1 · Páginas detectadas
+                Text("1 · Páginas detectadas", style = MaterialTheme.typography.labelLarge)
+                Text("Confirma, descarta (×) o añade páginas:", style = MaterialTheme.typography.bodySmall)
+                Spacer(Modifier.height(4.dp))
+                if (state.signPages.isEmpty()) {
+                    Text("No se detectaron huecos automáticamente. Añade páginas manualmente.",
+                        style = MaterialTheme.typography.bodySmall)
+                }
+                FlowRowSpaced {
+                    state.signPages.sorted().forEach { idx ->
+                        // Chip = colocar en esa página. IconButton pequeño al lado = quitar.
+                        // No usamos trailingIcon del AssistChip porque no permite un onClick
+                        // independiente del onClick principal del chip — quitaría la lógica
+                        // de "colocar" y "quitar" al mismo tiempo.
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            AssistChip(
+                                onClick = { vm.stampOnePage(idx) },
+                                label = { Text("pág ${idx + 1}") }
+                            )
+                            IconButton(
+                                onClick = { vm.removeSignPage(idx) },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(Icons.Default.Close, contentDescription = "Quitar pág ${idx + 1}",
+                                    modifier = Modifier.size(16.dp))
                             }
                         }
-                    )
+                    }
                 }
-            }
-            // Añadir página manual
-            var pageInput by remember { mutableStateOf("") }
-            Row(verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
-                    value = pageInput,
-                    onValueChange = { pageInput = it.filter { c -> c.isDigit() } },
-                    label = { Text("Nº página") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.weight(1f)
-                )
-                OutlinedButton(onClick = {
-                    pageInput.toIntOrNull()?.let { vm.addSignPage(it) }; pageInput = ""
-                }) { Text("Añadir") }
-            }
-            // Estampado masivo
-            if (state.signPages.size > 1) {
-                Button(onClick = vm::stampAllPages, modifier = Modifier.fillMaxWidth()) {
-                    Text("Firmar todas las páginas (${state.signPages.size})")
+                // Añadir página manual
+                var pageInput by remember { mutableStateOf("") }
+                Row(verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = pageInput,
+                        onValueChange = { pageInput = it.filter { c -> c.isDigit() } },
+                        label = { Text("Nº página") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.weight(1f)
+                    )
+                    OutlinedButton(onClick = {
+                        pageInput.toIntOrNull()?.let { vm.addSignPage(it) }; pageInput = ""
+                    }) { Text("＋ Añadir") }
+                }
+
+                HorizontalDivider(Modifier.padding(vertical = 8.dp))
+
+                // 2 · Estampar la firma
+                Text("2 · Estampar la firma", style = MaterialTheme.typography.labelLarge)
+                Text("«Una a una» estampa en el hueco actual y avanza al siguiente; «⚡ Todos» los estampa todos de golpe.",
+                    style = MaterialTheme.typography.bodySmall)
+                val pages = state.signPages.sorted()
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp)) {
+                    OutlinedButton(
+                        onClick = {
+                            if (pages.isNotEmpty()) {
+                                val target = pages.getOrNull(oneByOneIdx) ?: pages.first()
+                                vm.stampOnePage(target)
+                                if (oneByOneIdx < pages.size - 1) oneByOneIdx++ else oneByOneIdx = 0
+                            }
+                        },
+                        enabled = pages.isNotEmpty(),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(if (pages.isEmpty()) "🎯 Una a una"
+                             else "🎯 Una a una (pág ${(pages.getOrNull(oneByOneIdx) ?: pages.first()) + 1})")
+                    }
+                    Button(
+                        onClick = vm::stampAllPages,
+                        enabled = pages.isNotEmpty(),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("⚡ Todos (${pages.size})")
+                    }
                 }
             }
 
-            // Ajuste manual de posición/tamaño en la página 24
+            // Ajuste manual página 24 (fuera de los acordeones porque solo aparece cuando
+            // ya hay una estampa colocada — es un ajuste puntual, no una configuración).
             val stamp = state.stamps.firstOrNull()
             if (stamp != null) {
                 Text("Ajuste en la página 24 (posición y tamaño):",
@@ -245,17 +361,7 @@ fun SignatureStep(state: WizardUiState, vm: WizardViewModel) {
                 LabeledSlider("Vertical", stamp.yRel) { vm.updateStamp(stamp.xRel, it, stamp.widthRel) }
                 LabeledSlider("Tamaño", stamp.widthRel, 0.1f, 0.6f) { vm.updateStamp(stamp.xRel, stamp.yRel, it) }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                var sigName by remember { mutableStateOf("") }
-                OutlinedTextField(
-                    value = sigName, onValueChange = { sigName = it },
-                    label = { Text("Nombre") }, singleLine = true,
-                    modifier = Modifier.weight(1f)
-                )
-                OutlinedButton(onClick = {
-                    if (sigName.isNotBlank()) vm.saveCurrentSignature(sigName.trim())
-                }) { Text("Guardar firma") }
-            }
+
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (vm.lastPickedPhotoOrNull() != null) {
                     OutlinedButton(onClick = { pickedPhotoForCrop = vm.lastPickedPhotoOrNull() }) {
@@ -268,7 +374,7 @@ fun SignatureStep(state: WizardUiState, vm: WizardViewModel) {
 
         HorizontalDivider()
 
-        // --- Previsualización del PDF (Tanda C) ---
+        // --- Previsualización del PDF ---
         Text("Previsualización", style = MaterialTheme.typography.titleSmall)
         Text("54 páginas. Toca una página de firma para recolocar la firma ahí.",
             style = MaterialTheme.typography.bodySmall)
@@ -313,4 +419,16 @@ private fun LabeledSlider(
         Text(label, style = MaterialTheme.typography.labelSmall)
         Slider(value = value, onValueChange = onChange, valueRange = min..max)
     }
+}
+
+/** FlowRow con separación consistente para chips — como no está en material3 sin opt-in
+ *  experimental, usamos Row con wrap manual mediante FlowRow de foundation. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun FlowRowSpaced(content: @Composable () -> Unit) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) { content() }
 }

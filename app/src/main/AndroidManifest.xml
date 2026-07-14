@@ -3,6 +3,13 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Camera permission for the "Hacer foto" button in SignatureStep (Paso 5).
+         TakePicturePreview delega a la app de cámara del sistema — en teoría el sistema
+         ya pide el permiso al usuario, pero declararlo aquí evita fallos en dispositivos
+         que aplican el permiso a la app llamante y no solo a la de cámara. La feature va
+         como required=false para que la app siga instalable en dispositivos sin cámara. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
 
     <application
         android:name=".RellenadorApp"

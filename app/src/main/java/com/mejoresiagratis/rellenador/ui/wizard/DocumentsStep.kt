@@ -36,6 +36,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 
 import com.mejoresiagratis.rellenador.ui.components.EngineChip
+import com.mejoresiagratis.rellenador.ui.components.ExpressiveAccordion
 import com.mejoresiagratis.rellenador.ui.components.ExpressiveButton
 import com.mejoresiagratis.rellenador.ui.components.MotorLoadingIndicator
 import com.mejoresiagratis.rellenador.ui.components.TipBanner
@@ -144,7 +145,7 @@ fun DocumentsStep(state: WizardUiState, vm: WizardViewModel) {
                 enter = expandVertically(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec()) + fadeIn(),
                 exit = shrinkVertically(animationSpec = MaterialTheme.motionScheme.fastSpatialSpec()) + fadeOut()
             ) {
-                AccordionSection(
+                ExpressiveAccordion(
                     title = "Documentos",
                     count = state.docUris.size,
                     icon = Icons.Outlined.Description,
@@ -180,7 +181,7 @@ fun DocumentsStep(state: WizardUiState, vm: WizardViewModel) {
             }
 
             // Sección Motores IA — acordeón terciario.
-            AccordionSection(
+            ExpressiveAccordion(
                 title = "Motores IA",
                 count = state.enabledProviders.size,
                 countSuffix = " activos",
@@ -260,79 +261,6 @@ fun DocumentsStep(state: WizardUiState, vm: WizardViewModel) {
                 progressCurrent = state.progressCurrent,
                 progressTotal = state.progressTotal
             )
-        }
-    }
-}
-
-/**
- * Bloque acordeón tonal reutilizado por Documentos y Motores IA: cabecera con icono,
- * título, contador y chevron que gira; cuerpo con expandVertically/shrinkVertically.
- */
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
-@Composable
-private fun AccordionSection(
-    title: String,
-    count: Int,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    shape: androidx.compose.ui.graphics.Shape,
-    containerColor: androidx.compose.ui.graphics.Color,
-    onContainerColor: androidx.compose.ui.graphics.Color,
-    expanded: Boolean,
-    onToggle: () -> Unit,
-    modifier: Modifier = Modifier,
-    countSuffix: String = "",
-    content: @Composable ColumnScope.() -> Unit
-) {
-    // Motion physics real (M3 Expressive): el muelle del MotionScheme del tema, no un
-    // tween/easing manual — mismo principio que el "pop" del blob hero.
-    val chevronRotation by animateFloatAsState(
-        targetValue = if (expanded) 180f else 0f,
-        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-        label = "chevron"
-    )
-    Surface(
-        shape = shape,
-        color = containerColor,
-        modifier = modifier.fillMaxWidth().animateContentSize()
-    ) {
-        Column(Modifier.padding(4.dp)) {
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .clickable(onClick = onToggle)
-                    .padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(icon, contentDescription = null, tint = onContainerColor, modifier = Modifier.size(20.dp))
-                Spacer(Modifier.width(8.dp))
-                Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                    Text("$title · ", style = MaterialTheme.typography.titleSmall, color = onContainerColor)
-                    AnimatedContent(
-                        targetState = count,
-                        transitionSpec = {
-                            (slideInVertically { h -> h } + fadeIn())
-                                .togetherWith(slideOutVertically { h -> -h } + fadeOut())
-                        },
-                        label = "sectionCount"
-                    ) { c ->
-                        Text("$c$countSuffix", style = MaterialTheme.typography.titleSmall, color = onContainerColor)
-                    }
-                }
-                Icon(
-                    Icons.Filled.KeyboardArrowDown, contentDescription = if (expanded) "Contraer" else "Expandir",
-                    tint = onContainerColor,
-                    modifier = Modifier.rotate(chevronRotation)
-                )
-            }
-            AnimatedVisibility(
-                visible = expanded,
-                enter = expandVertically(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec()),
-                exit = shrinkVertically(animationSpec = MaterialTheme.motionScheme.fastSpatialSpec())
-            ) {
-                Column(Modifier.padding(horizontal = 12.dp, vertical = 4.dp).padding(bottom = 12.dp)) {
-                    content()
-                }
-            }
         }
     }
 }

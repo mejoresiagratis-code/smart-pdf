@@ -6,6 +6,56 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.6.3-firma-alineada-web] — 2026-07-14
+
+### Añadido / cambiado — SignatureStep alineado con la app web
+Auditoría contra `rellenador-pro.html` (paso 4 de la web) y aplicación de 6 mejoras
+estructurales al paso de Firma:
+
+1. **`ExpressiveAccordion` extraído a componente compartido** (`ui/components/`): antes
+   estaba definido como `private fun AccordionSection` dentro de `DocumentsStep.kt`.
+   Ahora se reutiliza desde SignatureStep sin duplicar código. Firma más flexible:
+   `count` es `Int?` (opcional) para poder tener secciones sin contador natural.
+2. **"Ajustes de firma" en acordeón plegable** (secondaryContainer, `shapes.medium`),
+   con tinta, fondo, firmas guardadas y guardar-firma-actual todo dentro. Plegado por
+   defecto — antes estaba siempre visible ocupando espacio.
+3. **"Huecos de firma" en acordeón plegable** (tertiaryContainer, `shapes.extraLarge`
+   para tensión visual con Ajustes), con dos sub-secciones numeradas:
+   `1 · Páginas detectadas` (chips con IconButton × al lado para quitar) y
+   `2 · Estampar la firma`.
+4. **"Una a una" + "⚡ Todos" en Estampar**: dos botones lado a lado que replican la
+   pauta de la web. "Una a una" estampa en la página actual del cursor y avanza al
+   siguiente hueco automáticamente (con recycle al llegar al final). "Todos" hace el
+   estampado masivo (comportamiento anterior).
+5. **Paleta de tintas ampliada a 6** (Negro, Azul bolígrafo, Azul claro, Turquesa,
+   Sepia vintage, Tinta violeta) — antes solo 3.
+6. **Checkbox "Mejorar con IA (localizar y limpiar)"** en modo Extraer de foto, activo
+   por defecto. Si el usuario lo desactiva, se salta la localización IA y se abre el
+   recorte manual directamente.
+7. **Botón "📷 Hacer foto"** dedicado en modo Extraer (además del selector de foto de
+   galería). Requiere permiso `CAMERA` — añadido al Manifest con
+   `<uses-feature required="false">` para no restringir la instalación a dispositivos
+   con cámara.
+
+### No aplicado (con justificación)
+- **Modo "De documento"** (elegir firma de un PDF ya subido en el Paso 2): añade
+  complejidad estructural (enlazar `docUris` del Paso 2 con selector+recorte en Paso 5).
+  Merece una tanda propia, no un añadido.
+- **Slider de "Tamaño global"** de firma: el `stampFor()` actual calibra cada estampa
+  con anchors por página; un slider global requeriría refactor mayor de
+  `WizardViewModel.stampFor()`. Decisión de Pablo: dejarlo fuera.
+
+### Nota honesta sobre iconos
+Los iconos "PhotoCamera", "Bolt", "MyLocation", "Tune" y "EditNote" no se han verificado
+directamente contra el catálogo real de `material-icons-extended` en esta versión. Para
+minimizar riesgo de compilación (viendo que hemos tenido antes el problema con
+`Icons.Outlined.Cpu` que no existía), se han sustituido por:
+- Iconos ya usados y confirmados en otros archivos del proyecto (`Settings`, `Description`)
+- Emojis Unicode en el texto de los botones (📷, ⚡, 🎯) — coincide además con lo que
+  usa la app web y no depende del catálogo de iconos.
+
+---
+
 ## [0.6.2-contexto-conjunto-docs-popup-squiggly] — 2026-07-14
 
 ### Corregido — extracción CIF + DNI/NIE en documentos separados
