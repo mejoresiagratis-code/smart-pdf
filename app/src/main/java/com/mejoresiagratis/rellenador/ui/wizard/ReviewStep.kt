@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -15,6 +17,7 @@ import com.mejoresiagratis.rellenador.data.model.ContractFields
 import com.mejoresiagratis.rellenador.data.model.FieldProposal
 import com.mejoresiagratis.rellenador.data.model.PackageApplier
 import com.mejoresiagratis.rellenador.data.model.Paquete
+import com.mejoresiagratis.rellenador.ui.components.ExpressiveAccordion
 import com.mejoresiagratis.rellenador.ui.components.ProviderLogo
 
 /**
@@ -23,10 +26,17 @@ import com.mejoresiagratis.rellenador.ui.components.ProviderLogo
  * confirmación campo a campo con candidatos y consenso de motores.
  * Tanda 3: formas unificadas con el resto de la app (shapes.medium), logos reales
  * de motor en vez de texto plano, y candidatos como chips en vez de radio buttons.
+ *
+ * Ocultar duplicados: al aplicar un bloque o elegir un candidato de un campo suelto,
+ * ese campo ya tiene valor en `fieldValues` — su ProposalCard deja de mostrarse en la
+ * lista principal "Campos" (era ruido visual duplicado, ya resuelto) y pasa a un
+ * acordeón plegado "Ya resueltos" al final, por si el usuario quiere reconsiderar sin
+ * perder la capacidad de cambiar de opinión.
  */
 @Composable
 fun ReviewStep(state: WizardUiState, vm: WizardViewModel) {
     var showEngineDetail by remember { mutableStateOf(false) }
+    var resolvedExpanded by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             // (Título "Paso 3 · ..." retirado — el stepper superior ya indica el paso.
@@ -58,6 +68,12 @@ fun ReviewStep(state: WizardUiState, vm: WizardViewModel) {
         }
         HorizontalDivider()
 
+        // Campo "resuelto" = ya tiene un valor no vacío en fieldValues, sea porque se
+        // aplicó un bloque que lo cubre o porque se eligió un candidato directamente.
+        val (resolved, pending) = state.proposals.partition {
+            !state.fieldValues[it.fieldKey].isNullOrBlank()
+        }
+
         LazyColumn(Modifier.weight(1f).padding(horizontal = 12.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
             contentPadding = PaddingValues(vertical = 10.dp)) {
@@ -73,21 +89,51 @@ fun ReviewStep(state: WizardUiState, vm: WizardViewModel) {
                 item { HorizontalDivider(Modifier.padding(vertical = 4.dp)) }
             }
 
-            if (state.proposals.isEmpty()) {
+            if (pending.isEmpty() && resolved.isEmpty()) {
                 item {
                     Text("La IA no propuso campos sueltos. Puedes rellenar manualmente en el siguiente paso.",
+                        style = MaterialTheme.typography.bodyMedium)
+                }
+            } else if (pending.isEmpty()) {
+                item {
+                    Text("Todos los campos propuestos ya están resueltos ✓ — revísalos abajo si quieres cambiar algo.",
                         style = MaterialTheme.typography.bodyMedium)
                 }
             } else {
                 item {
                     Text("Campos", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                 }
-                items(state.proposals, key = { it.fieldKey }) { fp ->
+                items(pending, key = { it.fieldKey }) { fp ->
                     ProposalCard(
                         proposal = fp,
                         selected = state.fieldValues[fp.fieldKey],
                         onSelect = { v -> if (v == null) vm.clearField(fp.fieldKey) else vm.setFieldValue(fp.fieldKey, v) }
                     )
+                }
+            }
+
+            if (resolved.isNotEmpty()) {
+                item {
+                    ExpressiveAccordion(
+                        title = "Ya resueltos",
+                        count = resolved.size,
+                        icon = Icons.Filled.Check,
+                        shape = MaterialTheme.shapes.medium,
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        onContainerColor = MaterialTheme.colorScheme.onSurface,
+                        expanded = resolvedExpanded,
+                        onToggle = { resolvedExpanded = !resolvedExpanded }
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            resolved.forEach { fp ->
+                                ProposalCard(
+                                    proposal = fp,
+                                    selected = state.fieldValues[fp.fieldKey],
+                                    onSelect = { v -> if (v == null) vm.clearField(fp.fieldKey) else vm.setFieldValue(fp.fieldKey, v) }
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }

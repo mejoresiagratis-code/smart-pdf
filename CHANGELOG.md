@@ -6,6 +6,25 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.6.6-ocultar-campos-resueltos] — 2026-07-16
+
+### Cambiado — Revisión IA (Paso 3)
+Al aplicar un bloque o elegir un candidato de un campo suelto, la tarjeta de ese campo
+seguía apareciendo en la lista "Campos" — duplicando visualmente algo ya resuelto.
+
+- **`ReviewStep.kt`**: los `FieldProposal` cuyo `fieldKey` ya tiene valor en
+  `fieldValues` (`!isNullOrBlank()`) se separan de los pendientes y se muestran dentro
+  de un `ExpressiveAccordion` "Ya resueltos · N", plegado por defecto.
+- No se ocultan del todo (perdería la capacidad de reconsiderar una elección): siguen
+  siendo `ProposalCard` completos con sus chips de candidato, solo que agrupados aparte
+  y colapsados para no ensuciar la vista principal.
+- Si TODOS los campos propuestos quedan resueltos, se muestra un mensaje corto en vez
+  de la lista "Campos" vacía.
+- Reutiliza el mismo `ExpressiveAccordion` compartido que ya usan Documentación y
+  Firma — coherencia visual, cero componente nuevo.
+
+---
+
 ## [0.6.5-persistencia-sesion] — 2026-07-15
 
 ### Diagnóstico del problema real
