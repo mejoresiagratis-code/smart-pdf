@@ -6,6 +6,31 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.6.7-fix-recorte-firma-letterbox] — 2026-07-16
+
+### Corregido — bug real de recorte manual de firma deformado
+Reportado con capturas: al recortar manualmente una firma con el dedo (pantalla "Recorta
+la firma"), el rectángulo se veía perfecto sobre la foto en pantalla, pero la firma
+resultante en la previsualización salía deformada/descuadrada.
+
+**Causa raíz confirmada**: `SignatureCropDialog.kt` mostraba la foto con `Image(...)` sin
+especificar `contentScale`, que por defecto es `ContentScale.Fit` — la foto se encaja
+proporcionalmente dentro del contenedor, con márgenes (letterbox) si la proporción de la
+foto no coincide con la del contenedor. Pero el cálculo del recorte al pulsar "Confirmar"
+asumía que la foto ocupaba el contenedor entero y estirada (`scaleX = photo.width /
+containerSize.width`, `scaleY` análogo) — correcto solo si fuera `ContentScale.FillBounds`.
+Con letterbox presente (el caso normal, ya que casi ninguna foto de móvil coincide en
+proporción con el recuadro de recorte), la posición arrastrada en pantalla no se traducía
+correctamente a píxeles reales de la foto.
+
+**Fix**: se calcula el rectángulo real donde `ContentScale.Fit` dibuja la foto dentro del
+contenedor (ancho/alto renderizado + offset de letterbox según qué eje se ajusta), y se
+invierte esa transformación exacta al mapear cada punto arrastrado a coordenadas de píxel
+real. Los puntos que caen en el margen de letterbox se acotan (`coerceIn`) al borde de la
+foto en vez de producir coordenadas fuera de rango.
+
+---
+
 ## [0.6.6-ocultar-campos-resueltos] — 2026-07-16
 
 ### Cambiado — Revisión IA (Paso 3)

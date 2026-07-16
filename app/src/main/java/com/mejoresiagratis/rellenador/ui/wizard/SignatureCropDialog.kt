@@ -96,14 +96,45 @@ fun SignatureCropDialog(
                     Button(
                         onClick = {
                             val start = dragStart; val end = dragEnd
-                            if (start == null || end == null || containerSize.width == 0) return@Button
-                            val scaleX = photo.width.toFloat() / containerSize.width
-                            val scaleY = photo.height.toFloat() / containerSize.height
-                            val x0 = (minOf(start.x, end.x) * scaleX).toInt().coerceIn(0, photo.width - 1)
-                            val y0 = (minOf(start.y, end.y) * scaleY).toInt().coerceIn(0, photo.height - 1)
-                            val x1 = (maxOf(start.x, end.x) * scaleX).toInt().coerceIn(x0 + 1, photo.width)
-                            val y1 = (maxOf(start.y, end.y) * scaleY).toInt().coerceIn(y0 + 1, photo.height)
-                            val cropped = Bitmap.createBitmap(photo, x0, y0, x1 - x0, y1 - y0)
+                            if (start == null || end == null || containerSize.width == 0 || containerSize.height == 0) return@Button
+                            // La Image de arriba usa ContentScale.Fit (por defecto, sin
+                            // deformar) — la foto se encaja PROPORCIONALMENTE dentro del
+                            // contenedor, con márgenes (letterbox) si la proporción no
+                            // coincide. El cálculo anterior asumía que la foto ocupaba el
+                            // contenedor entero estirada (como si fuera FillBounds), lo
+                            // que desalineaba el recorte cada vez que había letterbox —
+                            // el resultado salía descuadrado/deformado aunque el rectángulo
+                            // marcado en pantalla estuviera perfecto sobre la firma.
+                            val photoAspect = photo.width.toFloat() / photo.height.toFloat()
+                            val containerAspect = containerSize.width.toFloat() / containerSize.height.toFloat()
+                            val renderedW: Float; val renderedH: Float
+                            if (photoAspect > containerAspect) {
+                                // Letterbox arriba/abajo: se ajusta al ancho del contenedor.
+                                renderedW = containerSize.width.toFloat()
+                                renderedH = renderedW / photoAspect
+                            } else {
+                                // Letterbox a los lados: se ajusta al alto del contenedor.
+                                renderedH = containerSize.height.toFloat()
+                                renderedW = renderedH * photoAspect
+                            }
+                            val offsetX = (containerSize.width - renderedW) / 2f
+                            val offsetY = (containerSize.height - renderedH) / 2f
+
+                            // Mapea un punto de pantalla (dentro del área realmente ocupada
+                            // por la foto, con clamp por si el dedo se sale al letterbox) a
+                            // coordenadas de píxel real de la foto original.
+                            fun toPhotoX(sx: Float) =
+                                (((sx - offsetX) / renderedW) * photo.width).coerceIn(0f, photo.width - 1f)
+                            fun toPhotoY(sy: Float) =
+                                (((sy - offsetY) / renderedH) * photo.height).coerceIn(0f, photo.height - 1f)
+
+                            val x0 = minOf(toPhotoX(start.x), toPhotoX(end.x)).toInt()
+                            val y0 = minOf(toPhotoY(start.y), toPhotoY(end.y)).toInt()
+                            val x1 = maxOf(toPhotoX(start.x), toPhotoX(end.x)).toInt().coerceAtLeast(x0 + 1)
+                            val y1 = maxOf(toPhotoY(start.y), toPhotoY(end.y)).toInt().coerceAtLeast(y0 + 1)
+                            val cropped = Bitmap.createBitmap(photo, x0, y0,
+                                (x1 - x0).coerceAtMost(photo.width - x0),
+                                (y1 - y0).coerceAtMost(photo.height - y0))
                             onConfirm(cropped)
                         },
                         enabled = dragStart != null && dragEnd != null,
