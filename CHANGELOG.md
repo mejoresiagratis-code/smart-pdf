@@ -6,6 +6,53 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.6.5-persistencia-sesion] — 2026-07-15
+
+### Diagnóstico del problema real
+`WizardViewModel._state` era un `MutableStateFlow` puramente en memoria, sin
+`SavedStateHandle` ni persistencia a disco. `hiltViewModel()` sobrevive rotaciones, pero
+**no sobrevive la muerte del proceso** — algo habitual en fabricantes que gestionan
+agresivamente la batería en segundo plano (Honor, Xiaomi, Huawei…). Al volver a primer
+plano tras la muerte del proceso, Android recrea la Activity desde cero y el ViewModel
+arranca en su estado inicial: todo el progreso se pierde.
+
+### Añadido — Persistencia de sesión (Fase 1 del roadmap)
+- **`PersistedWizardState`** (nuevo, `data/repository/`): DTO `@Serializable` plano que
+  aísla lo que merece persistirse (paso, documentos, extracción, campos rellenados,
+  firma, huecos, estampas) de lo transitorio (`busy`, progreso de extracción en vivo,
+  previsualización, motores disponibles — estos se recargan por su cuenta). Incluye
+  `toPersisted()`/`applyTo()` para convertir en ambas direcciones sin tocar los modelos
+  originales (`SignatureData`, `SignatureStamp`, `Paquete` no eran `@Serializable`).
+- **`PrefsRepository`**: `saveWizardSession()`, `loadWizardSession()`,
+  `clearWizardSession()` — mismo DataStore que ya usa el resto de la app.
+- **`WizardViewModel`**: `observeStateForAutosave()` guarda a disco cada cambio relevante
+  (con `distinctUntilChanged`); `restoreSessionIfAny()` restaura al arrancar, DESPUÉS de
+  cargar providers/responsable para no pisarlos; `resetSession()` borra la sesión y
+  vuelve al Paso 1.
+- **Aviso de URIs inválidos**: si al restaurar un documento ya no es accesible (el
+  proceso murió sin que se hubiera tomado permiso persistente sobre el URI), se filtra
+  de la lista y se avisa por snackbar con los nombres afectados, en vez de fallar en
+  silencio o mostrar un documento fantasma.
+- **"Empezar de nuevo"** en Ajustes (con diálogo de confirmación).
+- **"Empezar otro contrato"** en el paso de Firma, tras generar el PDF (con diálogo de
+  confirmación) — solo se ofrece cuando ya hay un PDF generado, para no invitar a
+  descartar progreso en curso sin querer.
+
+### Aviso honesto — lo que esta fase NO resuelve
+Los `Uri` de documentos (PDFs/fotos aportados en el Paso 2) siguen dependiendo de que el
+proveedor de contenido (galería, gestor de archivos) mantenga el permiso de lectura tras
+la muerte del proceso. Hoy la app no llama a `takePersistableUriPermission()`, así que en
+algunos casos el usuario tendrá que volver a añadir los documentos (con aviso claro, no
+en silencio). La solución definitiva — copiar los documentos a almacenamiento privado de
+la app al añadirlos — queda como **Fase 2**, documentada en `ROADMAP.md`.
+
+### Añadido — ROADMAP.md
+Nuevo documento en la raíz del repo con el estado real de versiones completadas y las
+tandas pendientes, priorizadas. Sustituye al roadmap informal que vivía solo en el
+contexto de las sesiones de Claude.
+
+---
+
 ## [0.6.4-firma-navegacion-huecos-feedback] — 2026-07-15
 
 ### Corregido — previsualización duplicada en modo Dibujar

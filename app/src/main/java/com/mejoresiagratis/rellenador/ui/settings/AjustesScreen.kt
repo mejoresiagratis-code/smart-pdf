@@ -113,6 +113,39 @@ fun AjustesScreen(
                     }
                 }
             }
+
+            HorizontalDivider()
+
+            // --- Sesión del wizard ---
+            var showConfirm by remember { mutableStateOf(false) }
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Sesión actual", style = MaterialTheme.typography.titleMedium)
+                Text("Borra el progreso guardado (paso, documentos, extracción, firma…) y " +
+                    "vuelve al Paso 1. Los ajustes y firmas guardadas no se tocan.",
+                    style = MaterialTheme.typography.bodySmall)
+                OutlinedButton(
+                    onClick = { showConfirm = true },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("Empezar de nuevo") }
+            }
+            if (showConfirm) {
+                AlertDialog(
+                    onDismissRequest = { showConfirm = false },
+                    title = { Text("¿Empezar de nuevo?") },
+                    text = { Text("Se borrará el progreso actual (paso, documentos, extracción, " +
+                        "firma y datos). Esta acción no se puede deshacer.") },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            showConfirm = false
+                            vm.resetSession()
+                            onBack()
+                        }) { Text("Empezar de nuevo") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showConfirm = false }) { Text("Cancelar") }
+                    }
+                )
+            }
         }
     }
 }

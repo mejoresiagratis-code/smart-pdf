@@ -474,6 +474,32 @@ fun SignatureStep(state: WizardUiState, vm: WizardViewModel) {
                     modifier = Modifier.weight(1f)
                 ) { Text("Guardar") }
             }
+            // Empezar otro contrato: reset del wizard y vuelta al Paso 1. Solo se ofrece
+            // cuando el PDF ya está generado — antes de eso hay progreso en curso que
+            // el usuario probablemente no quiere descartar sin querer.
+            var showRestartConfirm by remember { mutableStateOf(false) }
+            OutlinedButton(
+                onClick = { showRestartConfirm = true },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("Empezar otro contrato") }
+            if (showRestartConfirm) {
+                AlertDialog(
+                    onDismissRequest = { showRestartConfirm = false },
+                    title = { Text("¿Empezar otro contrato?") },
+                    text = { Text("Se borrará el progreso actual (paso, documentos, extracción, " +
+                        "firma y datos). El PDF que acabas de generar se conserva si ya lo has " +
+                        "guardado o compartido.") },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            showRestartConfirm = false
+                            vm.resetSession()
+                        }) { Text("Empezar otro") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showRestartConfirm = false }) { Text("Cancelar") }
+                    }
+                )
+            }
         }
 
         OutlinedButton(onClick = vm::back) { Text("Atrás") }

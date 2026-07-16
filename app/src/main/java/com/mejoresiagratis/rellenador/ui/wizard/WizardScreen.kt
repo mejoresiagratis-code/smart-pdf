@@ -48,7 +48,22 @@ import com.mejoresiagratis.rellenador.ui.components.blobShape
 @Composable
 fun WizardScreen(vm: WizardViewModel = hiltViewModel(), onOpenSettings: () -> Unit = {}) {
     val state by vm.state.collectAsState()
+    val restoreWarning by vm.restoreWarning.collectAsState()
     var showQuickSettings by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // Si la restauración de sesión detectó URIs inválidos, avisamos al usuario con
+    // un snackbar de larga duración y opción a descartar el aviso.
+    LaunchedEffect(restoreWarning) {
+        val msg = restoreWarning ?: return@LaunchedEffect
+        val result = snackbarHostState.showSnackbar(
+            message = msg,
+            actionLabel = "OK",
+            duration = SnackbarDuration.Long
+        )
+        // El resultado puede ser ActionPerformed o Dismissed — en ambos casos limpiamos.
+        vm.dismissRestoreWarning()
+    }
 
     Scaffold(
         topBar = {
@@ -74,7 +89,8 @@ fun WizardScreen(vm: WizardViewModel = hiltViewModel(), onOpenSettings: () -> Un
                     actionIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer
                 )
             )
-        }
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { pad ->
         Column(Modifier.padding(pad).fillMaxSize()) {
             Surface(color = MaterialTheme.colorScheme.surfaceContainer) {

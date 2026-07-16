@@ -35,8 +35,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.mejoresiagratis.rellenador.data.repository.applyTo
+import com.mejoresiagratis.rellenador.data.repository.toPersisted
 import javax.inject.Inject
 
 @HiltViewModel
@@ -58,9 +62,83 @@ class WizardViewModel @Inject constructor(
     private val _state = MutableStateFlow(WizardUiState())
     val state: StateFlow<WizardUiState> = _state.asStateFlow()
 
+    /** Aviso al usuario si algún URI persistido ya no es accesible tras la restauración
+     *  (SAF/Storage Access Framework revoca los permisos cuando el proceso muere si no
+     *  se llamó a takePersistableUriPermission). null = sin aviso. */
+    private val _restoreWarning = MutableStateFlow<String?>(null)
+    val restoreWarning: StateFlow<String?> = _restoreWarning.asStateFlow()
+
     init {
         probeProviders()
         loadPersistedSettings()
+        restoreSessionIfAny()
+        observeStateForAutosave()
+    }
+
+    /** Al arrancar, si hay sesión guardada, la restaura sobre el state por defecto —
+     *  se llama tras probeProviders/loadPersistedSettings para que los providers y el
+     *  responsable no se pisen. Silencioso si no hay sesión o si está corrupta. */
+    private fun restoreSessionIfAny() {
+        viewModelScope.launch {
+            val persisted = runCatching { prefs.loadWizardSession() }.getOrNull() ?: return@launch
+            // Copiamos sobre el state actual (que ya trae providers/responsable/perfil)
+            val restored = persisted.applyTo(_state.value)
+            _state.value = restored
+            // Comprueba accesibilidad real de los URIs restaurados. Si alguno ya no es
+            // válido, avisamos al usuario para que sepa qué documentos volver a subir.
+            val invalid = mutableListOf<String>()
+            restored.docUris.forEach { uri ->
+                val ok = runCatching {
+                    context.contentResolver.openInputStream(uri)?.use { true } ?: false
+                }.getOrDefault(false)
+                if (!ok) invalid.add(uri.lastPathSegment?.substringAfterLast('/') ?: uri.toString())
+            }
+            if (invalid.isNotEmpty()) {
+                _restoreWarning.value = "Algunos documentos ya no son accesibles y deberás " +
+                    "volver a añadirlos: ${invalid.joinToString(", ").take(120)}"
+                // Retirar los URIs inválidos del state para que no salgan zombis en la UI
+                val validUris = restored.docUris.filter { u ->
+                    runCatching { context.contentResolver.openInputStream(u)?.use { true } ?: false }
+                        .getOrDefault(false)
+                }
+                _state.value = _state.value.copy(docUris = validUris)
+            }
+        }
+    }
+
+    /** Observa el state y guarda a disco cada cambio "de progreso" (evitando ruido
+     *  durante extracciones vivas con `busy`). Usa distinctUntilChanged por el flag
+     *  step+contractSource+... implícito en toPersisted() para no escribir cada tick. */
+    private fun observeStateForAutosave() {
+        viewModelScope.launch {
+            _state
+                .map { it.toPersisted() }
+                .distinctUntilChanged()
+                .collect { snapshot ->
+                    runCatching { prefs.saveWizardSession(snapshot) }
+                }
+        }
+    }
+
+    /** Borra el snapshot persistido y vuelve al estado inicial. La sesión reset
+     *  respeta providers, responsable y proxy (recargándolos como en el init). */
+    fun resetSession() {
+        viewModelScope.launch {
+            runCatching { prefs.clearWizardSession() }
+        }
+        previewRenderer?.close()
+        previewRenderer = null
+        _restoreWarning.value = null
+        _state.value = WizardUiState()  // vuelta al Paso 1
+        // Recarga los valores por defecto (responsable, proxy, providers) para no
+        // dejar la app con esos campos vacíos justo después de un reset.
+        loadPersistedSettings()
+        probeProviders()
+    }
+
+    /** Descarta el aviso de URIs inválidos tras leerlo. */
+    fun dismissRestoreWarning() {
+        _restoreWarning.value = null
     }
 
     private fun loadPersistedSettings() {

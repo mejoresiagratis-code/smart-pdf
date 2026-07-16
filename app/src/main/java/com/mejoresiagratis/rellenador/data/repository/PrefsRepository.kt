@@ -109,6 +109,31 @@ class PrefsRepository @Inject constructor(
     }
 
 
+    // --- Persistencia de sesión del wizard (Fase 1) ---
+    // Guarda un snapshot del progreso actual del wizard para sobrevivir muerte del
+    // proceso en segundo plano. La clave crece con la versión del DTO — si algún día
+    // cambia el formato, se puede leer de forma tolerante y descartar sesiones viejas.
+    private val sessionKey = stringPreferencesKey("wizard_session_v1")
+
+    /** Guarda el snapshot serializado como JSON (llamado desde WizardViewModel en
+     *  cada cambio relevante del state). Silencioso: si falla, no hace ruido. */
+    suspend fun saveWizardSession(state: PersistedWizardState) {
+        val raw = runCatching { json.encodeToString(state) }.getOrNull() ?: return
+        context.dataStore.edit { it[sessionKey] = raw }
+    }
+
+    /** Devuelve el snapshot restaurado o null si no hay sesión guardada / es corrupta. */
+    suspend fun loadWizardSession(): PersistedWizardState? {
+        val raw = context.dataStore.data.map { it[sessionKey] }.first() ?: return null
+        return runCatching { json.decodeFromString<PersistedWizardState>(raw) }.getOrNull()
+    }
+
+    /** Borra la sesión guardada — usado por "Empezar de nuevo". */
+    suspend fun clearWizardSession() {
+        context.dataStore.edit { it.remove(sessionKey) }
+    }
+
+
     // --- Ajustes: perfil comercial (Responsable) + URL del proxy ---
     private val responsableKey = stringPreferencesKey("responsable_comercial")
     private val proxyUrlKey = stringPreferencesKey("proxy_base_url_override")
