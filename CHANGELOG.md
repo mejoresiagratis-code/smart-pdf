@@ -6,6 +6,30 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.6.10-fix-despeckle-corta-puntas] — 2026-07-16
+
+### Corregido — regresión real introducida por el propio despeckle de v0.6.9
+Probado con foto real: tras aplicar el filtro de motas de ruido de v0.6.9, la firma
+seguía cortándose, ahora por arriba **y** por abajo — un síntoma distinto al original,
+que apuntaba a una causa nueva en vez de a la de antes.
+
+**Causa raíz confirmada**: `despeckle()` etiquetaba componentes conexas directamente
+sobre la máscara de "es tinta". Una extremidad fina del propio trazo (la parte superior
+de una "S", el rabillo final de una "D") puede quedar conectada al resto por apenas 1-2
+píxeles debido al antialiasing del umbral — si esa conexión se rompía justo ahí, la
+extremidad se convertía en SU PROPIA componente pequeña y el filtro la borraba como si
+fuera ruido. Como esto puede pasar en cualquier punta del trazo, cortaba arriba y abajo
+por igual.
+
+**Fix**: `despeckle()` ahora DILATA la máscara (radio 2px) antes de etiquetar
+componentes — una conexión de 1 píxel se "engorda" lo suficiente para no partirse en
+dos. El tamaño que decide si un componente se conserva sigue contando SOLO los píxeles
+ORIGINALES de tinta (la dilatación solo decide qué va junto, nunca añade tinta de más
+al resultado final). Esto conserva las motas de ruido genuinamente aisladas fuera
+(siguen sin conectar con nada) mientras deja de cortar las puntas finas del trazo real.
+
+---
+
 ## [0.6.9-firma-margen-despeckle] — 2026-07-16
 
 ### Corregido — firma cortada por arriba y con motas de ruido

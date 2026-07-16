@@ -47,18 +47,47 @@ class SignatureProcessor @Inject constructor() {
     /**
      * Elimina motas de ruido aisladas (textura del papel, grano de la foto, sombras
      * puntuales) que pasan el umbral de tinta pero no forman parte del trazo real.
-     * Etiqueta componentes conexas (8-conectividad, para no partir trazos cursivos en
-     * diagonal) sobre la máscara de "es tinta" y descarta las que tengan menos de
-     * `minPixels` — el trazo real de una firma es, con mucha diferencia, la componente
-     * más grande; una mota de ruido son unos pocos píxeles sueltos.
+     *
+     * v0.6.9 etiquetaba componentes directamente sobre la máscara "es tinta" —
+     * PROBLEMA REAL detectado tras probar con foto real: una extremidad fina del propio
+     * trazo (la parte superior de una "S", el rabillo final de una "D") puede quedar
+     * conectada al resto por apenas 1-2 píxeles debido al antialiasing del umbral. Si
+     * esa conexión se rompe justo ahí, esa extremidad se convertía en SU PROPIA
+     * componente pequeña y se borraba como si fuera ruido — cortando la firma por
+     * arriba y por abajo exactamente en sus puntas, que es justo lo que se reportó.
+     *
+     * Fix: se DILATA la máscara (radio 2px) antes de etiquetar componentes, para que
+     * una conexión de 1 píxel se "engorde" lo suficiente y no se parta en dos
+     * componentes. Los componentes se calculan sobre la máscara dilatada, pero el
+     * tamaño que decide si se conserva o se descarta cuenta SOLO los píxeles
+     * ORIGINALES de tinta dentro de ese componente (la dilatación es solo para decidir
+     * qué va junto, nunca se añade tinta de más al resultado final).
      */
-    private fun despeckle(isInk: BooleanArray, w: Int, h: Int, minPixels: Int = 12): BooleanArray {
+    private fun despeckle(isInk: BooleanArray, w: Int, h: Int, minPixels: Int = 12, dilateRadius: Int = 2): BooleanArray {
+        val dilated = BooleanArray(w * h)
+        for (y in 0 until h) for (x in 0 until w) {
+            val i = y * w + x
+            if (isInk[i]) { dilated[i] = true; continue }
+            var found = false
+            var dy = -dilateRadius
+            while (dy <= dilateRadius && !found) {
+                var dx = -dilateRadius
+                while (dx <= dilateRadius && !found) {
+                    val nx = x + dx; val ny = y + dy
+                    if (nx in 0 until w && ny in 0 until h && isInk[ny * w + nx]) found = true
+                    dx++
+                }
+                dy++
+            }
+            dilated[i] = found
+        }
+
         val visited = BooleanArray(w * h)
         val keep = BooleanArray(w * h)
         val stack = ArrayDeque<Int>()
         val component = ArrayList<Int>()
         for (start in 0 until w * h) {
-            if (!isInk[start] || visited[start]) continue
+            if (!dilated[start] || visited[start]) continue
             component.clear()
             stack.addLast(start)
             visited[start] = true
@@ -66,16 +95,19 @@ class SignatureProcessor @Inject constructor() {
                 val i = stack.removeLast()
                 component.add(i)
                 val x = i % w; val y = i / w
-                for (dy in -1..1) for (dx in -1..1) {
-                    if (dx == 0 && dy == 0) continue
-                    val nx = x + dx; val ny = y + dy
+                for (ddy in -1..1) for (ddx in -1..1) {
+                    if (ddx == 0 && ddy == 0) continue
+                    val nx = x + ddx; val ny = y + ddy
                     if (nx < 0 || nx >= w || ny < 0 || ny >= h) continue
                     val ni = ny * w + nx
-                    if (isInk[ni] && !visited[ni]) { visited[ni] = true; stack.addLast(ni) }
+                    if (dilated[ni] && !visited[ni]) { visited[ni] = true; stack.addLast(ni) }
                 }
             }
-            if (component.size >= minPixels) {
-                for (i in component) keep[i] = true
+            // Tamaño real = solo píxeles de tinta ORIGINALES dentro del componente
+            // dilatado — la dilatación decide qué va unido, no infla el conteo.
+            val originalCount = component.count { isInk[it] }
+            if (originalCount >= minPixels) {
+                for (i in component) if (isInk[i]) keep[i] = true
             }
         }
         return keep
