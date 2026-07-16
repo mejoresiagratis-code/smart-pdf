@@ -4,6 +4,7 @@ import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.foundation.background
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.ui.graphics.Color
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -22,6 +23,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 
 import com.mejoresiagratis.rellenador.ui.components.ExpressiveAccordion
 
@@ -54,6 +56,11 @@ fun SignatureStep(state: WizardUiState, vm: WizardViewModel) {
     var holesExpanded by remember { mutableStateOf(false) }
     // Índice del hueco a firmar en modo "Una a una" (0-based sobre state.signPages ordenadas).
     var oneByOneIdx by remember { mutableStateOf(0) }
+    // Estado compartido entre botones y previsualización: al pulsar "Una a una" o
+    // "Todos", scroll animado al item de la página estampada, más feedback en snackbar.
+    val previewListState = rememberLazyListState()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) { vm.buildPreview(); vm.refreshSavedSignatures() }
 
@@ -105,6 +112,7 @@ fun SignatureStep(state: WizardUiState, vm: WizardViewModel) {
         }
     }
 
+    Box(Modifier.fillMaxSize()) {
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -169,8 +177,11 @@ fun SignatureStep(state: WizardUiState, vm: WizardViewModel) {
             }
         }
 
-        // Previsualización compacta de la firma ya procesada, justo tras elegir modo.
-        if (state.signature != null) {
+        // Previsualización compacta de la firma procesada — SOLO en modo Extraer de foto
+        // (modo 1). En modo Dibujar (0), SignatureCanvas ya muestra internamente el
+        // trazo como preview con el estilo aplicado, así que enseñar aquí otra caja
+        // gris con la misma firma quedaba duplicado.
+        if (state.signature != null && mode == 1) {
             val sigBmp = remember(state.signature) {
                 state.signature?.let {
                     BitmapFactory.decodeByteArray(it.pngBytes, 0, it.pngBytes.size)
@@ -185,6 +196,10 @@ fun SignatureStep(state: WizardUiState, vm: WizardViewModel) {
                         modifier = Modifier.height(100.dp))
                 }
             }
+        }
+
+        // Chip de estado — se muestra en ambos modos porque es información útil.
+        if (state.signature != null) {
             val nPages = state.signPages.size.coerceAtLeast(state.stamps.size)
             AssistChip(onClick = {}, label = {
                 Text(if (nPages > 0) "Firma cargada ✓ · lista para $nPages página${if (nPages == 1) "" else "s"}"
@@ -333,6 +348,13 @@ fun SignatureStep(state: WizardUiState, vm: WizardViewModel) {
                                 val target = pages.getOrNull(oneByOneIdx) ?: pages.first()
                                 vm.stampOnePage(target)
                                 if (oneByOneIdx < pages.size - 1) oneByOneIdx++ else oneByOneIdx = 0
+                                // Feedback + navegación: llevo la previsualización
+                                // directamente a la página estampada para que el usuario
+                                // no tenga que buscarla, y confirmo la acción por snackbar.
+                                scope.launch {
+                                    previewListState.animateScrollToItem(target)
+                                    snackbarHostState.showSnackbar("Firma estampada en la pág ${target + 1}")
+                                }
                             }
                         },
                         enabled = pages.isNotEmpty(),
@@ -342,7 +364,15 @@ fun SignatureStep(state: WizardUiState, vm: WizardViewModel) {
                              else "🎯 Una a una (pág ${(pages.getOrNull(oneByOneIdx) ?: pages.first()) + 1})")
                     }
                     Button(
-                        onClick = vm::stampAllPages,
+                        onClick = {
+                            vm.stampAllPages()
+                            // Scroll a la PRIMERA página estampada + feedback resumen.
+                            val first = pages.firstOrNull()
+                            if (first != null) scope.launch {
+                                previewListState.animateScrollToItem(first)
+                                snackbarHostState.showSnackbar("Firmadas ${pages.size} páginas")
+                            }
+                        },
                         enabled = pages.isNotEmpty(),
                         modifier = Modifier.weight(1f)
                     ) {
@@ -381,8 +411,47 @@ fun SignatureStep(state: WizardUiState, vm: WizardViewModel) {
         OutlinedButton(onClick = vm::buildPreview, modifier = Modifier.fillMaxWidth()) {
             Text("Actualizar previsualización")
         }
+        // Navegación entre huecos de firma como hace la web (flechas ↑↓ con contador).
+        // Solo se muestra si hay huecos detectados y la previsualización está lista.
+        if (state.previewReady && state.signPages.isNotEmpty()) {
+            val holes = remember(state.signPages) { state.signPages.sorted() }
+            var currentHoleIdx by remember { mutableStateOf(0) }
+            Row(
+                Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Ir al hueco:", style = MaterialTheme.typography.bodySmall)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedButton(
+                        onClick = {
+                            currentHoleIdx = (currentHoleIdx - 1 + holes.size) % holes.size
+                            scope.launch { previewListState.animateScrollToItem(holes[currentHoleIdx]) }
+                        },
+                        modifier = Modifier.size(width = 48.dp, height = 40.dp),
+                        contentPadding = PaddingValues(0.dp)
+                    ) { Text("↑") }
+                    Text(
+                        "  ${currentHoleIdx + 1}/${holes.size} · p.${holes[currentHoleIdx] + 1}  ",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    OutlinedButton(
+                        onClick = {
+                            currentHoleIdx = (currentHoleIdx + 1) % holes.size
+                            scope.launch { previewListState.animateScrollToItem(holes[currentHoleIdx]) }
+                        },
+                        modifier = Modifier.size(width = 48.dp, height = 40.dp),
+                        contentPadding = PaddingValues(0.dp)
+                    ) { Text("↓") }
+                }
+            }
+        }
         if (state.previewReady) {
-            PdfPreview(state, vm, modifier = Modifier.fillMaxWidth().height(560.dp))
+            PdfPreview(
+                state, vm,
+                modifier = Modifier.fillMaxWidth().height(560.dp),
+                listState = previewListState
+            )
         }
 
         HorizontalDivider()
@@ -408,6 +477,14 @@ fun SignatureStep(state: WizardUiState, vm: WizardViewModel) {
         }
 
         OutlinedButton(onClick = vm::back) { Text("Atrás") }
+    }
+    // Snackbar como overlay flotante en la parte inferior — patrón Material estándar.
+    // Muestra los mensajes de "Firma estampada en la pág X" / "Firmadas N páginas" sin
+    // desplazar el contenido del scroll.
+    SnackbarHost(
+        hostState = snackbarHostState,
+        modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp)
+    )
     }
 }
 

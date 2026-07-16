@@ -6,6 +6,40 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.6.4-firma-navegacion-huecos-feedback] — 2026-07-15
+
+### Corregido — previsualización duplicada en modo Dibujar
+La caja gris con la firma azul que aparecía justo debajo del canvas de dibujo (añadida en
+v0.6.3) estaba duplicando la información: `SignatureCanvas` ya muestra el trazo interno-
+mente con el estilo aplicado, así que la caja extra solo saturaba visualmente sin aportar.
+Ahora esa caja solo se muestra en modo **Extraer de foto** (donde no hay canvas y el
+usuario sí necesita ver la firma extraída/procesada). El chip "Firma cargada ✓" se
+mantiene en ambos modos porque es información útil.
+
+### Añadido — navegación y feedback al estampar
+Al pulsar los botones "🎯 Una a una" o "⚡ Todos":
+- **Scroll automático a la página estampada** en la previsualización (`animateScrollToItem`)
+  — antes había que buscarla a mano bajando por 54 páginas.
+- **Snackbar de confirmación** con la acción realizada:
+  - "Una a una": `Firma estampada en la pág X`
+  - "Todos": `Firmadas N páginas`
+
+### Añadido — navegación entre huecos como en la web
+Nueva fila `Ir al hueco: ↑ 3/5 · p.33 ↓` justo encima de la previsualización, visible
+cuando hay huecos detectados. Flechas circulares que hacen scroll a cada página con
+`animateScrollToItem`. Replica la barra de navegación entre huecos que tiene la app web
+sobre el documento en el paso de firma.
+
+### Técnico
+- `PdfPreview` acepta ahora un parámetro opcional `listState: LazyListState` para que el
+  llamador pueda controlar el scroll desde fuera (sigue funcionando con default
+  `rememberLazyListState()` si no se le pasa).
+- `SignatureStep` envuelve su Column raíz en un `Box` para poder poner el
+  `SnackbarHost` como overlay flotante en la parte inferior (patrón Material estándar,
+  sin desplazar el contenido del scroll).
+
+---
+
 ## [0.6.3-firma-alineada-web] — 2026-07-14
 
 ### Añadido / cambiado — SignatureStep alineado con la app web

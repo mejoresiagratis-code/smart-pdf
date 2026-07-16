@@ -32,10 +32,18 @@ import kotlinx.coroutines.withContext
 fun PdfPreview(
     state: WizardUiState,
     vm: WizardViewModel,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    // LazyListState opcional. Si el llamador lo pasa, puede hacer scroll a una página
+    // concreta desde fuera (p.ej. al pulsar "Una a una" en SignatureStep, para llevar
+    // la vista directamente a la página que se acaba de estampar).
+    listState: androidx.compose.foundation.lazy.LazyListState = androidx.compose.foundation.lazy.rememberLazyListState()
 ) {
     val renderer = vm.renderer() ?: return
-    LazyColumn(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    LazyColumn(
+        modifier.fillMaxWidth(),
+        state = listState,
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
         items((0 until renderer.pageCount).toList(), key = { it }) { pageIdx ->
             val stamp = state.stamps.firstOrNull { it.pageIndex == pageIdx }
             PdfPageView(
