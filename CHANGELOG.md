@@ -6,6 +6,28 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.6.8-foto-completa-sin-relocalizar] — 2026-07-16
+
+### Corregido — "Foto completa" recortaba de más
+Reportado con foto real: al subir una firma ya recortada casi sin margen y pulsar
+"Foto completa" en el diálogo de recorte, el resultado salía cortado, perdiendo trazos.
+
+**Causa raíz**: el botón "Foto completa" llamaba a `extractSignatureFromPhoto()`, que
+**siempre** pasa primero por la IA de localización (`SignatureLocator`) antes de recortar
+y procesar. Si la foto ya es un recorte ajustado (poco margen), es habitual que la IA
+devuelva una caja menor al 100% aunque el prompt le pida `{x:0,y:0,w:100,h:100}` cuando
+toda la imagen es la firma — el modelo no siempre lo sigue al pie de la letra. Esa caja
+más pequeña se usaba para recortar OTRA VEZ por encima de la decisión del usuario de
+"usar la foto entera", cortando la firma.
+
+**Fix**: nueva función `WizardViewModel.useWholePhotoAsSignature()` — mismo pipeline que
+`useManualSignatureCrop()` (aplanado + Otsu + recorte a bounding-box del trazo real) pero
+**sin pasar nunca por la IA de localización ni por `sigProcessor.crop()`**. El botón
+"Foto completa" ahora es fiel a su nombre: usa la foto tal cual el usuario la ve, sin que
+ningún motor decida recortar más por su cuenta.
+
+---
+
 ## [0.6.7-fix-recorte-firma-letterbox] — 2026-07-16
 
 ### Corregido — bug real de recorte manual de firma deformado

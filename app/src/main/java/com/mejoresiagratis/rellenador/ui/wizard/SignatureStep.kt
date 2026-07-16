@@ -68,7 +68,7 @@ fun SignatureStep(state: WizardUiState, vm: WizardViewModel) {
         SignatureCropDialog(
             photo = pickedPhotoForCrop!!,
             onConfirm = { cropped -> vm.useManualSignatureCrop(cropped); pickedPhotoForCrop = null },
-            onUseWholePhoto = { vm.extractSignatureFromPhoto(pickedPhotoForCrop!!); pickedPhotoForCrop = null },
+            onUseWholePhoto = { vm.useWholePhotoAsSignature(pickedPhotoForCrop!!); pickedPhotoForCrop = null },
             onCancel = { pickedPhotoForCrop = null }
         )
     }

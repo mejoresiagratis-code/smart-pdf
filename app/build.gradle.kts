@@ -15,8 +15,8 @@ android {
         applicationId = "com.mejoresiagratis.rellenador"
         minSdk = 26
         targetSdk = 35
-        versionCode = 34
-        versionName = "0.6.7-fix-recorte-firma-letterbox"
+        versionCode = 35
+        versionName = "0.6.8-foto-completa-sin-relocalizar"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // Base URL of your PHP proxy. Override per build type.

@@ -534,6 +534,28 @@ class WizardViewModel @Inject constructor(
         else _state.value = _state.value.copy(stamps = listOf(defaultStamp()))
     }
 
+    /**
+     * "Foto completa": el usuario decide EXPLÍCITAMENTE no recortar nada — la foto
+     * entera es la región a procesar, tal cual. A diferencia de
+     * `extractSignatureFromPhoto()`, esta función NUNCA llama a la IA de localización:
+     * si lo hiciera, una caja devuelta más pequeña que el 100% (habitual cuando la foto
+     * ya es un recorte ajustado casi sin margen, como suele pasar tras usar la cámara o
+     * subir una foto ya recortada) volvería a recortar por encima de la decisión del
+     * usuario, cortando trazos de la firma — justo el bug real reportado: "al elegir
+     * foto completa sale recortada". Mismo pipeline que `useManualSignatureCrop`, solo
+     * que sin pasar primero por `sigProcessor.crop()` con una caja de la IA.
+     */
+    fun useWholePhotoAsSignature(bmp: Bitmap) {
+        val processed = sigProcessor.fromPhoto(bmp, _state.value.inkColor, _state.value.sigBackground)
+            ?: bmp
+        rawSignatureBitmap = bmp
+        rawSignatureIsPhoto = true
+        val data = sigProcessor.toSignatureData(processed)
+        _state.value = _state.value.copy(signature = data, error = null)
+        if (_state.value.signPages.isNotEmpty()) stampAllPages()
+        else _state.value = _state.value.copy(stamps = listOf(defaultStamp()))
+    }
+
     fun extractSignatureFromPhoto(bmp: Bitmap) {
         lastPickedPhoto = bmp
         viewModelScope.launch {
