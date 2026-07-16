@@ -6,6 +6,46 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.6.9-firma-margen-despeckle] — 2026-07-16
+
+### Corregido — firma cortada por arriba y con motas de ruido
+Reportado con foto real: al recortar una firma con poco margen de papel alrededor
+(recorte ajustado), el resultado procesado salía con la parte superior de las letras
+cortada y con puntos de ruido dispersos.
+
+**Causa 1 — corte por arriba**: `flattenIllumination()` estima el fondo reduciendo y
+ampliando la imagen entera. Con muy poco margen real de papel limpio, esa estimación
+queda contaminada por la propia tinta cerca de los bordes, y los trazos más finos
+(p.ej. la parte superior de una letra, con menos presión de bolígrafo) acaban justo por
+debajo del umbral de Otsu y se pierden.
+
+**Fix**: `SignatureProcessor.padWithWhiteMargin()` (nuevo, privado) añade un margen
+blanco sintético (25% del ancho/alto, mínimo 12px) antes de `flattenIllumination()`.
+Le da a la estimación de fondo zonas fiables de papel limpio cerca de cada borde. El
+recorte final a bounding-box del trazo real (ya existente en `processInk()`) vuelve a
+ajustar el resultado, así que el margen añadido no queda en el resultado final — solo
+mejora la calibración del paso intermedio.
+
+**Causa 2 — motas de ruido**: no había ningún filtro que distinguiera "textura del papel
+o grano de la foto que pasa el umbral" de "trazo real de la firma" — cualquier píxel
+oscuro aislado se quedaba en el resultado.
+
+**Fix**: `SignatureProcessor.despeckle()` (nuevo, privado) etiqueta componentes conexas
+(8-conectividad, para no partir trazos cursivos en diagonal) sobre la máscara de tinta y
+descarta las que tengan menos de 12 píxeles — el trazo real de una firma es, con mucha
+diferencia, la componente más grande; una mota de ruido son unos pocos píxeles sueltos.
+`processInk()` se reestructuró en dos pasadas (máscara + despeckle, luego tintado) para
+poder aplicar el filtro antes de calcular el bounding-box final.
+
+### Aviso honesto
+El umbral de 12 píxeles para descartar una componente es un compromiso: en signatures
+con acentos o puntos deliberados muy pequeños y desconectados del trazo principal (poco
+habitual, pero posible), podría eliminar también esa marca intencional junto con el
+ruido. Si esto se observa en la práctica, el valor es fácilmente ajustable
+(`despeckle(..., minPixels = N)`).
+
+---
+
 ## [0.6.8-foto-completa-sin-relocalizar] — 2026-07-16
 
 ### Corregido — "Foto completa" recortaba de más
