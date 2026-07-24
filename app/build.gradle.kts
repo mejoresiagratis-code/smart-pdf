@@ -15,8 +15,8 @@ android {
         applicationId = "com.mejoresiagratis.rellenador"
         minSdk = 26
         targetSdk = 35
-        versionCode = 39
-        versionName = "0.7.1-agrupar-paginas-por-archivo"
+        versionCode = 40
+        versionName = "0.7.2-preview-antes-scroll-sin-ajuste-pag24"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // Base URL of your PHP proxy. Override per build type.

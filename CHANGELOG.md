@@ -6,6 +6,31 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.7.2-preview-antes-scroll-sin-ajuste-pag24] — 2026-07-24
+
+### Corregido — scroll llegaba antes de que la previsualización reflejara la firma
+`stampOnePage()`/`stampAllPages()` solo actualizaban la lista de estampas en memoria —
+la previsualización real (el PDF renderizado que se ve en pantalla) solo se reconstruye
+llamando aparte a `buildPreview()`, que nadie llamaba tras estampar. Los botones "🎯 Una
+a una" y "⚡ Todos" hacían scroll a la página estampada INMEDIATAMENTE, antes de que esa
+reconstrucción ocurriera — la página podía verse un instante sin la firma, dando la
+sensación de que no se había estampado.
+
+- **`WizardViewModel.rebuildPreviewNow()`** (nuevo, `suspend`): misma lógica que
+  `buildPreview()` pero awaitable desde la propia corrutina de la UI. `buildPreview()`
+  se mantiene igual para el botón "Actualizar previsualización" (fire-and-forget).
+- **`SignatureStep.kt`**: ambos botones ahora hacen `vm.rebuildPreviewNow()` y ESPERAN
+  a que termine antes de `previewListState.animateScrollToItem(...)` — el scroll llega
+  siempre a una página que ya muestra la firma recién estampada.
+
+### Quitado
+- **Sección "Ajuste en la página 24 (posición y tamaño)"** con sus 3 sliders
+  (Horizontal/Vertical/Tamaño) — retirada de la UI a petición de Pablo. La función
+  `WizardViewModel.updateStamp()` se mantiene intacta por si se retoma en el futuro; el
+  composable `LabeledSlider` (ya sin ningún uso) se eliminó de `SignatureStep.kt`.
+
+---
+
 ## [0.7.1-agrupar-paginas-por-archivo] — 2026-07-24
 
 ### Corregido — causa real de la lentitud frente a la versión web

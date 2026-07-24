@@ -383,10 +383,13 @@ fun SignatureStep(state: WizardUiState, vm: WizardViewModel) {
                                 val target = pages.getOrNull(oneByOneIdx) ?: pages.first()
                                 vm.stampOnePage(target)
                                 if (oneByOneIdx < pages.size - 1) oneByOneIdx++ else oneByOneIdx = 0
-                                // Feedback + navegación: llevo la previsualización
-                                // directamente a la página estampada para que el usuario
-                                // no tenga que buscarla, y confirmo la acción por snackbar.
+                                // Primero se reconstruye la previsualización (para que la
+                                // página ya muestre la firma recién estampada) y SOLO
+                                // ENTONCES se hace scroll — antes el scroll llegaba antes
+                                // de que el PDF de previsualización reflejara el cambio, y
+                                // la página aparecía momentáneamente "en blanco".
                                 scope.launch {
+                                    vm.rebuildPreviewNow()
                                     previewListState.animateScrollToItem(target)
                                     snackbarHostState.showSnackbar("Firma estampada en la pág ${target + 1}")
                                 }
@@ -401,9 +404,11 @@ fun SignatureStep(state: WizardUiState, vm: WizardViewModel) {
                     Button(
                         onClick = {
                             vm.stampAllPages()
-                            // Scroll a la PRIMERA página estampada + feedback resumen.
+                            // Misma corrección: reconstruir la previsualización ANTES de
+                            // hacer scroll, para poder ver todas las páginas ya firmadas.
                             val first = pages.firstOrNull()
                             if (first != null) scope.launch {
+                                vm.rebuildPreviewNow()
                                 previewListState.animateScrollToItem(first)
                                 snackbarHostState.showSnackbar("Firmadas ${pages.size} páginas")
                             }
@@ -414,17 +419,6 @@ fun SignatureStep(state: WizardUiState, vm: WizardViewModel) {
                         Text("⚡ Todos (${pages.size})")
                     }
                 }
-            }
-
-            // Ajuste manual página 24 (fuera de los acordeones porque solo aparece cuando
-            // ya hay una estampa colocada — es un ajuste puntual, no una configuración).
-            val stamp = state.stamps.firstOrNull()
-            if (stamp != null) {
-                Text("Ajuste en la página 24 (posición y tamaño):",
-                    style = MaterialTheme.typography.labelLarge)
-                LabeledSlider("Horizontal", stamp.xRel) { vm.updateStamp(it, stamp.yRel, stamp.widthRel) }
-                LabeledSlider("Vertical", stamp.yRel) { vm.updateStamp(stamp.xRel, it, stamp.widthRel) }
-                LabeledSlider("Tamaño", stamp.widthRel, 0.1f, 0.6f) { vm.updateStamp(stamp.xRel, stamp.yRel, it) }
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -546,16 +540,6 @@ fun SignatureStep(state: WizardUiState, vm: WizardViewModel) {
         hostState = snackbarHostState,
         modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp)
     )
-    }
-}
-
-@Composable
-private fun LabeledSlider(
-    label: String, value: Float, min: Float = 0f, max: Float = 1f, onChange: (Float) -> Unit
-) {
-    Column {
-        Text(label, style = MaterialTheme.typography.labelSmall)
-        Slider(value = value, onValueChange = onChange, valueRange = min..max)
     }
 }
 

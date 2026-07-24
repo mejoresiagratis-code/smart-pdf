@@ -715,30 +715,41 @@ class WizardViewModel @Inject constructor(
 
     /** Genera el PDF de preview y abre el renderer bajo demanda. */
     fun buildPreview() {
+        viewModelScope.launch { rebuildPreviewNow() }
+    }
+
+    /**
+     * Versión awaitable de la reconstrucción de previsualización — a diferencia de
+     * `buildPreview()` (fire-and-forget, para el botón "Actualizar previsualización"),
+     * esta se puede llamar con `await`/dentro de un `launch` propio de la UI para
+     * garantizar que la previsualización YA refleja el estampado antes de hacer scroll
+     * a la página firmada. Sin esto, el scroll llegaba antes de que la firma nueva
+     * apareciera dibujada en la página — el usuario veía la página "en blanco" un
+     * instante y podía pensar que no se había estampado.
+     */
+    suspend fun rebuildPreviewNow() {
         val s = _state.value
-        viewModelScope.launch {
-            _state.value = s.copy(busy = true, busyMsg = "Preparando previsualización…", error = null)
-            val result = runCatching {
-                withContext(Dispatchers.IO) {
-                    val file = exporter.generatePreview(
-                        userContractUri = s.userContractUri,
-                        values = s.fieldValues,
-                        signature = s.signature,
-                        stamps = s.stamps,
-                        checkboxes = com.mejoresiagratis.rellenador.data.model.ContractFields
-                            .checkboxStateFor(s.tipoIdentificacion),
-                        fieldMapping = if (s.contractSource == ContractSource.USER) s.fieldMapping else emptyMap()
-                    )
-                    previewRenderer?.close()
-                    PdfPageRenderer(file)
-                }
-            }.getOrElse {
-                _state.value = _state.value.copy(busy = false, error = "No se pudo previsualizar: ${it.message}")
-                return@launch
+        _state.value = s.copy(busy = true, busyMsg = "Preparando previsualización…", error = null)
+        val result = runCatching {
+            withContext(Dispatchers.IO) {
+                val file = exporter.generatePreview(
+                    userContractUri = s.userContractUri,
+                    values = s.fieldValues,
+                    signature = s.signature,
+                    stamps = s.stamps,
+                    checkboxes = com.mejoresiagratis.rellenador.data.model.ContractFields
+                        .checkboxStateFor(s.tipoIdentificacion),
+                    fieldMapping = if (s.contractSource == ContractSource.USER) s.fieldMapping else emptyMap()
+                )
+                previewRenderer?.close()
+                PdfPageRenderer(file)
             }
-            previewRenderer = result
-            _state.value = _state.value.copy(busy = false, totalPages = result.pageCount, previewReady = true)
+        }.getOrElse {
+            _state.value = _state.value.copy(busy = false, error = "No se pudo previsualizar: ${it.message}")
+            return
         }
+        previewRenderer = result
+        _state.value = _state.value.copy(busy = false, totalPages = result.pageCount, previewReady = true)
     }
 
     fun renderer(): PdfPageRenderer? = previewRenderer
