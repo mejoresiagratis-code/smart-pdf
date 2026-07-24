@@ -15,8 +15,8 @@ android {
         applicationId = "com.mejoresiagratis.rellenador"
         minSdk = 26
         targetSdk = 35
-        versionCode = 37
-        versionName = "0.6.10-fix-despeckle-corta-puntas"
+        versionCode = 38
+        versionName = "0.7.0-retocar-firma-y-reintentar"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // Base URL of your PHP proxy. Override per build type.

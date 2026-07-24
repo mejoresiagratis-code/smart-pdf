@@ -19,9 +19,14 @@ class SignatureLocator @Inject constructor(
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
     private val PROMPT =
-        "Localiza la FIRMA MANUSCRITA. Responde SOLO JSON: " +
-        "{\"x\":<%>,\"y\":<%>,\"w\":<%>,\"h\":<%>} (0-100). " +
-        "Si toda la imagen es la firma: {\"x\":0,\"y\":0,\"w\":100,\"h\":100}."
+        "Localiza SOLO el trazo de la FIRMA MANUSCRITA hecha a mano con bolígrafo o " +
+        "pluma. IGNORA cualquier línea recta impresa, línea de puntos, raya guía para " +
+        "firmar (\"firme aquí\"), marca \"X\" pre-impresa, texto impreso, sellos, o el " +
+        "fondo/patrón de seguridad del documento (típico en carnés, DNI, pasaportes) — " +
+        "aunque estén muy cerca de la firma o parezcan tocarla. Si hay una línea recta " +
+        "horizontal justo encima o debajo del trazo manuscrito, NO la incluyas en la " +
+        "caja. Responde SOLO JSON: {\"x\":<%>,\"y\":<%>,\"w\":<%>,\"h\":<%>} (0-100). " +
+        "Si toda la imagen es solo el trazo manuscrito: {\"x\":0,\"y\":0,\"w\":100,\"h\":100}."
 
     // Orden fiable (0.2.1): Claude/Gemini pueden estar caídos según el día, y Groq no
     // tiene visión real (motor de texto que "especula" el JSON) — se excluye del todo.

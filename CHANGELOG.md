@@ -6,6 +6,40 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.7.0-retocar-firma-y-reintentar] — 2026-07-24
+
+### Añadido — herramientas reales para aislar mejor el trazo de la firma
+Reportado con fotos reales (firma con fondo de patrón de seguridad tipo DNI/carné): el
+procesado podía confundir una línea impresa/guía cercana a la firma con parte del trazo
+manuscrito. Tres mejoras, ninguna sustituye a las otras — se complementan:
+
+1. **Prompt de `SignatureLocator` reforzado**: ahora instruye explícitamente ignorar
+   líneas rectas impresas, líneas de puntos, rayas guía ("firme aquí"), marcas "X"
+   pre-impresas, sellos, y el fondo/patrón de seguridad típico de carnés y documentos de
+   identidad — aunque estén muy cerca del trazo real o lo toquen.
+2. **"🔄 Volver a intentar con IA"** (nuevo botón, solo visible con "Mejorar con IA"
+   activado y una foto ya procesada): vuelve a llamar a `SignatureLocator` sobre la
+   MISMA foto. Los modelos de visión no son perfectamente deterministas — una segunda
+   pasada puede acertar una caja más ajustada sin tener que rehacer la foto.
+   `WizardViewModel.retryAiExtraction()`.
+3. **"🧹 Retocar firma"** (nuevo, `SignatureEraserDialog.kt`): editor táctil que permite
+   borrar a mano (poner transparente) cualquier parte del resultado ya procesado que no
+   sea el trazo real — la solución definitiva para cualquier caso que ni la IA ni el
+   umbral resuelvan bien, sea cual sea la causa exacta. Arrastra o toca para borrar,
+   con control de grosor de pincel, "Deshacer" (hasta 15 pasos) y "Guardar"/"Cancelar".
+   Usa el mismo mapeo de coordenadas consciente del letterbox de `ContentScale.Fit` que
+   ya se corrigió en `SignatureCropDialog` (ver v0.6.7).
+
+### Decisión de diseño explícita
+Tras usar "Retocar firma", los ajustes de color de tinta y fondo (`setInkColor`/
+`setSigBackground`) quedan inactivos — `WizardViewModel.applyErasedSignature()` pone
+`rawSignatureBitmap = null` a propósito. Si no lo hiciéramos, cambiar el color después
+de retocar volvería a reprocesar el bitmap CRUDO original (sin el borrado) y el retoque
+se perdería en silencio. Mejor que esos ajustes queden sin efecto tras retocar —no
+rompen nada— que perder el trabajo de borrado sin aviso.
+
+---
+
 ## [0.6.10-fix-despeckle-corta-puntas] — 2026-07-16
 
 ### Corregido — regresión real introducida por el propio despeckle de v0.6.9

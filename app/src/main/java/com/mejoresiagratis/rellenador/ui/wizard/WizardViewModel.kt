@@ -518,6 +518,19 @@ class WizardViewModel @Inject constructor(
     fun lastPickedPhotoOrNull(): Bitmap? = lastPickedPhoto
 
     /**
+     * "Refrescar" — vuelve a llamar a la IA de localización sobre la ÚLTIMA foto
+     * elegida. Los modelos de visión no son perfectamente deterministas: una segunda
+     * pasada puede acertar una caja distinta (más ajustada, sin colar una línea
+     * impresa cercana) aunque la foto sea la misma. No cambia nada del recorte manual
+     * si el usuario lo hizo — solo tiene sentido si se llegó aquí vía "Extraer de
+     * foto" con IA activada.
+     */
+    fun retryAiExtraction() {
+        val bmp = lastPickedPhoto ?: return
+        extractSignatureFromPhoto(bmp)
+    }
+
+    /**
      * Recorte MANUAL confirmado por el usuario: NO pasa por la IA de localización —
      * el usuario ya decidió la región exacta arrastrando el dedo. Se ejecuta
      * directamente el pipeline de tinta (aplanar + Otsu + recorte a bounding-box)
@@ -647,6 +660,26 @@ class WizardViewModel @Inject constructor(
 
     fun clearSignature() {
         _state.value = _state.value.copy(signature = null, stamps = emptyList())
+        rawSignatureBitmap = null
+    }
+
+    /**
+     * Aplica una firma retocada a mano (tras borrar partes de fondo no deseadas con
+     * el editor de "Retocar firma"). El bitmap que llega YA está en su forma final
+     * (tintado, con alpha graduado, con las zonas borradas puestas transparentes) —
+     * no es una foto cruda que se pueda re-procesar con Otsu.
+     *
+     * Por eso se pone `rawSignatureBitmap = null`: si no lo hiciéramos, un cambio
+     * posterior de color de tinta o de fondo (`setInkColor`/`setSigBackground`)
+     * volvería a `reprocessSignatureFromRaw()`, que reprocesaría el bitmap CRUDO
+     * original (sin el retoque) y el usuario perdería su borrado sin ningún aviso.
+     * Es mejor que esos ajustes queden inactivos tras retocar a mano — no rompen
+     * nada, simplemente no tienen bitmap crudo sobre el que aplicarse — que perder
+     * el trabajo de borrado en silencio.
+     */
+    fun applyErasedSignature(bmp: Bitmap) {
+        rawSignatureBitmap = null
+        _state.value = _state.value.copy(signature = sigProcessor.toSignatureData(bmp))
     }
 
     /** Genera el PDF final (relleno + firmado) a fichero interno. */

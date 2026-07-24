@@ -173,6 +173,17 @@ fun SignatureStep(state: WizardUiState, vm: WizardViewModel) {
                             Spacer(Modifier.width(8.dp)); Text("Localizando firma…")
                         }
                     }
+                    // "Refrescar" — vuelve a preguntar a la IA sobre la MISMA foto. Los
+                    // modelos de visión no son perfectamente deterministas: una segunda
+                    // pasada puede acertar una caja más ajustada (p.ej. sin colar una línea
+                    // impresa cercana a la firma) sin tener que volver a hacer la foto.
+                    // Solo tiene sentido si hubo una extracción por IA de por medio.
+                    if (aiCleanEnabled && state.signature != null && vm.lastPickedPhotoOrNull() != null && !state.locatingSignature) {
+                        OutlinedButton(
+                            onClick = vm::retryAiExtraction,
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("🔄 Volver a intentar con IA") }
+                    }
                 }
             }
         }
@@ -205,6 +216,30 @@ fun SignatureStep(state: WizardUiState, vm: WizardViewModel) {
                 Text(if (nPages > 0) "Firma cargada ✓ · lista para $nPages página${if (nPages == 1) "" else "s"}"
                      else "Firma cargada ✓")
             })
+        }
+
+        // Retocar firma a mano: borra partes de fondo que no son el trazo real (p.ej.
+        // una línea impresa cercana que se coló como firma) — complementa el "Volver a
+        // intentar con IA" de arriba para los casos que ni la IA ni el umbral resuelven
+        // bien del todo. Disponible en ambos modos (Dibujar y Extraer de foto).
+        var showEraser by remember { mutableStateOf(false) }
+        if (state.signature != null) {
+            OutlinedButton(
+                onClick = { showEraser = true },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("🧹 Retocar firma") }
+        }
+        if (showEraser) {
+            val toEdit = remember(state.signature) {
+                state.signature?.let { BitmapFactory.decodeByteArray(it.pngBytes, 0, it.pngBytes.size) }
+            }
+            if (toEdit != null) {
+                SignatureEraserDialog(
+                    original = toEdit,
+                    onSave = { edited -> vm.applyErasedSignature(edited); showEraser = false },
+                    onCancel = { showEraser = false }
+                )
+            }
         }
 
         // --- Ajustes de firma (acordeón plegable) ---
