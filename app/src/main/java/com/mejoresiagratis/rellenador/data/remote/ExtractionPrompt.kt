@@ -33,7 +33,7 @@ $listado
 - Regla de nombres de archivo: pistas típicas — "cif*"/"nif*"/"escritura*"/"036*"/"iae*"/"censal*" suelen ser documentos de empresa; "dni*"/"nie*"/"tie*"/"permiso*"/nombres con formato "IMG_..." o "WA*" suelen ser DNI/NIE/pasaporte de persona.
 """.trimIndent() + "\n\n"
         } else ""
-        return contextBlock + """Eres un asistente meticuloso de back-office que rellena un contrato de distribución de telecomunicaciones (España). Vas a recibir UN documento y debes extraer datos del DISTRIBUIDOR / punto de venta para mapearlos a los campos listados.
+        return contextBlock + """Eres un asistente meticuloso de back-office que rellena un contrato de distribución de telecomunicaciones (España). Vas a recibir UN documento — puede llegar como una sola imagen o como VARIAS imágenes seguidas si son las distintas páginas de ese mismo documento (trátalas todas como partes de un único documento, no como documentos distintos) — y debes extraer datos del DISTRIBUIDOR / punto de venta para mapearlos a los campos listados.
 
 CAMPOS DEL PDF (claves EXACTAS): $fieldsJson
 

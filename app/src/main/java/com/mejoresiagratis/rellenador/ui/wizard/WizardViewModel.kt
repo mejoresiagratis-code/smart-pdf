@@ -280,29 +280,31 @@ class WizardViewModel @Inject constructor(
                 activeProvider = null, finishedProviders = emptySet(),
                 activeDocLabel = null, progressCurrent = 0, progressTotal = 0
             )
-            // Construye payloads y docNames EN PARALELO (mismo índice) — un PDF de varias
-            // páginas produce varios payloads con el mismo nombre base + "(pág. N/M)"; una
-            // imagen produce exactamente 1 payload con su nombre tal cual. docNames es
-            // puramente para la UI de progreso, nunca se manda al proxy.
+            // Construye los payloads AGRUPADOS POR ARCHIVO (jul 2026): antes se aplanaba
+            // todo a una lista de páginas sueltas y MultiAiExtractor hacía una llamada
+            // por página — para un PDF de 13 páginas, hasta 13x más peticiones de red
+            // por motor que la app web (que manda el PDF entero como un único "doc" por
+            // llamada, confirmado auditando su código real). Ahora cada archivo viaja
+            // como UN grupo (todas sus páginas juntas en una sola llamada por motor);
+            // MultiAiExtractor trocea internamente solo si un archivo excede su límite
+            // de páginas por llamada.
             val loadedPerUri = withContext(Dispatchers.IO) {
                 s.docUris.map { uri ->
                     val displayName = uri.lastPathSegment?.substringAfterLast('/') ?: "documento"
                     val pages = runCatching { loader.load(uri) }.getOrElse { emptyList() }
-                    val names = if (pages.size <= 1) List(pages.size) { displayName }
-                                else pages.indices.map { i -> "$displayName (pág. ${i + 1}/${pages.size})" }
-                    pages to names
+                    pages to displayName
                 }
             }
-            val payloads = loadedPerUri.flatMap { it.first }
-            val docNames = loadedPerUri.flatMap { it.second }
-            if (payloads.isEmpty()) {
+            val docGroups = loadedPerUri.map { it.first }.filter { it.isNotEmpty() }
+            val docNames = loadedPerUri.filter { it.first.isNotEmpty() }.map { it.second }
+            if (docGroups.isEmpty()) {
                 _state.value = _state.value.copy(busy = false, error = "No se pudieron leer los documentos.")
                 return@launch
             }
             _state.value = _state.value.copy(busyMsg = "Analizando con IA…")
             val result = runCatching {
                 extractor.extract(
-                    payloads, s.enabledProviders.toList(), docNames = docNames,
+                    docGroups, s.enabledProviders.toList(), docNames = docNames,
                     // Tanda 2 — el motor activo se refleja en vivo en el chip/indicador;
                     // al terminar un motor se marca como completado (queda con el tick
                     // aunque otro empiece justo después, por eso se añade sin quitar).

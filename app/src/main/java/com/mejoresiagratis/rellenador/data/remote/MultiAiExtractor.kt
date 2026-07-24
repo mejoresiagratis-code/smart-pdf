@@ -50,16 +50,26 @@ class MultiAiExtractor @Inject constructor(
         AiProvider.GEMINI, AiProvider.SCALEWAY, AiProvider.EUROUTER
     )
 
+    // Debe coincidir con MAX_DOCS en ai-proxy.php (actualmente 20). Si un archivo tiene
+    // más páginas que esto, se trocea en sub-lotes en vez de mandarlas todas juntas —
+    // el proxy trunca en SILENCIO cualquier exceso (array_slice), así que superarlo sin
+    // trocear perdería páginas sin ningún aviso. Ver comentario en ai-proxy.php.
+    private val MAX_PAGES_PER_CALL = 20
+
     suspend fun extract(
-        docs: List<DocPayload>,
+        // Un grupo = todas las páginas/payloads de UN mismo archivo aportado por el
+        // usuario. jul 2026: antes se aplanaba todo a una lista de páginas sueltas y se
+        // hacía UNA llamada por página — para un PDF de 13 páginas, hasta 13x más
+        // peticiones de red por motor que la app web (que manda el PDF entero como un
+        // único "doc" por llamada). Ahora se manda TODO un archivo en una sola llamada
+        // por motor (varias imágenes en el mismo `docs` de ProxyRequest, que el proxy ya
+        // soportaba desde siempre), troceando solo si excede MAX_PAGES_PER_CALL.
+        docGroups: List<List<DocPayload>>,
         enabled: List<AiProvider>,
         geminiMode: String = "g35",
         earlyStop: Boolean = true,
-        // Nombres de archivo de origen, en paralelo a `docs` (mismo índice). Solo para
-        // mostrar progreso en la UI ("Documento 3/6 · zeb1.pdf") — NUNCA se manda al
-        // proxy (no forma parte de ProxyRequest). Un PDF de varias páginas produce varios
-        // payloads con el MISMO nombre base + "(pág. N/M)"; ver cómo se construye en
-        // WizardViewModel.runExtraction(). Si no se pasa, se cae a "documento N".
+        // Un nombre por GRUPO (archivo), no por página — ya no hace falta desambiguar
+        // "(pág. N/M)" porque cada llamada ya cubre el archivo entero.
         docNames: List<String> = emptyList(),
         // Tanda 2 — callbacks opcionales para reflejar en la UI qué motor está
         // trabajando ahora mismo (chip activo + MotorLoadingIndicator). Defaults
@@ -72,13 +82,27 @@ class MultiAiExtractor @Inject constructor(
         // antes es porque ya no hacía falta seguir, no porque algo fallara.
         onProgress: (current: Int, total: Int) -> Unit = { _, _ -> }
     ): Result {
-        // Nombres únicos de documentos aportados por el usuario (sin sufijo de página),
-        // en el orden en que llegan. Se pasan al prompt como contexto para que la IA
-        // pueda deducir el rol del documento actual dentro del conjunto — clave para el
-        // caso "CIF + DNI/NIE en documentos separados" (sin este contexto, cada
-        // documento se procesa en aislamiento y el DNI parece un autónomo).
-        val uniqueDocNames = docNames.map { it.substringBefore(" (pág.") }.distinct()
-        val prompt = ExtractionPrompt.build(contextDocNames = uniqueDocNames)
+        // Trocea cualquier archivo que exceda MAX_PAGES_PER_CALL en sub-lotes, cada uno
+        // con su propia etiqueta "nombre (parte X/Y)" — caso raro (contratos/escrituras
+        // de más de 20 páginas), pero sin esto se perderían páginas en silencio.
+        val chunkedGroups = mutableListOf<List<DocPayload>>()
+        val chunkedNames = mutableListOf<String>()
+        docGroups.forEachIndexed { gi, group ->
+            val label = docNames.getOrNull(gi) ?: "documento ${gi + 1}"
+            if (group.size <= MAX_PAGES_PER_CALL) {
+                chunkedGroups.add(group); chunkedNames.add(label)
+            } else {
+                val parts = group.chunked(MAX_PAGES_PER_CALL)
+                parts.forEachIndexed { pi, part ->
+                    chunkedGroups.add(part)
+                    chunkedNames.add("$label (parte ${pi + 1}/${parts.size})")
+                }
+            }
+        }
+        // Nombres de archivo del conjunto para el contexto del prompt (CIF+DNI en
+        // documentos separados, etc.) — ya no hace falta desambiguar sufijos de página,
+        // cada nombre en docNames ya corresponde 1:1 a un archivo real.
+        val prompt = ExtractionPrompt.build(contextDocNames = docNames.distinct())
         // acumulador: campo -> (valor -> fuentes)
         val agg = LinkedHashMap<String, LinkedHashMap<String, MutableSet<String>>>()
         val perProviderStatus = LinkedHashMap<String, String>()  // último estado por motor (agrupado)
@@ -104,18 +128,18 @@ class MultiAiExtractor @Inject constructor(
         val orderedEnabled = enabled.sortedBy { p ->
             priorityOrder.indexOf(p).let { if (it < 0) priorityOrder.size else it }
         }
-        val totalSteps = docs.size * orderedEnabled.size
+        val totalSteps = chunkedGroups.size * orderedEnabled.size
         var stepCounter = 0
 
         run docsLoop@{
-            docs.forEachIndexed { i, doc ->
-                val docLabel = docNames.getOrNull(i) ?: "documento ${i + 1}"
+            chunkedGroups.forEachIndexed { i, group ->
+                val docLabel = chunkedNames.getOrNull(i) ?: "documento ${i + 1}"
                 for (provider in orderedEnabled) {
                     if (provider in dead) continue   // short-circuit: no reintentar un motor ya roto
                     onProviderStart(docLabel, provider)
                     val req = ProxyRequest(
                         provider = provider.id, prompt = prompt, task = "extract",
-                        maxTokens = 4096, seq = i, geminiMode = geminiMode, docs = listOf(doc)
+                        maxTokens = 4096, seq = i, geminiMode = geminiMode, docs = group
                     )
                     val resp = try {
                         api.call(req)

@@ -6,6 +6,53 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.7.1-agrupar-paginas-por-archivo] — 2026-07-24
+
+### Corregido — causa real de la lentitud frente a la versión web
+Reportado: la revisión con IA es mucho más lenta en Android que en la web. Auditado el
+código real de ambas para confirmar la causa exacta (no por suposición):
+
+- **Android** (hasta v0.7.0): cada página de un PDF se mandaba en una llamada
+  independiente por motor. Un PDF de 13 páginas × hasta 3 motores = hasta 39 peticiones
+  de red secuenciales para un solo archivo.
+- **Web** (`rellenador-pro.html`, línea 1058): cada archivo se guarda como UN único
+  "doc" (`S.docs.push({name, mime, b64})`) — el PDF entero, sin partir por páginas — y
+  se manda así en cada llamada.
+
+Ambas versiones iteran documento y motor en serie (ninguna paraleliza), así que la
+diferencia real no es concurrencia — es el NÚMERO de llamadas por archivo.
+
+### Cambiado
+- **`MultiAiExtractor.extract()`**: ahora recibe `docGroups: List<List<DocPayload>>`
+  (un grupo = todas las páginas de un mismo archivo) en vez de una lista aplanada de
+  páginas sueltas. Cada grupo se manda en UNA sola llamada por motor (varias imágenes
+  dentro del mismo `docs` de `ProxyRequest` — el proxy ya soportaba esto desde siempre,
+  solo el cliente Android no lo aprovechaba).
+- **`WizardViewModel.runExtraction()`**: construye `docGroups`/`docNames` uno por
+  archivo, ya no aplana por página.
+- **`ExtractionPrompt.kt`**: aclarado que un documento puede llegar como varias
+  imágenes seguidas (sus páginas) que hay que tratar como partes de un único
+  documento, no como documentos distintos.
+
+### Corregido — límite de páginas del proxy que truncaba en silencio
+- **`ai-proxy.php`**: `MAX_DOCS` subido de 12 a 20. Con el límite anterior, agrupar
+  las páginas de un archivo de 13+ páginas en una sola llamada habría hecho que el
+  proxy truncara el array `docs` en silencio (`array_slice`), perdiendo páginas sin
+  ningún aviso.
+- **`MultiAiExtractor.MAX_PAGES_PER_CALL = 20`** (nuevo, debe mantenerse sincronizado
+  con `MAX_DOCS` del proxy): si un archivo excede este límite (caso raro — contratos o
+  escrituras de más de 20 páginas), se trocea en sub-lotes con su propia etiqueta
+  "(parte X/Y)" en vez de mandarlas todas juntas o perder páginas.
+
+### Aviso honesto
+Un archivo con muchas páginas de alta resolución en una sola llamada aumenta el tamaño
+de esa petición (más imágenes en base64 en el mismo cuerpo JSON). Para los casos
+habituales (Modelo 036, escrituras, certificados — pocas páginas) no debería notarse.
+Si algún día se sube un documento con páginas muy pesadas y muchas de ellas, vigilar
+que no se acerque al límite de `MAX_BODY` (20 MB) del proxy.
+
+---
+
 ## [0.7.0-retocar-firma-y-reintentar] — 2026-07-24
 
 ### Añadido — herramientas reales para aislar mejor el trazo de la firma
