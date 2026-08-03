@@ -6,6 +6,37 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.7.5-forzar-ipv4-fix-5g] — 2026-08-03
+
+### Corregido — "Unable to resolve host" en redes 5G, funcionando bien en el navegador
+Reportado y diagnosticado con datos reales: la app fallaba con "Unable to resolve host
+datingtrck.com" en red 5G, mientras que el navegador del mismo dispositivo, misma red,
+conectaba sin problema a la misma URL exacta.
+
+**Causa raíz confirmada**: `datingtrck.com` no tiene registro DNS AAAA (IPv6) — verificado
+consultando `https://dns.google/resolve?name=datingtrck.com&type=AAAA`, cuya respuesta
+solo trae el SOA en "Authority" sin ningún "Answer". En redes móviles IPv6-only (habitual
+en 5G, con NAT64), el sistema sintetiza una dirección IPv6 falsa para alcanzar servidores
+que solo tienen IPv4 — esa síntesis puede fallar en una conexión de socket cruda (OkHttp)
+aunque el navegador, con mecanismos de repliegue más robustos (Happy Eyeballs), sí
+consiga conectar.
+
+**Fix**: `Ipv4PreferredDns.kt` (nuevo) — implementación de `okhttp3.Dns` que pide al
+sistema todas las direcciones y se queda solo con las IPv4 si hay alguna, sin depender de
+que la síntesis NAT64 del operador funcione bien. Conectado en `AppModule.kt` vía
+`.dns(Ipv4PreferredDns())` en el `OkHttpClient`. Si por algún motivo no hubiera ninguna
+IPv4 disponible, no rompe nada — cae a lo que devuelva el sistema.
+
+### Nota sobre la causa de fondo
+El hosting real es BanaHosting (`europe121.banahosting.com`), gestionado desde el cPanel
+de `mejoresiagratis.com`. Si en algún momento se añade un registro AAAA real para
+`datingtrck.com` (requiere que BanaHosting dé IP pública IPv6 en el plan contratado), este
+fix seguiría funcionando sin cambios — simplemente dejaría de ser necesario, pero no
+hace daño mantenerlo como red de seguridad para cualquier otro dominio que en el futuro
+tampoco tenga AAAA.
+
+---
+
 ## [0.7.4-prompt-formato-nif-irpf-censal] — 2026-08-03
 
 ### Auditoría completa de cobertura de campos (sin cambios de código — confirmación)

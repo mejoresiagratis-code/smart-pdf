@@ -36,6 +36,11 @@ object AppModule {
     fun okHttp(dynamicBaseUrlInterceptor: com.mejoresiagratis.rellenador.data.remote.DynamicBaseUrlInterceptor): OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(120, TimeUnit.SECONDS) // AI calls can be slow
+        // Prioriza IPv4 — datingtrck.com no tiene registro AAAA, y en redes 5G/IPv6-only
+        // (NAT64) la síntesis de dirección IPv6 puede fallar en una conexión de socket
+        // cruda aunque el navegador del mismo dispositivo, misma red, sí conecte bien.
+        // Ver Ipv4PreferredDns.kt para el diagnóstico completo.
+        .dns(com.mejoresiagratis.rellenador.data.remote.Ipv4PreferredDns())
         .addInterceptor(dynamicBaseUrlInterceptor)
         .addInterceptor(HttpLoggingInterceptor().apply {
             level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BODY
