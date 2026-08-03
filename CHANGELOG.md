@@ -6,6 +6,50 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.7.4-prompt-formato-nif-irpf-censal] — 2026-08-03
+
+### Auditoría completa de cobertura de campos (sin cambios de código — confirmación)
+Comparado `ContractFields.CANON` (21 campos) contra los 26 campos reales del AcroForm
+de `contrato-base.pdf` (extraídos con `pypdf`): coinciden exactamente. Los 5 restantes
+son 3 checkboxes gestionados aparte, el autorrelleno de Responsable, y el campo
+"Profesión..." descartado a petición de Pablo. **No hay ningún campo de texto real sin
+cubrir** — el problema de fondo no era de cobertura de `CANON`.
+
+### Corregido — bug real confirmado con documento aportado (Certificado de Situación
+### Censal de un autónomo con NIE)
+Se generaba un paquete "Representante" a partir del documento de identidad de un titular
+autónomo (NIE), en vez de reconocer que esa misma persona ES el titular — violando la
+regla ya existente de "titular autónomo sin representante distinto". Causa: la regla de
+"domicilio personal ≠ fiscal de empresa" solo mencionaba explícitamente documentos
+"DNI/NIE/pasaporte", sin cubrir con la misma claridad un **certificado censal
+individual** (que también muestra domicilio y actividad de una persona física).
+
+### Añadido al prompt (`ExtractionPrompt.kt`)
+- **Regla generalizada**: la protección de "domicilio personal ≠ fiscal de empresa"
+  ahora cubre explícitamente CUALQUIER documento centrado en una persona física
+  (censal individual incluido), no solo DNI/NIE/pasaporte.
+- **Heurística de formato de NIF/CIF/NIE**: letra inicial de persona jurídica
+  (A,B,C,D,E,F,G,H,J,N,P,Q,R,S,U,V,W) = CIF; letra X/Y/Z = NIE; 8 dígitos sin letra
+  inicial = DNI/NIF. Señal fiable por sí sola, útil cuando el documento no lo dice
+  explícitamente.
+- **Heurística IRPF vs Impuesto de Sociedades**: un certificado censal que mencione
+  IRPF es SIEMPRE de persona física (una empresa nunca paga IRPF, paga Impuesto de
+  Sociedades). Señal cruzada con el formato del NIF/CIF para determinar
+  `tipo_identificacion` con más fiabilidad.
+- **Desempate de "Actividad principal"** cuando varias actividades comparten la misma
+  fecha de alta (sin señal que desempate): usar la primera listada en el documento, en
+  su mismo orden.
+- Bloque de contexto de conjunto de documentos generalizado igual (censal individual
+  reconocible por IRPF + formato de NIF, no solo por el nombre del archivo).
+
+### Aviso pendiente
+Este prompt es compartido con la app web (`rellenador-pro.html`) por diseño — el
+comentario de cabecera de `ExtractionPrompt.kt` ya avisa de esto. Estos mismos 4
+refuerzos deberían aplicarse también allí para no desincronizar el comportamiento entre
+ambas apps.
+
+---
+
 ## [0.7.3-migracion-datingtrck] — 2026-08-03
 
 ### Cambiado — migración de dominio del proxy (mejoresiagratis.com → datingtrck.com)
