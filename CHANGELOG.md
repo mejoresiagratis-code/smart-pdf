@@ -6,6 +6,33 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.7.3-migracion-datingtrck] — 2026-08-03
+
+### Cambiado — migración de dominio del proxy (mejoresiagratis.com → datingtrck.com)
+Auditado el repo entero buscando el dominio antiguo (`mejoresiagratis.com`) — se
+distinguió cuidadosamente del paquete Android (`com.mejoresiagratis.rellenador`, que
+aparece en la cabecera de cada archivo `.kt` pero NO es una URL y no se toca: cambiar
+el `applicationId` rompería continuidad de instalación/actualización en Play Store).
+Solo 3 apariciones reales de la URL del dominio en todo el código:
+
+- **`app/build.gradle.kts`**: `PROXY_BASE_URL` (la URL de fábrica compilada en el
+  APK) — de `https://mejoresiagratis.com/pdf/` a `https://datingtrck.com/pdf/`.
+- **`AjustesScreen.kt`**: texto de ayuda bajo "URL del proxy IA" que describe la URL
+  de fábrica — actualizado para no mentir sobre cuál es el valor por defecto real.
+- **`network_security_config.xml`**: solo un comentario descriptivo (`<!-- ... -->`),
+  sin ninguna regla de dominio restringida — el `base-config
+  cleartextTrafficPermitted="false"` ya aplicaba HTTPS-only a cualquier dominio, así
+  que este cambio es puramente documental, sin efecto funcional.
+
+### Nota sobre el override manual existente
+Quien ya haya guardado `https://datingtrck.com/pdf/` a mano en Ajustes (override local
+por dispositivo, vía DataStore) no necesita hacer nada — su override sigue
+funcionando igual y ahora además coincide con el nuevo valor de fábrica. Esta
+actualización solo afecta a instalaciones NUEVAS del APK que nunca hayan tocado ese
+campo.
+
+---
+
 ## [0.7.2-preview-antes-scroll-sin-ajuste-pag24] — 2026-07-24
 
 ### Corregido — scroll llegaba antes de que la previsualización reflejara la firma

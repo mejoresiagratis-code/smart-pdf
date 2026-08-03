@@ -68,7 +68,7 @@ fun AjustesScreen(
             // --- URL del proxy ---
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("URL del proxy IA", style = MaterialTheme.typography.titleMedium)
-                Text("Deja en blanco para usar la de fábrica (mejoresiagratis.com/pdf/). " +
+                Text("Deja en blanco para usar la de fábrica (datingtrck.com/pdf/). " +
                     "Solo cámbiala si tienes tu propio proxy compatible.",
                     style = MaterialTheme.typography.bodySmall)
                 OutlinedTextField(
