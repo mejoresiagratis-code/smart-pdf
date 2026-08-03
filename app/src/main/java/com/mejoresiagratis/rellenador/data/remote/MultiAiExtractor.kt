@@ -139,23 +139,41 @@ class MultiAiExtractor @Inject constructor(
                     onProviderStart(docLabel, provider)
                     val req = ProxyRequest(
                         provider = provider.id, prompt = prompt, task = "extract",
-                        maxTokens = 4096, seq = i, geminiMode = geminiMode, docs = group
+                        maxTokens = 4096, seq = i, geminiMode = geminiMode,
+                        // Groq tiene un límite de tokens/minuto muy ajustado (8000,
+                        // confirmado en producción con HTTP 413 "Requested 9741" al
+                        // mandarle varias imágenes juntas de un mismo archivo). Desde que
+                        // se agrupan todas las páginas de un archivo en una sola llamada
+                        // (jul 2026), Groq revienta ese límite en cualquier documento de
+                        // más de 1 página/imagen. Para Groq específicamente, se manda
+                        // SOLO la primera página/imagen del grupo — pierde cobertura de
+                        // las páginas siguientes de ESE archivo, pero evita un 413
+                        // garantizado que además no se arregla solo (el documento sigue
+                        // siendo igual de grande la próxima vez). Los demás motores no
+                        // tienen este límite tan ajustado y reciben el grupo completo.
+                        docs = if (provider == AiProvider.GROQ) group.take(1) else group
                     )
                     val resp = try {
                         api.call(req)
                     } catch (e: HttpException) {
                         val real = e.realErrorMessage()
                         perProviderStatus[provider.displayName] = "HTTP ${e.code()}" + (real?.let { " — $it" } ?: "")
-                        // Nota: antes había un delay(2500) aquí para el caso 429, pero
-                        // dead.add() se ejecuta justo arriba y es permanente para el resto
-                        // de esta extracción (no hay reintento posterior a este motor en
-                        // ningún documento siguiente) — el delay no servía para nada salvo
-                        // alargar la espera del usuario sin ningún beneficio. Eliminado.
-                        dead.add(provider)
+                        // Solo se marca "muerto" permanente en errores que NO van a
+                        // arreglarse solos en el siguiente documento: clave inválida o
+                        // caducada (401/403) o modelo no encontrado (404). Todo lo demás
+                        // (429 cuota momentánea, 5xx infraestructura, 413 "documento
+                        // demasiado grande" para ESTE documento concreto) es específico
+                        // de esta llamada — el motor puede funcionar perfectamente en el
+                        // siguiente documento. Antes CUALQUIER fallo mataba el motor para
+                        // siempre — confirmado en producción: un 503 pasajero de Gemini en
+                        // un documento le impedía participar en el resto de la extracción,
+                        // aunque no tuviera nada que ver con los documentos siguientes.
+                        if (e.code() in setOf(401, 403, 404)) dead.add(provider)
                         null
                     } catch (e: Exception) {
                         perProviderStatus[provider.displayName] = "${e.message}"
-                        dead.add(provider)
+                        // Excepciones sin código HTTP (timeout, corte de red) son casi
+                        // siempre pasajeras — mismo criterio: no matar el motor.
                         null
                     } finally {
                         onProviderFinish(provider)
@@ -164,7 +182,9 @@ class MultiAiExtractor @Inject constructor(
                     if (resp == null) continue
                     if (!resp.ok) {
                         perProviderStatus[provider.displayName] = resp.error ?: "error"
-                        dead.add(provider)
+                        // Error estructurado del proxy sin código HTTP que inspeccionar
+                        // aquí — mismo criterio conservador: no matar el motor, solo
+                        // saltar este documento y seguir con el siguiente.
                         continue
                     }
 

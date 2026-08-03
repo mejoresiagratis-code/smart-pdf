@@ -80,12 +80,21 @@ al final de cada tanda con lo que quede pendiente.
   dos parsers. Cuando toque hacer un refactor de `AiJsonParser` unificando el formato de
   todos los motores, este cambio entra a la vez.
 
-- **PDF nativo a Gemini/Claude (no rasterizado)**
-  Gemini y Claude aceptan PDF nativo como `inline_data`, pero hoy el cliente Android
-  rasteriza SIEMPRE cada página con `PdfRenderer` antes de mandar. Si en algún momento se
-  ve que la extracción pierde precisión por no ver la estructura del PDF completa (por
-  ejemplo, en documentos con tablas o formularios), esta tanda migra a doble ruta: PDF
-  nativo para los motores que lo soportan, JPEG rasterizado para los demás.
+- **PDF nativo o TEXTO extraído, en vez de rasterizar siempre a imagen**
+  Hoy el cliente Android SIEMPRE rasteriza cada página con `PdfRenderer` a JPEG antes de
+  mandar, sea cual sea el motor. Dos alternativas, no excluyentes entre sí:
+  - **PDF nativo**: Gemini y Claude aceptan `inline_data` con el PDF real (sin rasterizar).
+  - **Texto extraído**: para PDFs con capa de texto real (no escaneados — como los
+    certificados de la AEAT, que tienen texto seleccionable), extraer el texto y
+    mandarlo en vez de una imagen. La app web ya hace esto para Groq (`pdfTextOf()` en
+    `rellenador-pro.html`) — Android nunca lo ha aprovechado. Ventajas reales: mucho
+    más barato en tokens (ayudaría directamente con el límite de 8000 TPM de Groq),
+    más preciso (sin errores de interpretación visual/OCR), y más rápido.
+  Requiere añadir una librería de extracción de texto de PDF al proyecto (Android
+  `PdfRenderer` nativo no expone texto, solo rasteriza). Si se ve que la extracción
+  pierde precisión por no ver la estructura completa del PDF, o si se quiere ahorrar
+  coste/tokens en documentos de texto, esta tanda migra a doble ruta según el tipo de
+  motor y si el PDF tiene capa de texto aprovechable.
 
 ### 🟢 Baja prioridad (deferred de siempre)
 

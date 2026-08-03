@@ -8,6 +8,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -199,6 +200,16 @@ private fun FieldRow(key: String, field: CanonField?, state: WizardUiState, vm: 
     val result = FieldValidator.validate(key, value, state.tipoIdentificacion, state.fieldValues[provKey])
     val isError = result?.ok == false
 
+    // Candidatos originales propuestos por la IA para este campo (de Revisión IA) —
+    // permite verlos y cambiar de opción sin volver al paso 3, incluso en campos que
+    // ya se rellenaron solos (por un paquete aplicado o el candidato de mayor
+    // consenso). Solo se muestra el selector si hay MÁS de un candidato — con uno
+    // solo no hay nada entre lo que elegir.
+    val candidates = remember(state.proposals, key) {
+        state.proposals.find { it.fieldKey == key }?.candidates.orEmpty()
+    }
+    var showCandidates by remember { mutableStateOf(false) }
+
     Column {
         OutlinedTextField(
             value = value,
@@ -207,6 +218,35 @@ private fun FieldRow(key: String, field: CanonField?, state: WizardUiState, vm: 
             singleLine = true,
             isError = isError,
             keyboardOptions = keyboardFor(key),
+            trailingIcon = if (candidates.size > 1) {
+                {
+                    Box {
+                        IconButton(onClick = { showCandidates = true }) {
+                            Icon(
+                                Icons.Filled.KeyboardArrowDown,
+                                contentDescription = "Ver ${candidates.size} sugerencias para este campo"
+                            )
+                        }
+                        DropdownMenu(expanded = showCandidates, onDismissRequest = { showCandidates = false }) {
+                            candidates.forEach { c ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Column {
+                                            Text(c.value, style = MaterialTheme.typography.bodyMedium)
+                                            Text(
+                                                c.sources.joinToString(", "),
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    },
+                                    onClick = { vm.setFieldValue(key, c.value); showCandidates = false }
+                                )
+                            }
+                        }
+                    }
+                }
+            } else null,
             modifier = Modifier.fillMaxWidth()
         )
         if (isError) {

@@ -6,6 +6,55 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.7.6-banco-tercero-alquiler-sugerencias] — 2026-08-04
+
+### Corregido — motores no mueren para siempre por un fallo pasajero
+(Fix pendiente de una entrega anterior, aplicado ahora junto con el resto para no
+desincronizar versiones.) `MultiAiExtractor.kt`: solo se marca un motor como muerto
+permanente en `HttpException` con código 401/403/404. Todo lo demás (429, 5xx, 413,
+excepciones sin código HTTP) se trata como pasajero: se salta ese documento para ese
+motor, pero se sigue intentando en los siguientes. Groq recibe solo la primera
+página/imagen del grupo (su límite de 8000 tokens/minuto revienta con varias imágenes
+juntas — confirmado con HTTP 413 real en producción).
+
+### Corregido — certificado de un CIF de tercero (banco) confundido con "empresa"
+Diagnosticado con el certificado de situación censal real de un titular NIE (autónomo):
+el certificado de IBAN de CaixaBank contiene el CIF real del banco (A-08663619). La
+regla de contexto del prompt no distinguía explícitamente "CIF de la empresa
+distribuidora" de "CIF de un tercero que simplemente certifica" — el sistema podía
+concluir "hay una empresa en el conjunto" a partir del CIF del BANCO, tratando
+erróneamente al titular autónomo como representante de una empresa inexistente y
+suprimiendo su propia dirección fiscal.
+
+**Fix** (`ExtractionPrompt.kt`):
+- Bloque de contexto y regla "TITULAR AUTÓNOMO" reforzados: un CIF de tercero (banco,
+  notaría, gestoría) NUNCA cuenta como "documento de empresa" del distribuidor.
+- Nueva regla explícita "CERTIFICADO BANCARIO / IBAN": el banco nunca genera un paquete
+  tipo "empresa"; de ese documento solo se extrae el IBAN del titular.
+
+### Añadido — alternativas de dirección de actividad cuando el censal no la tiene
+Confirmado con el documento real: algunos certificados de situación censal solo listan
+actividades con código y fecha, sin ninguna dirección de local distinta de la fiscal.
+Nueva regla "DIRECCIÓN DE ACTIVIDAD/COMERCIO SIN DOCUMENTO PROPIO": si no hay dirección
+de actividad explícita, y el conjunto tiene un DNI/NIE con domicilio propio o un
+CONTRATO DE ALQUILER (nuevo tipo de documento reconocido) con la dirección del local
+arrendado, se proponen como ALTERNATIVAS candidatas para "direccion_comercio" (nunca
+automáticas) — el usuario decide si las aplica.
+
+### Añadido — ver más sugerencias al tocar un campo ya rellenado (Paso 4 · Relleno)
+`FillStep.kt`: los campos que ya tienen valor (autorrellenados por un paquete aplicado
+o el candidato de mayor consenso) ahora muestran un icono desplegable si la IA propuso
+más de un candidato para ese campo — al tocarlo, se abre un menú con las alternativas
+(valor + motores que la propusieron) sin tener que volver al paso de Revisión IA.
+
+### Roadmap
+Documentada la idea de mandar TEXTO extraído del PDF en vez de imagen rasterizada
+(cuando el PDF tiene capa de texto real, como los certificados de la AEAT) — la app web
+ya lo hace para Groq, Android nunca lo ha aprovechado. Requiere una librería de
+extracción de texto nueva; queda como tanda futura en `ROADMAP.md`.
+
+---
+
 ## [0.7.5-forzar-ipv4-fix-5g] — 2026-08-03
 
 ### Corregido — "Unable to resolve host" en redes 5G, funcionando bien en el navegador
