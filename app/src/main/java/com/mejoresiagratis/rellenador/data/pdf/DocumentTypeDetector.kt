@@ -3,86 +3,54 @@ package com.mejoresiagratis.rellenador.data.pdf
 import java.text.Normalizer
 
 /**
- * Traduce el NOMBRE DE ARCHIVO real de un documento aportado (p. ej.
- * "CERTIFICADO_DE_SITUACION_CENSAL.PDF") a un nombre de TIPO legible para mostrar en
- * la UI ("Certificado de situación censal") en vez del ID crudo del proveedor SAF
- * ("document:17077").
+ * Detecta el TIPO de documento a partir de su CONTENIDO (el texto de las primeras
+ * páginas), no del nombre de archivo. Devuelve un nombre legible para la UI ("Certificado
+ * de situación censal", "Tarjeta CIF/NIF"…). El nombre del fichero es irrelevante aquí: da
+ * igual que llegue como `DOC-20260716-WA0015.PDF` — lo que decide es lo que dice dentro.
  *
- * IMPORTANTE — esto es SOLO para la UI (diálogo "Analizando con …"). La IA sigue
- * recibiendo el nombre de archivo real como `docNames`, porque el prompt de extracción
- * tiene una "Regla de nombres de archivo" que hace pattern-matching sobre patrones
- * como `censal*`, `036*`, `dni*`, `IMG_...`. Sustituir ese nombre por una etiqueta
- * traducida le quitaría a la IA esa señal. Por eso la traducción se aplica únicamente
- * en la frontera de presentación (WizardViewModel.onProviderStart).
- *
- * Detección basada en el nombre de archivo: es tan buena como lo sea el nombre. Un
- * fichero llamado literalmente "document.PDF" no se puede tipificar por su nombre y
- * cae al genérico "Documento". La detección por contenido (escanear el texto de la
- * primera página buscando "SITUACIÓN CENSAL", "CERTIFICA que la cuenta…", "PERMISO DE
- * RESIDENCIA"…) queda para una fase posterior, y solo cubriría PDFs con capa de texto
- * (no escaneos-imagen sin OCR).
+ * COBERTURA: PDFs con capa de texto (todo el papeleo oficial generado digitalmente:
+ * censal, tarjeta NIF, Modelo 036, certificado bancario, contrato, RETA…). Los documentos
+ * SIN texto (fotos de DNI/NIE en jpg/png, o PDFs que son solo un escaneo-imagen) no se
+ * pueden tipificar aquí sin OCR → devuelven "Documento". Para tipificarlos también haría
+ * falta que la propia IA (visión) devuelva el tipo (fase posterior, requiere tocar el
+ * prompt y replicarlo en la web).
  */
 object DocumentTypeDetector {
 
-    /** minúsculas, sin acentos, `_`/`-` → espacio, espacios colapsados. */
+    /** minúsculas, sin acentos, espacios colapsados. */
     private fun norm(s: String): String =
         Normalizer.normalize(s.lowercase(), Normalizer.Form.NFD)
             .replace(Regex("\\p{Mn}+"), "")
-            .replace(Regex("[_\\-]+"), " ")
             .replace(Regex("\\s+"), " ")
             .trim()
 
     /**
-     * Reglas ordenadas: gana la PRIMERA cuyo patrón aparezca en el nombre normalizado.
-     * El orden va de lo más específico a lo más genérico para evitar falsos positivos
-     * (p. ej. "certificado bancario" no debe caer en una regla genérica de "certificado").
+     * Reglas ordenadas: gana la PRIMERA cuyo patrón aparezca en el texto normalizado.
+     * El orden importa para evitar cruces (p. ej. el Modelo 036 menciona "tarjeta
+     * acreditativa" como una casilla; un contrato o un alta RETA mencionan un IBAN). Por
+     * eso los patrones son frases-firma específicas del documento, no palabras sueltas.
      */
     private val RULES: List<Pair<Regex, String>> = listOf(
-        Regex("situacion censal|\\bcensal\\b")                              to "Certificado de situación censal",
-        Regex("modelo *036|\\b036\\b")                                      to "Modelo 036",
-        Regex("modelo *037|\\b037\\b")                                      to "Modelo 037",
-        Regex("escritura")                                                  to "Escritura de constitución",
-        Regex("titularidad|\\biban\\b|bancari|\\bcaixa|\\bbbva|santander|sabadell|bankinter|\\bing\\b|unicaja|abanca|kutxabank|cajamar")
-                                                                            to "Certificado bancario",
-        Regex("\\breta\\b|autonom|alta.*trabajador|resguardo.*alta")        to "Alta en RETA",
-        Regex("arrendamiento|alquiler|\\blocal\\b|\\btienda\\b")            to "Contrato de alquiler",
-        Regex("\\biae\\b")                                                  to "Certificado IAE",
-        Regex("\\bnie\\b|\\btie\\b|permiso.*residen|residen.*permiso")      to "NIE / Permiso de residencia",
-        Regex("pasaporte|passport")                                         to "Pasaporte",
-        Regex("\\bdni\\b")                                                  to "DNI",
-        Regex("tarjeta.*(cif|nif|fiscal)|\\bcif\\b|\\bnif\\b")              to "Tarjeta CIF/NIF",
-        Regex("\\bfactura")                                                 to "Factura",
-    )
-
-    /** Nombres que no aportan tipo alguno → se muestran como "Documento". */
-    private val GENERIC = Regex(
-        "^(document|documento|documento \\d+|scan[ \\w]*|escaneo[ \\w]*|img[ \\d]*|" +
-        "imagen[ \\w]*|foto[ \\d]*|file|archivo|adjunto|wa\\d+|whatsapp.*|screenshot.*|" +
-        "captura.*|pdf|\\d{6,}|[a-f0-9]{8,})$"
+        Regex("certificado de situacion censal|situacion en el censo de actividades")   to "Certificado de situación censal",
+        Regex("modelo 036|modelo 037|declaracion censal de alta")                       to "Modelo 036",
+        Regex("tarjeta de identificacion fiscal|comunicacion de tarjeta acreditativa")  to "Tarjeta CIF/NIF",
+        Regex("regimen especial de trabajo autonomo")                                   to "Alta en RETA",
+        Regex("contrato de arrendamiento|arrendamiento para uso distinto")              to "Contrato de alquiler",
+        Regex("escritura de constitucion|numero de protocolo|otorgo ante mi")           to "Escritura de constitución",
+        Regex("solicitud de datos codigo cuenta|codigo cuenta \\(iban\\)|\\bes titularidad\\b|bic ?[/(]? ?(codigo )?swift") to "Certificado bancario",
+        Regex("permiso de residencia|titre de sejour|tarjeta de identidad de extranjero") to "NIE / Permiso de residencia",
+        Regex("documento nacional de identidad")                                        to "DNI",
+        Regex("\\bpasaporte\\b|\\bpassport\\b")                                          to "Pasaporte",
     )
 
     /**
-     * Devuelve un nombre legible del TIPO de documento para la UI.
-     * Nunca devuelve el ID crudo SAF; ante la duda devuelve "Documento".
+     * Devuelve el TIPO del documento a partir del texto de su contenido.
+     * Texto vacío (sin capa de texto) o sin coincidencia → "Documento".
      */
-    fun friendlyName(rawName: String?): String {
-        val raw = rawName?.trim().orEmpty()
-        if (raw.isEmpty()) return "Documento"
-
-        // ID crudo del proveedor SAF (p. ej. "document:17077", "msf:42", "raw:...").
-        if (raw.contains(':')) return "Documento"
-
-        val stem = raw.substringBeforeLast('.', raw) // quita la extensión
-        val n = norm(stem)
+    fun fromContent(text: String?): String {
+        val n = norm(text.orEmpty())
         if (n.isBlank()) return "Documento"
-
         RULES.firstOrNull { it.first.containsMatchIn(n) }?.let { return it.second }
-
-        // Sin tipo reconocido: si el nombre es genérico o puro número → "Documento".
-        if (GENERIC.matches(n) || n.matches(Regex("\\d+"))) return "Documento"
-
-        // Nombre de archivo real no tipificado: límpialo y capitaliza para que al menos
-        // se lea el nombre que le puso el usuario (mejor que "document:17077").
-        return n.replaceFirstChar { it.uppercase() }
+        return "Documento"
     }
 }

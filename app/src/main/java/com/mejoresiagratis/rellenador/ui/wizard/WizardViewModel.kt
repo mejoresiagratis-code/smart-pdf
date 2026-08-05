@@ -87,6 +87,21 @@ class WizardViewModel @Inject constructor(
             ?: uri.lastPathSegment?.substringAfterLast('/')
             ?: "documento"
 
+    /**
+     * Tipo del documento DETECTADO POR CONTENIDO para mostrar en la UI ("Certificado de
+     * situación censal", "Tarjeta CIF/NIF"…). Solo PDFs con capa de texto; imágenes/fotos
+     * o escaneos sin texto → "Documento" (sin OCR no hay contenido que leer). El nombre de
+     * archivo NO influye. Defensivo: cualquier fallo → "Documento".
+     */
+    private fun detectDocType(uri: Uri, displayName: String): String {
+        val mime = runCatching { context.contentResolver.getType(uri) }.getOrNull().orEmpty()
+        val isPdf = mime.contains("pdf", ignoreCase = true) ||
+            displayName.endsWith(".pdf", ignoreCase = true)
+        if (!isPdf) return "Documento"
+        val text = loader.firstPagesText(uri).orEmpty()
+        return DocumentTypeDetector.fromContent(text)
+    }
+
     /** Aviso al usuario si algún URI persistido ya no es accesible tras la restauración
      *  (SAF/Storage Access Framework revoca los permisos cuando el proceso muere si no
      *  se llamó a takePersistableUriPermission). null = sin aviso. */
@@ -317,11 +332,19 @@ class WizardViewModel @Inject constructor(
                 s.docUris.map { uri ->
                     val displayName = resolveDisplayName(uri)
                     val pages = runCatching { loader.load(uri) }.getOrElse { emptyList() }
-                    pages to displayName
+                    // Tipo del documento DETECTADO POR CONTENIDO (no por el nombre): se lee
+                    // el texto del PDF y se busca la frase-firma del tipo. Fotos / escaneos
+                    // sin texto → "Documento". Se hace aquí (IO) para no bloquear la UI.
+                    val docType = runCatching { detectDocType(uri, displayName) }.getOrElse { "Documento" }
+                    Triple(pages, displayName, docType)
                 }
             }
-            val docGroups = loadedPerUri.map { it.first }.filter { it.isNotEmpty() }
-            val docNames = loadedPerUri.filter { it.first.isNotEmpty() }.map { it.second }
+            val kept = loadedPerUri.filter { it.first.isNotEmpty() }
+            val docGroups = kept.map { it.first }
+            // A la IA le va el NOMBRE DE ARCHIVO real (el prompt hace pattern-matching sobre
+            // patrones de nombre); la UI mostrará el tipo detectado por contenido.
+            val docNames = kept.map { it.second }
+            val docTypeByName = kept.associate { it.second to it.third }
             if (docGroups.isEmpty()) {
                 _state.value = _state.value.copy(busy = false, error = "No se pudieron leer los documentos.")
                 return@launch
@@ -334,12 +357,12 @@ class WizardViewModel @Inject constructor(
                     // al terminar un motor se marca como completado (queda con el tick
                     // aunque otro empiece justo después, por eso se añade sin quitar).
                     onProviderStart = { docLabel, p ->
-                        // La IA recibió el nombre de archivo real (docLabel); aquí, solo para
-                        // la UI, lo traducimos a un nombre de tipo legible ("Certificado de
-                        // situación censal") en vez de mostrar "document:17077" o el fichero crudo.
+                        // La IA recibió el nombre de archivo real (docLabel); la UI muestra el
+                        // TIPO detectado por contenido ("Certificado de situación censal"…),
+                        // o "Documento" si no se pudo tipificar (foto/escaneo sin texto).
                         _state.value = _state.value.copy(
                             activeProvider = p,
-                            activeDocLabel = DocumentTypeDetector.friendlyName(docLabel)
+                            activeDocLabel = docTypeByName[docLabel] ?: "Documento"
                         )
                     },
                     onProviderFinish = { p ->

@@ -8,6 +8,8 @@ import android.os.ParcelFileDescriptor
 import android.util.Base64
 import androidx.core.graphics.createBitmap
 import androidx.core.graphics.scale
+import com.tom_roush.pdfbox.pdmodel.PDDocument
+import com.tom_roush.pdfbox.text.PDFTextStripper
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.ByteArrayOutputStream
 import javax.inject.Inject
@@ -29,6 +31,26 @@ class DocumentLoader @Inject constructor(
 
     private fun readBytes(uri: Uri): ByteArray =
         context.contentResolver.openInputStream(uri)!!.use { it.readBytes() }
+
+    /**
+     * Texto de la capa de texto de las primeras [maxPages] páginas de un PDF, para
+     * tipificar el documento por su CONTENIDO (ver DocumentTypeDetector). Devuelve null si
+     * no es un PDF legible o no tiene capa de texto (escaneo-imagen) — en ese caso el
+     * documento no se puede tipificar en local sin OCR. Totalmente defensivo: cualquier
+     * fallo (URI ilegible, PDF corrupto, cifrado) → null, nunca lanza.
+     */
+    fun firstPagesText(uri: Uri, maxPages: Int = 2): String? = runCatching {
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            PDDocument.load(input).use { doc ->
+                if (doc.numberOfPages == 0) return@use null
+                val stripper = PDFTextStripper().apply {
+                    startPage = 1
+                    endPage = minOf(maxPages, doc.numberOfPages)
+                }
+                stripper.getText(doc)?.takeIf { it.isNotBlank() }
+            }
+        }
+    }.getOrNull()
 
     private fun displayName(uri: Uri): String =
         uri.lastPathSegment?.substringAfterLast('/') ?: "documento"

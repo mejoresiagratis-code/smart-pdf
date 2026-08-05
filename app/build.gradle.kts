@@ -16,7 +16,7 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = 46
-        versionName = "0.7.8-nombre-documento-detectado"
+        versionName = "0.7.8-tipo-documento-por-contenido"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // Base URL of your PHP proxy. Override per build type.

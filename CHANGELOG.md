@@ -6,33 +6,32 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
-## [0.7.8-nombre-documento-detectado] — 2026-08-05
+## [0.7.8-tipo-documento-por-contenido] — 2026-08-05
 
-### Añadido — nombre de tipo de documento en el diálogo "Analizando con …"
-El diálogo de análisis mostraba `document:17077` en lugar del nombre del documento.
-Causa raíz: en un `content://` de SAF, `uri.lastPathSegment` devuelve el ID crudo del
-proveedor, NO el nombre de archivo. Se corrige en dos capas:
+### Añadido — tipo de documento DETECTADO POR CONTENIDO en el diálogo "Analizando con …"
+El diálogo mostraba `document:17077` (el ID crudo del proveedor SAF). Ahora muestra el
+TIPO del documento leyendo su contenido, no su nombre de archivo.
 
-- **Nombre de archivo real**: `WizardViewModel.resolveDisplayName()` consulta
-  `OpenableColumns.DISPLAY_NAME` vía `ContentResolver` (con fallback a `lastPathSegment`).
-  Este nombre real es el que viaja a la IA como `docNames`, así que la "Regla de nombres
-  de archivo" del prompt (patrones `censal*`, `036*`, `dni*`, `IMG_...`) recupera contexto
-  que antes perdía (recibía `document:17077`, señal nula) → mejor deducción de rol
-  (autónomo vs. representante).
-- **Nombre de tipo legible en la UI**: nuevo `DocumentTypeDetector.friendlyName()` mapea
-  el nombre de archivo a un tipo ("Certificado de situación censal", "NIE / Permiso de
-  residencia", "Alta en RETA", "Contrato de alquiler", "Certificado bancario",
-  "Escritura de constitución", "Tarjeta CIF/NIF", "DNI", "Modelo 036", "Certificado IAE",
-  "Pasaporte", "Factura"). Se aplica SOLO en `onProviderStart` (frontera de UI); la IA
-  sigue recibiendo el nombre de archivo crudo para no romper la simetría del prompt.
+- **Detección por contenido**: `DocumentLoader.firstPagesText()` extrae el texto de las
+  primeras páginas del PDF con PDFBox (`PDFTextStripper`), y `DocumentTypeDetector.fromContent()`
+  lo tipifica por frases-firma → "Certificado de situación censal", "Modelo 036",
+  "Tarjeta CIF/NIF", "Certificado bancario", "Alta en RETA", "Contrato de alquiler",
+  "Escritura de constitución", "NIE / Permiso de residencia", "DNI", "Pasaporte". El nombre
+  de archivo es irrelevante: da igual que llegue como `DOC-20260716-WA0015.PDF` (nombre de
+  export de WhatsApp) — decide lo que dice dentro. Reglas ordenadas para evitar cruces (el
+  036 menciona "tarjeta acreditativa"; contrato y RETA mencionan un IBAN).
+- **Nombre real del fichero → IA**: `resolveDisplayName()` (vía `OpenableColumns.DISPLAY_NAME`)
+  sigue alimentando `docNames`, que viaja a la IA como contexto (la "Regla de nombres de
+  archivo" del prompt). El nombre real NO se muestra en la UI; solo va a la IA.
+- **Desacople UI/IA**: la IA recibe el nombre de archivo real; la UI muestra el tipo por
+  contenido (mapa `docTypeByName` en `WizardViewModel`, aplicado en `onProviderStart`).
 
 ### Notas / límites
-- Detección por nombre de archivo: un fichero llamado literalmente `document.PDF` (sin
-  pista en el nombre) cae al genérico "Documento". La detección por contenido (escanear el
-  texto de la 1ª página) queda para una fase posterior y solo cubriría PDFs con capa de
-  texto, no escaneos-imagen sin OCR.
-- El texto de las etiquetas de tipo está centralizado en `DocumentTypeDetector.RULES`,
-  fácil de ajustar sin tocar UI ni ViewModel.
+- Solo PDFs con capa de texto (todo el papeleo oficial: censal, tarjeta NIF, 036, banco,
+  contrato, RETA). **Fotos de DNI/NIE (jpg/png) y PDFs que son solo escaneo-imagen no
+  tienen texto** → "Documento" (sin OCR no hay contenido). Tipificar también esos requiere
+  que la IA (visión) devuelva el tipo (fase posterior, toca el prompt → replicar en la web).
+- Todo defensivo: cualquier fallo de lectura/tipificación → "Documento", nunca peta.
 
 ---
 
