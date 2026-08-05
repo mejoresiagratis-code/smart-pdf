@@ -71,6 +71,9 @@ data class WizardUiState(
     val signPages: List<Int> = emptyList(),          // índices 0-based detectados/ajustados
     val signAnchors: Map<Int, Float> = emptyMap(),   // página -> yr del rótulo
     val totalPages: Int = 0,
+    // Cierto mientras se analiza el contrato elegido/subido en el Paso 1 (páginas,
+    // huecos de firma) — controla el estado de carga del resumen "Estructura detectada".
+    val detectingStructure: Boolean = false,
 
     // Previsualización (Tanda C)
     val previewReady: Boolean = false,

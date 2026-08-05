@@ -440,15 +440,25 @@ class WizardViewModel @Inject constructor(
     /** Detecta las páginas de firma del contrato activo (Tanda B). */
     fun detectSignaturePages() {
         viewModelScope.launch {
+            _state.value = _state.value.copy(detectingStructure = true)
             val det = withContext(Dispatchers.IO) {
                 runCatching { openContract().use { pageDetector.detect(it) } }.getOrNull()
-            } ?: return@launch
+            }
+            if (det == null) {
+                _state.value = _state.value.copy(detectingStructure = false)
+                return@launch
+            }
             // Colocación por defecto en cada página detectada (calibrada si existe).
             val stamps = det.signPages.map { pageIdx -> stampFor(pageIdx, det.anchors) }
             _state.value = _state.value.copy(
                 signPages = det.signPages,
                 signAnchors = det.anchors,
-                stamps = if (_state.value.signature != null) stamps else _state.value.stamps
+                stamps = if (_state.value.signature != null) stamps else _state.value.stamps,
+                // Página total del contrato elegido — se usa en el resumen "Estructura
+                // detectada" del Paso 1 (Contrato), para dar el mismo feedback inmediato
+                // que ya tenía la app web al elegir/subir un contrato.
+                totalPages = det.totalPages,
+                detectingStructure = false
             )
         }
     }

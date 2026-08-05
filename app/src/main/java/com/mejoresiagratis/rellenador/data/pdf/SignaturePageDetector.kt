@@ -24,7 +24,8 @@ class SignaturePageDetector @Inject constructor() {
     data class Detection(
         val signPages: List<Int>,                 // índices 0-based
         val anchors: Map<Int, Float>,             // página -> yr del rótulo (0 arriba)
-        val multipageFields: List<String>         // campos multipágina detectados
+        val multipageFields: List<String>,        // campos multipágina detectados
+        val totalPages: Int                       // total de páginas del documento
     )
 
     /** Y relativa (0 arriba…1 abajo) del rótulo DISTRIBUIDOR por página. */
@@ -94,7 +95,7 @@ class SignaturePageDetector @Inject constructor() {
             val strong = candidates.filter { anchors.containsKey(it) }
             val signPages = if (strong.isNotEmpty()) strong else candidates
 
-            return Detection(signPages, anchors, multipageFields)
+            return Detection(signPages, anchors, multipageFields, total)
         }
     }
 }

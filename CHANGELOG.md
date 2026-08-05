@@ -6,6 +6,28 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.7.7-estructura-detectada-paso1] — 2026-08-04
+
+### Añadido — resumen "Estructura detectada" en el Paso 1 (Contrato)
+La app web, al elegir el contrato por defecto o subir uno propio, actualizaba la parte
+inferior del primer paso con campos detectados, páginas y huecos de firma, antes de dar
+a "Continuar". Android no tenía nada de esto — el contrato por defecto mostraba solo el
+texto estático "54 páginas" y el propio no mostraba ningún resumen.
+
+- **`SignaturePageDetector.Detection`**: nuevo campo `totalPages` (ya se calculaba
+  internamente como `doc.numberOfPages`, solo faltaba exponerlo).
+- **`WizardViewModel.detectSignaturePages()`**: ahora también actualiza
+  `state.totalPages`, y expone `state.detectingStructure` (estado de carga) mientras
+  analiza el PDF en segundo plano.
+- **`ContractStep.kt`**: nueva tarjeta "Estructura detectada" bajo las opciones de
+  contrato, con indicador de carga mientras analiza y, al terminar, "N páginas · M
+  campos · K huecos de firma". Para el contrato por defecto, M viene de
+  `ContractFields.CANON.size`; para uno propio, de `state.userFieldNames.size` (ya se
+  leía al elegir el PDF, solo faltaba mostrarlo). Si un PDF propio no tiene ningún
+  campo AcroForm, se avisa explícitamente en vez de mostrar "0 campos" sin más contexto.
+
+---
+
 ## [0.7.6-banco-tercero-alquiler-sugerencias] — 2026-08-04
 
 ### Corregido — motores no mueren para siempre por un fallo pasajero

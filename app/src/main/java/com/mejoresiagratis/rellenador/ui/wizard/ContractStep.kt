@@ -114,6 +114,46 @@ private fun ContractSelectionContent(
                 )
             }
 
+            // Resumen "Estructura detectada" — mismo feedback inmediato que ya daba la
+            // app web al elegir el contrato por defecto o subir uno propio: páginas,
+            // campos y huecos de firma detectados, antes de continuar. Se actualiza cada
+            // vez que cambia la selección (state.detectingStructure controla el estado
+            // de carga mientras SignaturePageDetector analiza el PDF en segundo plano).
+            if (isDefault || isUser) {
+                val camposDetectados = if (isDefault) {
+                    com.mejoresiagratis.rellenador.data.model.ContractFields.CANON.size
+                } else {
+                    state.userFieldNames.size
+                }
+                ElevatedCard(shape = MaterialTheme.shapes.medium) {
+                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("Estructura detectada", style = MaterialTheme.typography.labelLarge)
+                        if (state.detectingStructure) {
+                            Row(verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                                Text("Analizando contrato…", style = MaterialTheme.typography.bodySmall)
+                            }
+                        } else {
+                            Text(
+                                "${state.totalPages} páginas · $camposDetectados campos · " +
+                                    "${state.signPages.size} huecos de firma",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            if (isUser && camposDetectados == 0) {
+                                Text(
+                                    "No se detectaron campos de formulario en este PDF — puede que " +
+                                        "no tenga AcroForm, o que sea un PDF escaneado sin campos.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
             com.mejoresiagratis.rellenador.ui.components.TipBanner(
                 "Usa \"Aportar mi PDF\" solo si tienes una versión del contrato distinta a la incluida por defecto."
             )
