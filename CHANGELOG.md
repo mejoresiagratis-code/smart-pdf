@@ -6,6 +6,38 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.7.10-dns-fallback-doh] — 2026-08-05
+
+### Corregido — "Unable to resolve host datingtrck.com" pese a que el dominio resuelve bien
+Tras el cambio de servidor, la app fallaba con `No address associated with hostname`
+**estando en WiFi**, mientras el dominio resolvía perfectamente desde fuera (registro A
+presente: `107.6.184.117`; sin AAAA, como ya se sabía).
+
+**Diagnóstico**: NO era el filtro IPv4. El error se lanza dentro de `Dns.SYSTEM.lookup()`,
+antes de que el filtro llegue a ejecutarse, y el filtro además nunca deja la lista vacía
+(`ifEmpty { all }`). La causa real es **caché DNS negativa** en el dispositivo o en el
+router/ISP, cacheada mientras la zona propagaba (serial SOA `2026080506`, cambiada ese
+mismo día). Agravante: el **TTL de caché negativa del SOA es 86400 → hasta 24 horas** con
+la app inservible aunque el servidor esté perfecto.
+
+**Solución**: `Ipv4PreferredDns` gana un fallback a **DNS-over-HTTPS**. Si el resolutor del
+sistema falla, la app resuelve por su cuenta saltándose el resolutor de la red.
+- Endpoints por **IP literal** a propósito (`https://1.1.1.1/dns-query`,
+  `https://8.8.8.8/resolve`): con hostname harían falta DNS para resolverlos — justo lo que
+  está roto (círculo vicioso). Los certificados de Cloudflare y Google incluyen esas IPs en
+  el SAN, así que **la validación TLS sigue activa; no se desactiva ninguna verificación**.
+- Cliente OkHttp propio y mínimo, con `Dns.SYSTEM` (sin recursión) y timeouts cortos
+  (5s/5s, call 8s): es un camino de rescate, no debe colgar la extracción.
+- Caché en memoria de 5 min para no repetir la consulta DoH en cada conexión.
+- IPv4 se construye a mano desde el texto (`InetAddress.getByAddress`) para NO volver a
+  pedir DNS al crear la dirección.
+- **Sin dependencias nuevas** (no hace falta `okhttp-dnsoverhttps`).
+
+Orden: sistema (rápido, normal) → DoH (solo si el sistema falla). En operación normal el
+DoH nunca se usa.
+
+---
+
 ## [0.7.9-tipo-documento-por-ia] — 2026-08-05
 
 ### Añadido — la IA tipifica fotos y escaneos (opción B, completa la 0.7.8)
