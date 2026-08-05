@@ -7,6 +7,7 @@ import kotlinx.serialization.Serializable
 data class AiExtraction(
     val sugerencias: Map<String, String> = emptyMap(),
     val tipo_identificacion: String? = null,           // "CIF" | "NIF" | "NIE"
+    val tipo_documento: String? = null,                // qué documento es (para la UI; ver DocumentTypeDetector)
     val alternativas: Map<String, List<AltValue>> = emptyMap(),
     val paquetes: List<Paquete> = emptyList()
 )

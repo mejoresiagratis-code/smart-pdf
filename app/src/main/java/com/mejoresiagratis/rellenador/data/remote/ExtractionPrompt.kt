@@ -73,6 +73,7 @@ DEVUELVE SOLO JSON VÁLIDO (sin texto adicional, sin ```):
 {
  "sugerencias": { "<campo>": "valor" },
  "tipo_identificacion": "CIF" | "NIF" | "NIE",
+ "tipo_documento": "<qué documento es ESTE — ver lista abajo>",
  "alternativas": { "<campo>": [ {"valor":"...","fuente":"<qué documento es>","nota":"<qué representa esta variante>"} ] },
  "paquetes": [
    {"tipo":"direccion","etiqueta":"Dirección fiscal (AEAT)","fuente":"<doc>","datos":{"Dirección":"...","CP":"...","Población":"...","Provincia":"..."}},
@@ -82,6 +83,7 @@ DEVUELVE SOLO JSON VÁLIDO (sin texto adicional, sin ```):
    {"tipo":"banco","etiqueta":"Cuenta <banco>","fuente":"<doc>","datos":{"Datos bancarios del DISTRIBUIDOR":"<IBAN>"}}
  ]
 }
-Incluye "alternativas" SOLO cuando el documento contenga MÁS DE UNA variante literal para un mismo campo (p. ej. dos teléfonos escritos). No las uses para repetir o reformular un único valor. En "paquetes.datos" usa SIEMPRE las claves SIN sufijo (Dirección/CP/Población/Provincia), tanto para el paquete "direccion" como para "direccion_comercio" — el usuario decide a qué bloque (fiscal o _2) lo aplica al elegirlo. Sé conciso en "fuente" y "nota" (5-7 palabras)."""
+Incluye "alternativas" SOLO cuando el documento contenga MÁS DE UNA variante literal para un mismo campo (p. ej. dos teléfonos escritos). No las uses para repetir o reformular un único valor. En "paquetes.datos" usa SIEMPRE las claves SIN sufijo (Dirección/CP/Población/Provincia), tanto para el paquete "direccion" como para "direccion_comercio" — el usuario decide a qué bloque (fiscal o _2) lo aplica al elegirlo. Sé conciso en "fuente" y "nota" (5-7 palabras).
+"tipo_documento": identifica QUÉ DOCUMENTO ES el que estás viendo (solo sirve para mostrárselo al usuario mientras se analiza; no afecta a los valores extraídos). Usa EXACTAMENTE una de estas etiquetas, copiada literalmente: "DNI" | "NIE / Permiso de residencia" | "Pasaporte" | "Tarjeta CIF/NIF" | "Certificado de situación censal" | "Modelo 036" | "Certificado IAE" | "Escritura de constitución" | "Certificado bancario" | "Alta en RETA" | "Contrato de alquiler" | "Factura" | "Foto del local" | "Documento". Si el documento no encaja claramente en ninguna, usa "Documento" — no inventes etiquetas nuevas ni traduzcas las de la lista. Para un DNI/NIE da igual que veas el anverso o el reverso: la etiqueta es la misma."""
     }
 }

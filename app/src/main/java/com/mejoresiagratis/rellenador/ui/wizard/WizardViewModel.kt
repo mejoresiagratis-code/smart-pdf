@@ -344,7 +344,10 @@ class WizardViewModel @Inject constructor(
             // A la IA le va el NOMBRE DE ARCHIVO real (el prompt hace pattern-matching sobre
             // patrones de nombre); la UI mostrará el tipo detectado por contenido.
             val docNames = kept.map { it.second }
-            val docTypeByName = kept.associate { it.second to it.third }
+            // Tipo por documento: lo detectado en local (PDFs con texto). Los que quedaron
+            // como "Documento" (fotos / escaneos sin texto) los completará la IA vía
+            // onDocTypeDetected — por eso es mutable.
+            val docTypeByName = kept.associate { it.second to it.third }.toMutableMap()
             if (docGroups.isEmpty()) {
                 _state.value = _state.value.copy(busy = false, error = "No se pudieron leer los documentos.")
                 return@launch
@@ -359,11 +362,29 @@ class WizardViewModel @Inject constructor(
                     onProviderStart = { docLabel, p ->
                         // La IA recibió el nombre de archivo real (docLabel); la UI muestra el
                         // TIPO detectado por contenido ("Certificado de situación censal"…),
-                        // o "Documento" si no se pudo tipificar (foto/escaneo sin texto).
+                        // o "Documento" si aún no se pudo tipificar (foto/escaneo sin texto,
+                        // que la IA completará al responder). El sufijo "(parte X/Y)" de los
+                        // archivos troceados se normaliza al nombre base.
+                        val base = docLabel.substringBefore(" (parte ").trim()
                         _state.value = _state.value.copy(
                             activeProvider = p,
-                            activeDocLabel = docTypeByName[docLabel] ?: "Documento"
+                            activeDocLabel = docTypeByName[base] ?: "Documento"
                         )
+                    },
+                    onDocTypeDetected = { docLabel, tipo ->
+                        // La detección local (texto del PDF) manda: es determinista y ya está
+                        // confirmada. La IA solo rellena los huecos — fotos de DNI/NIE y
+                        // escaneos-imagen, que en local salen como "Documento". Si un motor
+                        // se equivoca con un PDF que ya tipificamos bien, no lo pisa.
+                        // El nombre puede venir con sufijo "(parte X/Y)" si el archivo se
+                        // troceó: se normaliza al nombre base para casar con el mapa.
+                        val base = docLabel.substringBefore(" (parte ").trim()
+                        if (docTypeByName[base].isNullOrBlank() || docTypeByName[base] == "Documento") {
+                            docTypeByName[base] = tipo
+                            if (_state.value.activeDocLabel == "Documento") {
+                                _state.value = _state.value.copy(activeDocLabel = tipo)
+                            }
+                        }
                     },
                     onProviderFinish = { p ->
                         _state.value = _state.value.copy(

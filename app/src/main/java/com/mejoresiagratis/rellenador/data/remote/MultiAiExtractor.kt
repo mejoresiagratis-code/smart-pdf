@@ -76,6 +76,11 @@ class MultiAiExtractor @Inject constructor(
         // no-op: no cambia el comportamiento de ningún llamador existente.
         onProviderStart: (docLabel: String, provider: AiProvider) -> Unit = { _, _ -> },
         onProviderFinish: (AiProvider) -> Unit = {},
+        // El tipo de documento que reconoce la IA (visión). Sirve para tipificar lo que la
+        // detección local por contenido NO puede: fotos de DNI/NIE y PDFs que son solo
+        // escaneo-imagen (sin capa de texto). Se emite en cuanto el primer motor lo
+        // devuelve para ese documento. Default no-op.
+        onDocTypeDetected: (docLabel: String, tipo: String) -> Unit = { _, _ -> },
         // Progreso agregado (documento × motor) para la barra de la Propuesta 2+3:
         // `current` es 1-based, `total` es el techo teórico (docs × motores activos) —
         // con earlyStop puede quedarse corto del final, lo cual es correcto: si se para
@@ -207,6 +212,10 @@ class MultiAiExtractor @Inject constructor(
 
                     enginesOk.add(provider.displayName)
                     ex.tipo_identificacion?.let { tipoVotes[it] = (tipoVotes[it] ?: 0) + 1 }
+                    // Tipo de documento reconocido por la IA (visión) → la UI lo usa solo si
+                    // la detección local no pudo tipificarlo (imagen/escaneo sin texto).
+                    ex.tipo_documento?.trim()?.takeIf { it.isNotEmpty() }
+                        ?.let { onDocTypeDetected(docLabel, it) }
                     ex.sugerencias.forEach { (k, v) -> track(k, v, provider.displayName) }
                     ex.alternativas.forEach { (k, list) -> list.forEach { track(k, it.valor, provider.displayName) } }
                     ex.paquetes.forEach { pk ->

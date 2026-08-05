@@ -6,6 +6,34 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.7.9-tipo-documento-por-ia] — 2026-08-05
+
+### Añadido — la IA tipifica fotos y escaneos (opción B, completa la 0.7.8)
+La detección local por contenido (0.7.8) solo cubre PDFs con capa de texto. Las fotos de
+DNI/NIE (jpg/png) y los PDFs que son solo escaneo-imagen salían como "Documento" porque no
+hay texto que leer. Ahora los tipifica la propia IA, que ya los está mirando con visión.
+
+- **Prompt**: nuevo campo `tipo_documento` en el JSON de salida, con **vocabulario cerrado**
+  (mismas etiquetas que usa la detección local) para que los motores no devuelvan cada uno
+  una variante distinta. Se indica explícitamente que no afecta a los valores extraídos y
+  que anverso/reverso de un DNI/NIE comparten etiqueta.
+- **Modelo**: `AiExtraction.tipo_documento` (nullable, default null → motores que no lo
+  devuelvan siguen funcionando igual).
+- **MultiAiExtractor**: nuevo callback `onDocTypeDetected(docLabel, tipo)`, emitido en
+  cuanto un motor devuelve el campo. Default no-op (no altera llamadores existentes).
+- **WizardViewModel**: `docTypeByName` pasa a mutable. **La detección local tiene
+  prioridad** — el tipo de la IA solo rellena huecos ("Documento"), así que un motor que se
+  equivoque no pisa un PDF ya tipificado correctamente en local. El sufijo `(parte X/Y)` de
+  los archivos troceados se normaliza al nombre base antes de casar en el mapa.
+
+### Notas
+- Para fotos, el tipo aparece **al responder el primer motor** (no antes): hasta entonces
+  se muestra "Documento". Es inherente a que lo resuelva la IA.
+- **Paridad con la app web**: este cambio toca `ExtractionPrompt`. Para mantener la simetría
+  hay que replicar el campo `tipo_documento` en el prompt de la versión web.
+
+---
+
 ## [0.7.8-tipo-documento-por-contenido] — 2026-08-05
 
 ### Añadido — tipo de documento DETECTADO POR CONTENIDO en el diálogo "Analizando con …"
