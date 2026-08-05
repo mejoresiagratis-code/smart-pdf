@@ -1,6 +1,8 @@
 # Changelog — Rellenador de Contratos (Android)
 
-Todas las versiones que han llegado a **build verde** en el workflow. Se sigue [Keep a
+Todas las versiones que han llegado a **build verde** en el workflow.
+(Las 1–2 entradas más recientes pueden estar pendientes de verificación en Actions;
+se consolidan al confirmarse el verde.) Se sigue [Keep a
 Changelog](https://keepachangelog.com/es-ES/1.1.0/) y versionado semántico. El nombre del
 artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 

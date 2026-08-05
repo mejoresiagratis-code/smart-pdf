@@ -1,5 +1,46 @@
 # Estado y guía de continuidad — Rellenador Android (nativo)
 
+> **Este documento tiene dos partes.** La primera es el **estado actual** (mantener al
+> día). Todo lo que hay a partir de «ARCHIVO HISTÓRICO» es el registro de las tandas
+> originales de la migración — valioso como referencia, pero NO refleja el estado
+> presente (habla de 15 campos canónicos, versionCode 5, y de "pendientes" que llevan
+> meses hechos). Para el estado por versión, la fuente de verdad es `CHANGELOG.md`; para
+> lo próximo, `ROADMAP.md`.
+
+## ESTADO ACTUAL (2026-08-05 · v0.7.10-dns-fallback-doh · versionCode 48)
+
+- **Los 5 pasos del wizard están completos y en uso real** (Contrato con mapeo de PDF
+  propio, Documentación, Revisión IA con bloques, Relleno con validación en vivo y
+  candidatos alternativos, Firma con estampado calibrado en pág. 24/30/33/45/54 y
+  previsualización de 54 páginas). CANON tiene **22 campos** (no 15).
+- **Producción**: proxy en `datingtrck.com/pdf/ai-proxy.php` (BanaHosting/cPanel,
+  usuario `obvzudpy`), config protegida en `/home/obvzudpy/datingtrck.com/proxyconfig/`.
+  El proxy NO vive en el repo; se despliega por FTP/cPanel.
+- **Motores activos en servidor** (GET del proxy, ago 2026): `gemini:true`, `groq:true`;
+  resto sin clave activa.
+- **Red**: `Ipv4PreferredDns` — IPv4 primero (dominio sin AAAA; NAT64/5G) + fallback
+  DNS-over-HTTPS por IP literal ante cachés DNS negativas (v0.7.10).
+- **Tipo de documento en el diálogo de análisis**: por contenido (texto PDF, PDFBox) con
+  prioridad, y por IA (visión, `tipo_documento`) para fotos/escaneos (v0.7.8/0.7.9).
+- **Flujo de trabajo vigente**: Claude tiene push directo por token (PAT) cuando Pablo lo
+  facilita; si no, ZIPs completos que Pablo aplica con `git pull && unzip -o && git
+  commit && git push`. El juez del build es GitHub Actions (aquí no se compila Android).
+  El workflow `.github/workflows/android.yml` es de Pablo — no tocarlo sin pedirle el
+  contenido actual.
+- **Paridad web pendiente**: replicar `tipo_documento` en el prompt de la web.
+
+## Cómo arrancar una sesión nueva
+1. `git clone` fresco del remoto real y `git log --oneline` — nunca asumir el estado.
+2. Leer la cabecera de `CHANGELOG.md` (última versión) y el `ROADMAP.md` (prioridades).
+3. Si la tanda toca el prompt, el proxy o la web: pedir a Pablo los ficheros reales
+   (el proxy y la web no viven en este repo).
+4. Versionado: cada tanda con build verde sube `versionCode`+`versionName` y añade su
+   entrada al CHANGELOG. Hotfix sobre versión que nunca llegó a verde NO incrementa.
+
+---
+
+# ARCHIVO HISTÓRICO (tandas de la migración original — no refleja el estado actual)
+
 ## Hito alcanzado
 La app compila, instala y arranca. Migración nativa Kotlin+Compose de la web
 `rellenador-pro.html`. Fase 1 (pasos 1-3 del flujo) implementada, con andamiaje
@@ -225,7 +266,7 @@ de la que no hay rastro, y "0.2.2-stamp-letterbox" (commit 8d611c5), fusionada a
 - Lección para el futuro: verificar SIEMPRE con `git log --oneline --all` si hay commits
   no reconocidos antes de generar un ZIP completo nuevo, para no repetir este problema.
 
-## Pendiente (siguiente tanda)
+## Pendiente (siguiente tanda) — [HISTÓRICO: todo lo de esta lista está HECHO desde hace meses; ver CHANGELOG]
 - **Firma**: captura manuscrita en Canvas + task "locate_signature" (ya soportada por
   el proxy) para ubicar el hueco + inserción en página 24 + generar PDF final con
   AcroFormFiller + compartir/guardar (FileProvider).

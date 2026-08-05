@@ -4,7 +4,7 @@ Estado real del proyecto y próximas tandas planificadas. Este documento sustitu
 "roadmap" informal que vivía en las notas de continuidad de las sesiones. Se actualiza
 al final de cada tanda con lo que quede pendiente.
 
-Última actualización: **2026-07-15** (versión `0.6.5-persistencia-sesion`).
+Última actualización: **2026-08-05** (versión `0.7.10-dns-fallback-doh`, versionCode 48).
 
 ---
 
@@ -27,6 +27,14 @@ al final de cada tanda con lo que quede pendiente.
 | **0.6.3** | Firma alineada con web: `ExpressiveAccordion` compartido, "Ajustes de firma" y "Huecos de firma" plegables, "Una a una" + "⚡ Todos", paleta ampliada a 6 tintas, checkbox "Mejorar con IA", botón "📷 Hacer foto" con permiso `CAMERA` en Manifest. |
 | **0.6.4** | Firma: previsualización sin duplicados, scroll animado a página estampada, snackbar de feedback, flechas de navegación entre huecos como en la web. |
 | **0.6.5** | **Persistencia de sesión (Fase 1)**: el progreso del wizard sobrevive al segundo plano y a la muerte del proceso. Botón "Empezar de nuevo" en Ajustes y "Empezar otro contrato" tras generar el PDF. Aviso si un URI restaurado ya no es accesible. |
+| **0.7.0–0.7.2** | Recorte de firma (mapeo ContentScale.Fit), borrador de firma con deshacer, `MultiAiExtractor` agrupa TODO un archivo en una llamada por motor (antes: una por página), motores ya no mueren permanentemente por un error transitorio (solo 401/403/404). |
+| **0.7.3–0.7.4** | Migración de servidor: URL de fábrica del proxy → `datingtrck.com`. Prompt reforzado (formato NIF/CIF/NIE, IRPF vs Sociedades como señal persona/empresa, censal individual). |
+| **0.7.5** | `Ipv4PreferredDns`: prioriza IPv4 (dominio sin AAAA fallaba en 5G/NAT64 dentro de la app, no en Chrome). |
+| **0.7.6** | Banco nunca es empresa (CIF de banco = tercero), alternativas para dirección de actividad, ver sugerencias alternativas en Relleno (dropdown por campo). |
+| **0.7.7** | "Estructura detectada" en Paso 1 (páginas, campos, huecos de firma) + hotfix de scope en `ContractStep`. |
+| **0.7.8** | **Tipo de documento por CONTENIDO**: `DocumentLoader.firstPagesText()` (PDFBox) + `DocumentTypeDetector.fromContent()` — el diálogo "Analizando con…" muestra "Certificado de situación censal", "Alta en RETA"… en vez de `document:17077`. Fix causa raíz SAF (`OpenableColumns.DISPLAY_NAME`); el nombre de archivo real viaja a la IA como contexto. |
+| **0.7.9** | **Tipo por IA (visión)** para fotos/escaneos sin capa de texto: campo `tipo_documento` en el prompt (vocabulario cerrado), callback `onDocTypeDetected`; la detección local tiene prioridad. ⚠️ Pendiente replicar `tipo_documento` en el prompt de la app web (paridad). |
+| **0.7.10** | **Fallback DNS-over-HTTPS** en `Ipv4PreferredDns`: ante caché DNS negativa del router/dispositivo (hasta 24 h por el TTL del SOA), la app resuelve por su cuenta vía `1.1.1.1`/`8.8.8.8` por IP literal, TLS intacto, sin dependencias nuevas. |
 
 ---
 
@@ -43,11 +51,23 @@ al final de cada tanda con lo que quede pendiente.
   `context.filesDir` — un directorio propio de la app que no depende del proveedor del URI.
   *Fichero clave*: `DocumentLoader.kt`, `WizardViewModel.addDocuments`, `WizardUiState.docUris`.
 
-- **Subir `ai-proxy.php` corregido a producción**
-  El proxy real en `mejoresiagratis.com/pdf/ai-proxy.php` puede seguir con los modelos
-  antiguos (`gemini-2.5-flash`, `mistral-small-latest` para EUrouter). Sin este paso,
-  Gemini y EUrouter pueden fallar todas las extracciones reales aunque el APK compile
-  perfecto. El fix está entregado en las últimas ZIPs — solo falta subirlo por FTP/cPanel.
+- ~~**Subir `ai-proxy.php` corregido a producción**~~ ✅ *Completado (ago 2026)* — el
+  proxy con todos los fixes acumulados ya vive en `datingtrck.com/pdf/ai-proxy.php`
+  (BanaHosting/cPanel, usuario `obvzudpy`), con la config en
+  `/home/obvzudpy/datingtrck.com/proxyconfig/` (carpeta 403). Verificado en vivo:
+  GET responde `ok:true` con `gemini:true`/`groq:true`.
+
+- **Paridad web: campo `tipo_documento` en el prompt**
+  La v0.7.9 añadió `tipo_documento` al `ExtractionPrompt` de Android. La regla del
+  proyecto es que el prompt sea VERBATIM entre web y Android → hay que replicar el
+  campo (con el mismo vocabulario cerrado) en el prompt de `rellenador-pro.html`.
+  Requiere que Pablo suba el fichero web actual al arrancar la sesión.
+
+- **Endurecer `.htaccess` de `proxyconfig/`**
+  Hoy la carpeta da 403 pero el fichero `ai-proxy.config.php` da 200 con cuerpo vacío
+  (PHP lo ejecuta). Si algún día PHP dejara de ejecutarse en esa carpeta, el fichero se
+  serviría en texto plano CON LAS CLAVES. Añadir denegación explícita del fichero
+  (`<Files>`/`Require all denied`) además del bloqueo de carpeta. Tanda de 5 minutos.
 
 ### 🟠 Media prioridad
 
@@ -90,8 +110,10 @@ al final de cada tanda con lo que quede pendiente.
     `rellenador-pro.html`) — Android nunca lo ha aprovechado. Ventajas reales: mucho
     más barato en tokens (ayudaría directamente con el límite de 8000 TPM de Groq),
     más preciso (sin errores de interpretación visual/OCR), y más rápido.
-  Requiere añadir una librería de extracción de texto de PDF al proyecto (Android
-  `PdfRenderer` nativo no expone texto, solo rasteriza). Si se ve que la extracción
+  La librería ya NO es un bloqueo: desde la v0.7.8, `DocumentLoader.firstPagesText()`
+  extrae texto con PDFBox (`PDFTextStripper`) — hoy solo para tipificar el documento,
+  pero es exactamente la pieza que esta tanda necesitaría para mandar texto a los
+  motores en vez de imágenes. Si se ve que la extracción
   pierde precisión por no ver la estructura completa del PDF, o si se quiere ahorrar
   coste/tokens en documentos de texto, esta tanda migra a doble ruta según el tipo de
   motor y si el PDF tiene capa de texto aprovechable.
@@ -136,3 +158,17 @@ Estos son errores concretos que ya nos costaron una tanda de build rojo — no r
   hay que hacerla con `git rm` explícito.
 - Web fetch a GitHub **puede devolver cache antiguo**. Verificar HEAD real vía MCPGIT
   antes de asumir el estado del repo.
+- En un `content://` de SAF, `uri.lastPathSegment` **NO es el nombre del fichero** — es
+  el ID crudo del proveedor (`document:17077`). El nombre real se consulta con
+  `OpenableColumns.DISPLAY_NAME` vía `ContentResolver`.
+- `kotlinx.serialization` **omite los campos con valor por defecto** salvo
+  `encodeDefaults = true` en el `Json` — un campo "siempre presente" en el modelo puede
+  no viajar nunca en la petición real (causa raíz del 500 histórico de Gemini por
+  `gemini_mode` ausente).
+- Una **caché DNS negativa** (dispositivo o router) puede dejar la app sin resolver un
+  dominio hasta 24 h (TTL negativo del SOA) aunque el dominio esté perfecto — de ahí el
+  fallback DoH de la 0.7.10. Los endpoints DoH deben ir por **IP literal** o necesitan
+  DNS para resolverse a sí mismos.
+- La detección de tipo de documento por nombre de archivo es inútil en el flujo real:
+  los clientes mandan todo por WhatsApp (`DOC-…-WA….PDF`, `IMG-…-WA….jpg`, sin pista).
+  Por contenido (texto del PDF) sí funciona; fotos/escaneos sin texto requieren visión.

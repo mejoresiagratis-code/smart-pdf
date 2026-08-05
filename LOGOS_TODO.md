@@ -1,5 +1,9 @@
 # Logos oficiales pendientes de sustituir (Tanda 2)
 
+> **Estado a 2026-08-05 (v0.7.10): sigue pendiente.** Los 9 drawables continúan siendo
+> placeholders (verificado en `res/drawable/ic_provider_*.xml`). Prioridad baja en el
+> ROADMAP. Todo lo de abajo sigue vigente tal cual.
+
 Los 9 drawables en `app/src/main/res/drawable/ic_provider_*.xml` son placeholders
 (un disco relleno con el color de marca) generados en la Tanda 2. Compilan y se ven
 bien desde ya, pero **no son los logos oficiales**. Para sustituirlos:
