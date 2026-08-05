@@ -78,6 +78,15 @@ private fun ContractSelectionContent(
     // decir 40dp perdidos por lado en vez de los 20dp del mockup: por eso todo
     // se veía más estrecho y más alto de lo debido, y hacía falta scroll).
     Column(modifier = Modifier.fillMaxSize()) {
+        // Elevados al scope de la función (antes vivían dentro del Column de abajo) —
+        // el bloque "Estructura detectada" que sigue después también los necesita, y
+        // estando dentro de ese Column quedaban fuera de su alcance: exactamente el
+        // "Unresolved reference 'isDefault'/'isUser'" que rompió el build de v0.7.7.
+        val isDefault = state.contractSource == ContractSource.DEFAULT
+        val isUser = state.contractSource == ContractSource.USER
+        val fileName = state.userContractUri?.lastPathSegment?.substringAfterLast('/')
+            ?: "Seleccionar un PDF del dispositivo"
+
         Column(
             modifier = Modifier
                 .weight(1f)
@@ -92,7 +101,6 @@ private fun ContractSelectionContent(
                 modifier = Modifier.selectableGroup(),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                val isDefault = state.contractSource == ContractSource.DEFAULT
                 ContractOptionCard(
                     selected = isDefault,
                     onClick = vm::chooseDefaultContract,
@@ -100,10 +108,6 @@ private fun ContractSelectionContent(
                     supporting = "Contrato de distribución PdV (54 páginas)",
                     icon = { Icon(Icons.Outlined.Description, contentDescription = null) }
                 )
-
-                val isUser = state.contractSource == ContractSource.USER
-                val fileName = state.userContractUri?.lastPathSegment?.substringAfterLast('/')
-                    ?: "Seleccionar un PDF del dispositivo"
 
                 ContractOptionCard(
                     selected = isUser,
