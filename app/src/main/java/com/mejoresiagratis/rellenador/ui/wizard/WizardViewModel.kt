@@ -2,6 +2,7 @@ package com.mejoresiagratis.rellenador.ui.wizard
 
 import android.content.Context
 import android.net.Uri
+import android.provider.OpenableColumns
 import dagger.hilt.android.qualifiers.ApplicationContext
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -15,6 +16,7 @@ import androidx.core.graphics.scale
 import com.mejoresiagratis.rellenador.data.model.SignatureData
 import com.mejoresiagratis.rellenador.data.model.SignatureStamp
 import com.mejoresiagratis.rellenador.data.pdf.DocumentLoader
+import com.mejoresiagratis.rellenador.data.pdf.DocumentTypeDetector
 import com.mejoresiagratis.rellenador.data.pdf.PdfExporter
 import com.mejoresiagratis.rellenador.data.pdf.SignatureProcessor
 import com.mejoresiagratis.rellenador.data.pdf.TemplateMapper
@@ -61,6 +63,29 @@ class WizardViewModel @Inject constructor(
     private var previewRenderer: PdfPageRenderer? = null
     private val _state = MutableStateFlow(WizardUiState())
     val state: StateFlow<WizardUiState> = _state.asStateFlow()
+
+    /**
+     * Nombre de archivo REAL de un content:// (p. ej. "CERTIFICADO_DE_SITUACION_CENSAL.PDF").
+     * `uri.lastPathSegment` en un content:// devuelve el ID crudo del proveedor SAF
+     * ("document:17077"), NO el nombre — por eso hay que consultar OpenableColumns.DISPLAY_NAME.
+     * Se pasa tal cual a la IA como `docNames` (el prompt hace pattern-matching sobre el
+     * nombre de archivo); la traducción a nombre de tipo legible se hace aparte, solo en la UI.
+     */
+    private fun resolveDisplayName(uri: Uri): String =
+        runCatching {
+            if (uri.scheme == "content") {
+                context.contentResolver.query(
+                    uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null
+                )?.use { c ->
+                    if (c.moveToFirst()) {
+                        val idx = c.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                        if (idx >= 0) c.getString(idx)?.takeIf { it.isNotBlank() } else null
+                    } else null
+                }
+            } else null
+        }.getOrNull()
+            ?: uri.lastPathSegment?.substringAfterLast('/')
+            ?: "documento"
 
     /** Aviso al usuario si algún URI persistido ya no es accesible tras la restauración
      *  (SAF/Storage Access Framework revoca los permisos cuando el proceso muere si no
@@ -290,7 +315,7 @@ class WizardViewModel @Inject constructor(
             // de páginas por llamada.
             val loadedPerUri = withContext(Dispatchers.IO) {
                 s.docUris.map { uri ->
-                    val displayName = uri.lastPathSegment?.substringAfterLast('/') ?: "documento"
+                    val displayName = resolveDisplayName(uri)
                     val pages = runCatching { loader.load(uri) }.getOrElse { emptyList() }
                     pages to displayName
                 }
@@ -309,7 +334,13 @@ class WizardViewModel @Inject constructor(
                     // al terminar un motor se marca como completado (queda con el tick
                     // aunque otro empiece justo después, por eso se añade sin quitar).
                     onProviderStart = { docLabel, p ->
-                        _state.value = _state.value.copy(activeProvider = p, activeDocLabel = docLabel)
+                        // La IA recibió el nombre de archivo real (docLabel); aquí, solo para
+                        // la UI, lo traducimos a un nombre de tipo legible ("Certificado de
+                        // situación censal") en vez de mostrar "document:17077" o el fichero crudo.
+                        _state.value = _state.value.copy(
+                            activeProvider = p,
+                            activeDocLabel = DocumentTypeDetector.friendlyName(docLabel)
+                        )
                     },
                     onProviderFinish = { p ->
                         _state.value = _state.value.copy(

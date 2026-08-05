@@ -6,6 +6,36 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.7.8-nombre-documento-detectado] — 2026-08-05
+
+### Añadido — nombre de tipo de documento en el diálogo "Analizando con …"
+El diálogo de análisis mostraba `document:17077` en lugar del nombre del documento.
+Causa raíz: en un `content://` de SAF, `uri.lastPathSegment` devuelve el ID crudo del
+proveedor, NO el nombre de archivo. Se corrige en dos capas:
+
+- **Nombre de archivo real**: `WizardViewModel.resolveDisplayName()` consulta
+  `OpenableColumns.DISPLAY_NAME` vía `ContentResolver` (con fallback a `lastPathSegment`).
+  Este nombre real es el que viaja a la IA como `docNames`, así que la "Regla de nombres
+  de archivo" del prompt (patrones `censal*`, `036*`, `dni*`, `IMG_...`) recupera contexto
+  que antes perdía (recibía `document:17077`, señal nula) → mejor deducción de rol
+  (autónomo vs. representante).
+- **Nombre de tipo legible en la UI**: nuevo `DocumentTypeDetector.friendlyName()` mapea
+  el nombre de archivo a un tipo ("Certificado de situación censal", "NIE / Permiso de
+  residencia", "Alta en RETA", "Contrato de alquiler", "Certificado bancario",
+  "Escritura de constitución", "Tarjeta CIF/NIF", "DNI", "Modelo 036", "Certificado IAE",
+  "Pasaporte", "Factura"). Se aplica SOLO en `onProviderStart` (frontera de UI); la IA
+  sigue recibiendo el nombre de archivo crudo para no romper la simetría del prompt.
+
+### Notas / límites
+- Detección por nombre de archivo: un fichero llamado literalmente `document.PDF` (sin
+  pista en el nombre) cae al genérico "Documento". La detección por contenido (escanear el
+  texto de la 1ª página) queda para una fase posterior y solo cubriría PDFs con capa de
+  texto, no escaneos-imagen sin OCR.
+- El texto de las etiquetas de tipo está centralizado en `DocumentTypeDetector.RULES`,
+  fácil de ajustar sin tocar UI ni ViewModel.
+
+---
+
 ## [0.7.7-estructura-detectada-paso1] — 2026-08-04
 
 ### Añadido — resumen "Estructura detectada" en el Paso 1 (Contrato)
