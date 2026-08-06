@@ -8,6 +8,45 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.8.6-fixes-uso-real] — 2026-08-06
+
+Cuatro fallos detectados usando la app con un alta real.
+
+### Corregido — Documentación no se podía desplazar
+Su `Column` tenía `weight(1f)` pero **ningún `verticalScroll`**: con varios documentos y
+los dos acordeones abiertos, el contenido desbordaba y quedaba cortado sin forma de bajar.
+
+- Añadido el scroll que faltaba.
+- Retirado el `Spacer(Modifier.weight(1f))` del final: dentro de un contenedor con scroll
+  la altura es infinita, así que `weight` no reparte nada.
+- Eliminado el scroll propio de la lista de documentos (`heightIn(max = 240.dp)`): con el
+  contenedor externo ya desplazable, dos scrolls anidados en el mismo eje se pelean por el
+  gesto. Ahora la lista fluye dentro del scroll de la pantalla.
+
+### Corregido — la hoja de Ajustes se quedaba a medio desplegar
+`ModalBottomSheet` se abre a media altura por defecto y ahí se quedaba, dejando cortados
+los motores y el resto de ajustes. Añadido `skipPartiallyExpanded = true` y scroll propio
+al contenido, por si en pantallas bajas o con fuente grande sigue sin caber.
+
+### Corregido — "Dejar en blanco" no vaciaba el campo
+`dismissField()` cambiaba el estado a `EMPTY` pero **conservaba el valor y la
+procedencia**, así que el campo seguía mostrando el dato que el usuario acababa de
+rechazar. Ahora borra valor y origen además del estado (y sigue siendo deshacible).
+
+### Corregido — el contrato se fechaba con la fecha de los documentos
+La IA extraía la fecha del censal o del 036 (p. ej. **23 de julio de 2026**) y, como el
+campo ya llegaba con valor, `DateAutofill` lo respetaba: el contrato salía **fechado en el
+pasado**. La fecha del contrato es siempre la de la **firma**.
+
+- Nuevo `ContractFields.DATE_KEYS`; esas claves se descartan del prerelleno antes de
+  aplicar `DateAutofill`, que ahora manda siempre.
+- `FieldResolver` ignora por completo los candidatos de fecha, para que la fecha de un
+  documento no se ofrezca siquiera como alternativa.
+- Resultado hoy: **6 · agosto · 6** (día · mes en letras · último dígito del año, la regla
+  de la web).
+
+---
+
 ## [0.8.5-scroll-firma] — 2026-08-06
 
 ### Corregido — el final del paso de Firma quedaba inalcanzable

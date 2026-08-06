@@ -87,6 +87,9 @@ object FieldResolver {
 
         // ── 2. Campos sueltos → candidatos (el consenso de motores va en el origen) ──
         proposals.forEach { p ->
+            // La fecha del contrato es la de la firma: las fechas que la IA lee de los
+            // documentos (censal, 036, alquiler…) no son candidatas a nada.
+            if (p.fieldKey in ContractFields.DATE_KEYS) return@forEach
             p.candidates.forEach { c ->
                 if (c.value.isBlank()) return@forEach
                 val list = candidates.getOrPut(p.fieldKey) { mutableListOf() }

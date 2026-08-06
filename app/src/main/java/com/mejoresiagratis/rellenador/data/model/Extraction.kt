@@ -80,6 +80,13 @@ object ContractFields {
 
     /** Valor fijo autorrellenado (regla de la app web). */
     const val RESPONSABLE_KEY = "Responsable Comercial MASORANGE"
+
+    /**
+     * Claves de la fecha del contrato: día / mes en letras / último dígito del año
+     * ("En ____ a __ de ______ de 20_"). Siempre es la fecha de la FIRMA, así que nunca
+     * se toman de los documentos aportados — ver `DateAutofill`.
+     */
+    val DATE_KEYS = listOf("Fecha", "de", "año")
     /** Valor por defecto; el real lo edita el usuario en Ajustes (PrefsRepository). */
     const val RESPONSABLE_VALUE = "PABLO SALVADOR POVEDA"
 

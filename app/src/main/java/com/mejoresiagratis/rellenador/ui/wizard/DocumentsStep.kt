@@ -85,6 +85,9 @@ fun DocumentsStep(state: WizardUiState, vm: WizardViewModel) {
         Column(
             modifier = Modifier
                 .weight(1f)
+                // v0.8.6: faltaba el scroll. Con varios documentos y los dos acordeones
+                // abiertos el contenido desborda y se cortaba sin poder desplazarlo.
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -155,12 +158,11 @@ fun DocumentsStep(state: WizardUiState, vm: WizardViewModel) {
                     expanded = docsExpanded,
                     onToggle = { docsExpanded = !docsExpanded }
                 ) {
-                    // Lista con scroll propio si crece — evita que empuje al Motores IA
-                    // fuera de la pantalla al añadir muchos documentos.
-                    Column(
-                        Modifier.heightIn(max = 240.dp).verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
+                    // La lista fluye dentro del scroll de la pantalla. Antes tenía scroll
+                    // propio acotado a 240 dp; ahora que el contenedor externo también se
+                    // desplaza, dos scrolls anidados en el mismo eje se pelean por el
+                    // gesto y la lista quedaba difícil de desplazar.
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         state.docUris.forEach { uri ->
                             ElevatedCard(shape = MaterialTheme.shapes.medium) {
                                 ListItem(
@@ -212,10 +214,9 @@ fun DocumentsStep(state: WizardUiState, vm: WizardViewModel) {
                 TipBanner("Los motores marcados con 🇪🇺 procesan los datos en servidores europeos.")
             }
 
-            // Spacer que empuja los acordeones hacia arriba cuando están plegados y no
-            // llenan por sí solos la pantalla — evita el hueco vacío entre "Motores IA"
-            // y la barra inferior que se veía antes.
-            Spacer(Modifier.weight(1f))
+            // (Se retira el antiguo `Spacer(Modifier.weight(1f))`: dentro de un contenedor
+            // con scroll la altura es infinita, así que `weight` no reparte nada — y con
+            // el contenido ya alineado arriba no aportaba nada.)
         }
 
         Surface(

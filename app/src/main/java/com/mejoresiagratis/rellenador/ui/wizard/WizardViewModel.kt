@@ -408,7 +408,11 @@ class WizardViewModel @Inject constructor(
             }.toMutableMap()
             // Regla fija de la web.
             prefill[ContractFields.RESPONSABLE_KEY] = _state.value.responsableComercial
-            // Autofill de fechas (Tanda D): rellena Fecha/de/año actuales si están vacías.
+            // La fecha del contrato es la de HOY (día de la firma), nunca la que aparezca
+            // en los documentos aportados. La IA extraía la fecha del censal o del 036
+            // (p. ej. "23 de julio de 2026") y, como el campo ya venía con valor, el
+            // autorrelleno lo respetaba y el contrato salía fechado en el pasado.
+            ContractFields.DATE_KEYS.forEach { prefill.remove(it) }
             prefill.putAll(DateAutofill.values(prefill))
 
             // v0.8.0: la extracción va DIRECTA a Relleno (ya no existe Revisión IA).
@@ -502,10 +506,20 @@ class WizardViewModel @Inject constructor(
     }
 
     /** Marca un campo dudoso/conflictivo como "lo relleno a mano": deja de bloquear. */
+    /**
+     * "Dejar en blanco · lo relleno a mano": vacía el campo, quita su procedencia y deja
+     * de bloquear el avance.
+     *
+     * Antes solo cambiaba el estado a EMPTY pero **conservaba el valor y el origen**, así
+     * que el campo seguía mostrando el dato que el usuario acababa de rechazar. Si además
+     * el campo estaba autorrellenado, no había forma de vaciarlo desde la hoja.
+     */
     fun dismissField(key: String) {
         val s = _state.value
         _state.value = s.copy(
+            fieldValues = s.fieldValues - key,
             fieldStates = s.fieldStates + (key to FieldState.EMPTY),
+            fieldOrigins = s.fieldOrigins - key,
             undoStack = (s.undoStack + UndoEntry(
                 labelOf(key),
                 mapOf(key to s.fieldValues[key]),

@@ -2,6 +2,8 @@ package com.mejoresiagratis.rellenador.ui.wizard
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
@@ -175,9 +177,18 @@ private fun QuickSettingsSheet(
 ) {
     var name by remember(state.responsableComercial) { mutableStateOf(state.responsableComercial) }
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    // v0.8.6 — `skipPartiallyExpanded`: por defecto la hoja se abre a media altura y ahí
+    // se quedaba, dejando los motores y el resto de ajustes cortados abajo. Con esto se
+    // despliega entera de una vez. Además el contenido lleva scroll propio por si en un
+    // móvil bajo o con la fuente grande sigue sin caber.
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(
-            Modifier.padding(horizontal = 20.dp).padding(bottom = 24.dp),
+            Modifier
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Text("Perfil comercial", style = MaterialTheme.typography.titleMedium)
