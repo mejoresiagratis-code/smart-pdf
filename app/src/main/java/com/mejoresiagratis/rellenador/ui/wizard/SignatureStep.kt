@@ -19,6 +19,7 @@ import androidx.compose.material.icons.outlined.Description
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.text.KeyboardOptions
@@ -114,7 +115,12 @@ fun SignatureStep(state: WizardUiState, vm: WizardViewModel) {
 
     Box(Modifier.fillMaxSize()) {
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+        Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            // El snackbar flota anclado abajo (overlay): sin este hueco reservado tapa
+            // los últimos controles y quedan inalcanzables mientras se muestra.
+            .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 96.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
@@ -476,9 +482,14 @@ fun SignatureStep(state: WizardUiState, vm: WizardViewModel) {
             }
         }
         if (state.previewReady) {
+            // Altura relativa a la pantalla en vez de 560.dp fijos: en móviles cortos
+            // aquello ocupaba casi todo el alto y empujaba el resto de controles fuera
+            // de vista. Se acota entre 320 y 560 dp para que siga siendo usable.
+            val screenH = LocalConfiguration.current.screenHeightDp.dp
+            val previewH = (screenH * 0.62f).coerceIn(320.dp, 560.dp)
             PdfPreview(
                 state, vm,
-                modifier = Modifier.fillMaxWidth().height(560.dp),
+                modifier = Modifier.fillMaxWidth().height(previewH),
                 listState = previewListState
             )
         }

@@ -4,7 +4,7 @@ Estado real del proyecto y próximas tandas planificadas. Este documento sustitu
 "roadmap" informal que vivía en las notas de continuidad de las sesiones. Se actualiza
 al final de cada tanda con lo que quede pendiente.
 
-Última actualización: **2026-08-06** (versión `0.8.4-firma-sin-marcos`, versionCode 53).
+Última actualización: **2026-08-06** (versión `0.8.5-scroll-firma`, versionCode 54).
 
 ---
 
@@ -34,6 +34,7 @@ al final de cada tanda con lo que quede pendiente.
 | **0.7.7** | "Estructura detectada" en Paso 1 (páginas, campos, huecos de firma) + hotfix de scope en `ContractStep`. |
 | **0.7.8** | **Tipo de documento por CONTENIDO**: `DocumentLoader.firstPagesText()` (PDFBox) + `DocumentTypeDetector.fromContent()` — el diálogo "Analizando con…" muestra "Certificado de situación censal", "Alta en RETA"… en vez de `document:17077`. Fix causa raíz SAF (`OpenableColumns.DISPLAY_NAME`); el nombre de archivo real viaja a la IA como contexto. |
 | **0.7.9** | **Tipo por IA (visión)** para fotos/escaneos sin capa de texto: campo `tipo_documento` en el prompt (vocabulario cerrado), callback `onDocTypeDetected`; la detección local tiene prioridad. ⚠️ Pendiente replicar `tipo_documento` en el prompt de la app web (paridad). |
+| **0.8.5** | Paso de Firma: hueco reservado para el snackbar (overlay anclado abajo que tapaba los últimos controles) y previsualización con altura proporcional a la pantalla (62%, entre 320 y 560 dp) en vez de 560 dp fijos. |
 | **0.8.4** | `removeFrameLines()` en `SignatureProcessor`: la firma extraída de foto ya no arrastra el recuadro impreso ni la raya de pauta. Criterio triple (cobertura ≥75% · grosor ≤4 · pegada al borde o span ≥90%), calibrado contra una firma real cuyo trazo vertical cubre el 78% de la altura. |
 | **0.8.3** | Hero de la IA en la cabecera del Relleno (titular, documentos y motores, contador `X/N` con rebote real vía `Animatable` + specs capturados fuera del `LaunchedEffect`, barra animada). Cierra el diseño aprobado. |
 | **0.8.2** | Aspecto del mockup aprobado: roles `surfaceContainer*` cálidos en `Theme.kt` (faltaban → M3 los derivaba en gris neutro y las tarjetas se veían frías sobre fondo cálido; afecta a toda la app), stepper de barras en vez de círculos, campos como cajas rellenas con tinte por estado y chip de procedencia. Limpieza de imports huérfanos. |

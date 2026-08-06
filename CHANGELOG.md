@@ -8,6 +8,25 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.8.5-scroll-firma] — 2026-08-06
+
+### Corregido — el final del paso de Firma quedaba inalcanzable
+Con el acordeón "Huecos de firma" desplegado (5 páginas), los controles del final —los
+botones de «2 · Estampar la firma»— quedaban tapados y no había forma de llegar a ellos.
+
+El paso **sí tenía scroll**; el problema eran otras dos cosas:
+
+- **El snackbar es un overlay anclado abajo** ("Firmadas 5 páginas") y no había hueco
+  reservado para él, así que se comía los últimos ~90 dp de contenido mientras estaba
+  visible. Añadido `bottom = 96.dp` al padding del contenido desplazable.
+- **La previsualización tenía 560 dp fijos.** En móviles de pantalla corta ocupaba casi
+  todo el alto disponible y empujaba el resto de controles fuera de vista. Ahora es
+  proporcional a la pantalla (62% del alto), acotada entre 320 y 560 dp.
+
+Verificado que los cuatro pasos del asistente tienen contenedor desplazable.
+
+---
+
 ## [0.8.4-firma-sin-marcos] — 2026-08-06
 
 ### Corregido — la firma extraída de una foto arrastraba el marco del recuadro
