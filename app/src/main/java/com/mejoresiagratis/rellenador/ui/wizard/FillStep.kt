@@ -1,6 +1,5 @@
 package com.mejoresiagratis.rellenador.ui.wizard
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -18,8 +17,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.ImeAction
@@ -308,22 +305,23 @@ private fun FieldRow(
     var showSheet by rememberSaveable(key) { mutableStateOf(false) }
 
     val scheme = MaterialTheme.colorScheme
-    // Tinte suave según estado. La IA se marca con el terciario (frío) para que se
-    // distinga del naranja de marca, que queda reservado a las acciones.
-    val tint = when (fState) {
-        FieldState.AI -> scheme.tertiaryContainer.copy(alpha = 0.34f)
-        FieldState.CONFLICT -> scheme.errorContainer.copy(alpha = 0.55f)
-        FieldState.WARN -> scheme.tertiary.copy(alpha = 0.10f)
-        else -> Color.Transparent
+    // El estado tiñe el CONTENEDOR del propio campo (no un fondo detrás): así el campo se
+    // lee como una caja rellena, sin doble superficie. La IA usa el terciario (frío) para
+    // no competir con el naranja de marca, reservado a las acciones.
+    val container = when (fState) {
+        FieldState.AI -> scheme.tertiaryContainer
+        FieldState.CONFLICT -> scheme.errorContainer
+        FieldState.WARN -> scheme.surfaceContainerHighest
+        else -> scheme.surfaceContainerLowest
     }
+    val fieldColors = OutlinedTextFieldDefaults.colors(
+        focusedContainerColor = container,
+        unfocusedContainerColor = container,
+        errorContainerColor = scheme.errorContainer,
+        disabledContainerColor = container,
+    )
 
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .clip(MaterialTheme.shapes.medium)
-            .background(tint)
-            .padding(vertical = if (fState == FieldState.EMPTY) 0.dp else 6.dp)
-    ) {
+    Column(Modifier.fillMaxWidth()) {
         OutlinedTextField(
             value = value,
             onValueChange = { vm.setFieldValue(key, it) },
@@ -358,6 +356,8 @@ private fun FieldRow(
                 }
                 else -> null
             },
+            colors = fieldColors,
+            shape = MaterialTheme.shapes.medium,
             modifier = Modifier.fillMaxWidth()
         )
 
@@ -373,18 +373,26 @@ private fun FieldRow(
         // Procedencia: qué documento aportó el dato y qué motores lo respaldan.
         if (origin != null && value.isNotBlank()) {
             Row(
-                Modifier.padding(start = 12.dp, top = 3.dp, end = 12.dp),
+                Modifier.padding(start = 10.dp, top = 5.dp, end = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Text(
-                    origin.document,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = scheme.onSurfaceVariant
-                )
+                // Chip de procedencia: DE QUÉ DOCUMENTO salió el dato. Es lo que permite
+                // detectar a simple vista un valor que viene del documento equivocado.
+                Surface(
+                    shape = CircleShape,
+                    color = scheme.surfaceContainerLowest.copy(alpha = 0.86f),
+                ) {
+                    Text(
+                        origin.document,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = scheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 3.dp)
+                    )
+                }
                 if (origin.engines.isNotEmpty()) {
                     Text(
-                        "· ${origin.engines.joinToString(", ")}",
+                        origin.engines.joinToString(" · "),
                         style = MaterialTheme.typography.labelSmall,
                         color = scheme.onSurfaceVariant
                     )

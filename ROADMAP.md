@@ -4,7 +4,7 @@ Estado real del proyecto y próximas tandas planificadas. Este documento sustitu
 "roadmap" informal que vivía en las notas de continuidad de las sesiones. Se actualiza
 al final de cada tanda con lo que quede pendiente.
 
-Última actualización: **2026-08-06** (versión `0.8.1-intrusos-y-persistencia`, versionCode 50).
+Última actualización: **2026-08-06** (versión `0.8.2-aspecto-calido`, versionCode 51).
 
 ---
 
@@ -34,6 +34,7 @@ al final de cada tanda con lo que quede pendiente.
 | **0.7.7** | "Estructura detectada" en Paso 1 (páginas, campos, huecos de firma) + hotfix de scope en `ContractStep`. |
 | **0.7.8** | **Tipo de documento por CONTENIDO**: `DocumentLoader.firstPagesText()` (PDFBox) + `DocumentTypeDetector.fromContent()` — el diálogo "Analizando con…" muestra "Certificado de situación censal", "Alta en RETA"… en vez de `document:17077`. Fix causa raíz SAF (`OpenableColumns.DISPLAY_NAME`); el nombre de archivo real viaja a la IA como contexto. |
 | **0.7.9** | **Tipo por IA (visión)** para fotos/escaneos sin capa de texto: campo `tipo_documento` en el prompt (vocabulario cerrado), callback `onDocTypeDetected`; la detección local tiene prioridad. ⚠️ Pendiente replicar `tipo_documento` en el prompt de la app web (paridad). |
+| **0.8.2** | Aspecto del mockup aprobado: roles `surfaceContainer*` cálidos en `Theme.kt` (faltaban → M3 los derivaba en gris neutro y las tarjetas se veían frías sobre fondo cálido; afecta a toda la app), stepper de barras en vez de círculos, campos como cajas rellenas con tinte por estado y chip de procedencia. Limpieza de imports huérfanos. |
 | **0.8.1** | Conecta `flagIntruders` (la detección de documento de otro titular estaba escrita pero sin llamar) con deducción del titular por documento y regla de "ante empate no se acusa"; persiste `fieldStates`/`fieldOrigins`/`fieldCandidates` (sin ellos, restaurar sesión desactivaba el bloqueo del avance); snackbar con DESHACER y badge "N por decidir" por sección. |
 | **0.8.0** | **Asistente de 4 pasos**: "Revisión IA" se funde en "Relleno". `ReviewStep.kt` eliminado; el formulario llega prerrellenado con estado por campo (`AI`/`CONFLICT`/`WARN`), procedencia por documento, hoja de decisión con alternativas, deshacer, y bloqueo del avance mientras haya campos por decidir. Autorrelleno gobernado por `AutoFillPolicy` (procedencia, no solo consenso de motores). Migración de sesiones persistidas (`schemaVersion` + `migrateStepIndex`). |
 | **0.7.10** | **Fallback DNS-over-HTTPS** en `Ipv4PreferredDns`: ante caché DNS negativa del router/dispositivo (hasta 24 h por el TTL del SOA), la app resuelve por su cuenta vía `1.1.1.1`/`8.8.8.8` por IP literal, TLS intacto, sin dependencias nuevas. |

@@ -81,6 +81,22 @@ private val OnSurfaceVariantDark = Color(0xFFD6C3B6)
 private val OutlineDark = Color(0xFF9E8D80)
 private val OutlineVariantDark = Color(0xFF51443A)
 
+// ---- Roles surfaceContainer* (v0.8.2) ----
+// Sin declararlos, Material 3 los deriva en GRIS NEUTRO y rompen la calidez del resto
+// del tema: las tarjetas se veían frías sobre un fondo cálido. Estos valores continúan
+// la rampa tonal del naranja de marca, que es lo que ya hacía `surface`.
+private val SurfaceContainerLowestLight = Color(0xFFFFFFFF)
+private val SurfaceContainerLowLight = Color(0xFFFFF1EA)
+private val SurfaceContainerLight = Color(0xFFFCEBE2)
+private val SurfaceContainerHighLight = Color(0xFFF6E4DA)
+private val SurfaceContainerHighestLight = Color(0xFFF0DED4)
+
+private val SurfaceContainerLowestDark = Color(0xFF120C08)
+private val SurfaceContainerLowDark = Color(0xFF21180F)
+private val SurfaceContainerDark = Color(0xFF251B13)
+private val SurfaceContainerHighDark = Color(0xFF30251C)
+private val SurfaceContainerHighestDark = Color(0xFF3C2F26)
+
 private val LightColors: ColorScheme = lightColorScheme(
     primary = BrandOrange, onPrimary = OnBrandOrange,
     primaryContainer = OrangeContainerLight, onPrimaryContainer = OnOrangeContainerLight,
@@ -92,6 +108,11 @@ private val LightColors: ColorScheme = lightColorScheme(
     errorContainer = ErrorContainerLight, onErrorContainer = OnErrorContainerLight,
     surface = SurfaceLight, onSurface = OnSurfaceLight,
     surfaceVariant = SurfaceVariantLight, onSurfaceVariant = OnSurfaceVariantLight,
+    surfaceContainerLowest = SurfaceContainerLowestLight,
+    surfaceContainerLow = SurfaceContainerLowLight,
+    surfaceContainer = SurfaceContainerLight,
+    surfaceContainerHigh = SurfaceContainerHighLight,
+    surfaceContainerHighest = SurfaceContainerHighestLight,
     outline = OutlineLight, outlineVariant = OutlineVariantLight,
 )
 
@@ -106,6 +127,11 @@ private val DarkColors: ColorScheme = darkColorScheme(
     errorContainer = ErrorContainerDark, onErrorContainer = OnErrorContainerDark,
     surface = SurfaceDark, onSurface = OnSurfaceDark,
     surfaceVariant = SurfaceVariantDark, onSurfaceVariant = OnSurfaceVariantDark,
+    surfaceContainerLowest = SurfaceContainerLowestDark,
+    surfaceContainerLow = SurfaceContainerLowDark,
+    surfaceContainer = SurfaceContainerDark,
+    surfaceContainerHigh = SurfaceContainerHighDark,
+    surfaceContainerHighest = SurfaceContainerHighestDark,
     outline = OutlineDark, outlineVariant = OutlineVariantDark,
 )
 

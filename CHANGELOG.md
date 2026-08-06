@@ -8,6 +8,43 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.8.2-aspecto-calido] — 2026-08-06
+
+Alinea la app con el diseño aprobado (mockup v2): paleta cálida completa, stepper de
+barras y campos como cajas rellenas con su procedencia visible.
+
+### Corregido — los contenedores de superficie salían en gris neutro
+`Theme.kt` definía `surface` con tinte cálido (`#FFF8F5`) pero **no** los roles
+`surfaceContainer*`. Material 3 los derivaba en gris neutro, así que las tarjetas y
+secciones se veían frías sobre un fondo cálido — la incoherencia visual que se arrastraba
+desde el principio.
+
+- Añadidos `surfaceContainerLowest/Low/…/Highest` en claro y oscuro, continuando la rampa
+  tonal del naranja de marca (`#FFFFFF`, `#FFF1EA`, `#FCEBE2`, `#F6E4DA`, `#F0DED4`).
+- Afecta a **toda la app**, no solo al Relleno: es la base para propagar el estilo al resto
+  de pasos.
+
+### Cambiado — stepper de barras en lugar de círculos numerados
+Con 4 pasos, las barras comunican avance de forma continua (cada paso es un tramo que se
+llena) y **liberan altura vertical**, que en el formulario de Relleno es lo más escaso. El
+tramo activo lleva degradado; la animación usa `motionScheme.defaultSpatialSpec()`.
+
+### Cambiado — los campos se leen como cajas rellenas, con su procedencia
+- El estado tiñe el **contenedor del propio campo** (`OutlinedTextFieldDefaults.colors`) en
+  vez de pintar un fondo detrás: se acabó la doble superficie.
+  `AI` → `tertiaryContainer` · `CONFLICT` → `errorContainer` · `WARN` →
+  `surfaceContainerHighest` · vacío → `surfaceContainerLowest`.
+- La procedencia pasa de texto suelto a **chip**, con los motores al lado.
+
+### Limpieza
+Eliminados 8 imports que quedaron huérfanos al reescribir el stepper y los campos
+(`rememberInfiniteTransition`, `infiniteRepeatable`, `RepeatMode`, `LinearOutSlowInEasing`,
+`tween`, `BorderStroke`, `scale`, `clip`, `background`, `Color`). Se usa
+`defaultSpatialSpec()` —ya probado en este proyecto— en lugar de `slowSpatialSpec()`, que
+no tenía uso previo aquí.
+
+---
+
 ## [0.8.1-intrusos-y-persistencia] — 2026-08-06
 
 Cierra los dos huecos que dejó la 0.8.0, ambos de seguridad real, y añade el pulido de
