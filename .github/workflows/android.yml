@@ -1,5 +1,12 @@
 name: Android CI
 
+# Título visible en la lista de Actions.
+# En `push`, GitHub ya usaba el mensaje del commit; en `workflow_dispatch` no hay commit
+# en el evento y se quedaba en "Android CI #NNN", sin decir qué se estaba compilando.
+# El operador `||` de las expresiones actúa como "si es nulo, usa esto otro".
+run-name: >-
+  ${{ github.event.head_commit.message || format('Compilación manual · {0}', github.sha) }}
+
 on:
   push:
     branches: [ main, master ]
@@ -29,12 +36,37 @@ jobs:
       - name: Dar permiso de ejecucion a gradlew
         run: chmod +x gradlew
 
+      - name: Leer version del proyecto
+        id: ver
+        run: |
+          NAME=$(grep -oP 'versionName\s*=\s*"\K[^"]+' app/build.gradle.kts | head -1)
+          CODE=$(grep -oP 'versionCode\s*=\s*\K[0-9]+' app/build.gradle.kts | head -1)
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "code=$CODE" >> "$GITHUB_OUTPUT"
+          echo "Compilando $NAME (code $CODE)"
+
       - name: Compilar APK debug
         run: ./gradlew assembleDebug --stacktrace
 
       - name: Subir APK como artefacto
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug-apk
+          # Con la versión en el nombre no hay que abrir el APK para saber cuál es
+          # cuando hay varios descargados a la vez.
+          name: rellenador-${{ steps.ver.outputs.name }}
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: warn
+
+      - name: Resumen del build
+        if: always()
+        run: |
+          {
+            echo "## Rellenador de Contratos"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Versión | \`${{ steps.ver.outputs.name }}\` |"
+            echo "| versionCode | ${{ steps.ver.outputs.code }} |"
+            echo "| Commit | \`${{ github.sha }}\` |"
+            echo "| Lanzado por | ${{ github.event_name }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
