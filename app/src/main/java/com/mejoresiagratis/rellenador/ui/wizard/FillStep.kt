@@ -15,6 +15,7 @@ import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -61,6 +62,23 @@ private val SECTIONS = listOf(
 fun FillStep(state: WizardUiState, vm: WizardViewModel) {
     var showHistory by remember { mutableStateOf(false) }
     if (showHistory) HistoryPanel(vm, onDismiss = { showHistory = false })
+
+    // v0.8.2 — confirmación de cada decisión, con DESHACER a mano. Antes el cambio
+    // ocurría en silencio y el usuario no sabía qué campos se habían tocado.
+    val snackbarHost = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    fun confirm(message: String) {
+        scope.launch {
+            snackbarHost.currentSnackbarData?.dismiss()
+            val res = snackbarHost.showSnackbar(
+                message = message,
+                actionLabel = "DESHACER",
+                withDismissAction = true,
+                duration = SnackbarDuration.Short,
+            )
+            if (res == SnackbarResult.ActionPerformed) vm.undoLast()
+        }
+    }
 
     val canonByKey = remember { ContractFields.CANON.associateBy { it.key } }
 
@@ -167,8 +185,25 @@ fun FillStep(state: WizardUiState, vm: WizardViewModel) {
                                 )
                                 Spacer(Modifier.width(6.dp))
                             }
-                            if (sectionComplete) {
-                                Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp)) {
+                            // v0.8.2 — la sección avisa de sus propios campos por decidir,
+                            // para no tener que buscarlos bajando por todo el formulario.
+                            val sectionPending = section.keys.count {
+                                val fs = state.fieldStates[it]
+                                fs == FieldState.CONFLICT || fs == FieldState.WARN
+                            }
+                            when {
+                                sectionPending > 0 -> Surface(
+                                    shape = MaterialTheme.shapes.small,
+                                    color = MaterialTheme.colorScheme.tertiaryContainer
+                                ) {
+                                    Text(
+                                        if (sectionPending == 1) "1 por decidir" else "$sectionPending por decidir",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
+                                    )
+                                }
+                                sectionComplete -> Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp)) {
                                     Box(contentAlignment = Alignment.Center) {
                                         Icon(Icons.Filled.Check, contentDescription = "Sección completa",
                                             tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(12.dp))
@@ -177,7 +212,7 @@ fun FillStep(state: WizardUiState, vm: WizardViewModel) {
                             }
                         }
                         section.keys.forEach { key ->
-                            FieldRow(key, canonByKey[key], state, vm)
+                            FieldRow(key, canonByKey[key], state, vm, ::confirm)
                         }
                     }
                 }
@@ -220,6 +255,9 @@ fun FillStep(state: WizardUiState, vm: WizardViewModel) {
             }
         }
 
+        // Host del snackbar: encima de la barra de acciones para que no la tape.
+        SnackbarHost(snackbarHost, Modifier.padding(horizontal = 12.dp))
+
         HorizontalDivider()
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -247,7 +285,13 @@ fun FillStep(state: WizardUiState, vm: WizardViewModel) {
 }
 
 @Composable
-private fun FieldRow(key: String, field: CanonField?, state: WizardUiState, vm: WizardViewModel) {
+private fun FieldRow(
+    key: String,
+    field: CanonField?,
+    state: WizardUiState,
+    vm: WizardViewModel,
+    onConfirm: (String) -> Unit = {},
+) {
     val value = state.fieldValues[key] ?: ""
     val provKey = if (key.endsWith("_2")) "Provincia_2" else "Provincia"
     val result = FieldValidator.validate(key, value, state.tipoIdentificacion, state.fieldValues[provKey])
@@ -354,8 +398,16 @@ private fun FieldRow(key: String, field: CanonField?, state: WizardUiState, vm: 
             fieldLabel = field?.label ?: key,
             state = fState,
             candidates = candidates,
-            onPick = { vm.chooseCandidate(key, it); showSheet = false },
-            onManual = { vm.dismissField(key); showSheet = false },
+            onPick = {
+                vm.chooseCandidate(key, it)
+                showSheet = false
+                onConfirm("${field?.label ?: key}: ${it.value}")
+            },
+            onManual = {
+                vm.dismissField(key)
+                showSheet = false
+                onConfirm("${field?.label ?: key}: lo rellenas a mano")
+            },
             onDismiss = { showSheet = false },
         )
     }

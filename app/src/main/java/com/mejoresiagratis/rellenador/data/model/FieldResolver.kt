@@ -40,6 +40,27 @@ object FieldResolver {
     ): Resolution {
         val candidates = LinkedHashMap<String, MutableList<FieldCandidate>>()
 
+        // ── 0. ¿Qué titular afirma cada documento? ──────────────────────────────
+        // Solo se miran los paquetes de tipo "empresa" (el TITULAR del contrato). Los de
+        // tipo "persona" se ignoran a propósito: el NIE del representante de una S.L. es
+        // legítimamente distinto del CIF de la empresa y marcarlo sería un falso positivo.
+        val documentHolders: Map<String, String> = packages
+            .filter { it.tipo == "empresa" }
+            .mapNotNull { pk ->
+                val id = pk.datos["NIE"]?.trim()?.uppercase()?.takeIf { it.isNotBlank() }
+                id?.let { pk.fuente to it }
+            }
+            .toMap()
+
+        // El titular esperado es el que afirman MÁS documentos. Si hay empate no se
+        // acusa a nadie (conjunto vacío ⇒ flagIntruders no marca nada): mejor no avisar
+        // que avisar en falso, porque un aviso falso enseña al usuario a ignorarlos.
+        val byFrequency = documentHolders.values.groupingBy { it }.eachCount()
+        val top = byFrequency.values.maxOrNull() ?: 0
+        val expectedHolders: Set<String> =
+            if (top == 0 || byFrequency.count { it.value == top } > 1) emptySet()
+            else byFrequency.filterValues { it == top }.keys
+
         // ── 1. Bloques → candidatos, con destino resuelto y campos enlazados ──
         packages.forEach { pk ->
             val toBlock2 = pk.tipo == "direccion_comercio"
@@ -91,6 +112,9 @@ object FieldResolver {
         val autoValues = LinkedHashMap<String, String>()
         val states = LinkedHashMap<String, FieldState>()
         val origins = LinkedHashMap<String, FieldOrigin>()
+        // Candidatos YA marcados, que son los que verá la hoja de decisión: así el
+        // usuario lee "este documento parece de otro titular" en la propia alternativa.
+        val flaggedByKey = LinkedHashMap<String, List<FieldCandidate>>()
 
         candidates.forEach { (key, list) ->
             // Un campo ya rellenado (fecha, responsable, o escrito por el usuario) no se pisa.
@@ -98,7 +122,12 @@ object FieldResolver {
                 states[key] = FieldState.USER
                 return@forEach
             }
-            val distinct = list.distinctBy { it.value.trim().lowercase() }
+            // Marca los candidatos que vienen de un documento de OTRO titular. Es lo que
+            // salva el caso del documento intruso: dos motores pueden coincidir leyendo
+            // el documento equivocado (consenso 2/2) y sin esto se autorrellenaría.
+            val flagged = AutoFillPolicy.flagIntruders(list, documentHolders, expectedHolders)
+            flaggedByKey[key] = flagged
+            val distinct = flagged.distinctBy { it.value.trim().lowercase() }
             when (val state = AutoFillPolicy.decide(key, distinct)) {
                 FieldState.AI -> {
                     val chosen = distinct.first()
@@ -118,6 +147,9 @@ object FieldResolver {
             }
         }
 
-        return Resolution(autoValues, states, origins, candidates.mapValues { it.value.toList() })
+        // Los campos que salieron por el atajo de "ya rellenado" no pasan por el marcado;
+        // se completan aquí para que la hoja siga ofreciendo sus alternativas.
+        candidates.forEach { (k, v) -> flaggedByKey.putIfAbsent(k, v.toList()) }
+        return Resolution(autoValues, states, origins, flaggedByKey)
     }
 }

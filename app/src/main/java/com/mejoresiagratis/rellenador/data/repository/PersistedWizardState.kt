@@ -5,6 +5,9 @@ import com.mejoresiagratis.rellenador.data.model.Paquete
 import com.mejoresiagratis.rellenador.data.model.SignatureData
 import com.mejoresiagratis.rellenador.data.model.SignatureStamp
 import com.mejoresiagratis.rellenador.ui.wizard.ContractSource
+import com.mejoresiagratis.rellenador.ui.wizard.FieldCandidate
+import com.mejoresiagratis.rellenador.ui.wizard.FieldOrigin
+import com.mejoresiagratis.rellenador.ui.wizard.FieldState
 import com.mejoresiagratis.rellenador.ui.wizard.Step
 import com.mejoresiagratis.rellenador.ui.wizard.WizardUiState
 import kotlinx.serialization.Serializable
@@ -55,6 +58,15 @@ data class PersistedWizardState(
 
     val fieldValues: Map<String, String> = emptyMap(),
 
+    /**
+     * Estado de revisión por campo (v0.8.1). Sin esto, al restaurar una sesión los
+     * valores volvían pero los conflictos dejaban de estar marcados y **el bloqueo del
+     * avance a Firma desaparecía**: se podía firmar con un conflicto sin resolver.
+     */
+    val fieldStates: Map<String, FieldState> = emptyMap(),
+    val fieldOrigins: Map<String, FieldOrigin> = emptyMap(),
+    val fieldCandidates: Map<String, List<FieldCandidate>> = emptyMap(),
+
     // Firma (bytes en base64 estándar)
     val signaturePngBase64: String? = null,
     val signatureAspectRatio: Float = 0.4f,
@@ -85,7 +97,10 @@ fun WizardUiState.toPersisted(): PersistedWizardState {
     val sig = signature
     return PersistedWizardState(
         schemaVersion = SCHEMA_VERSION,
-    step = step.index,
+        step = step.index,
+        fieldStates = fieldStates,
+        fieldOrigins = fieldOrigins,
+        fieldCandidates = fieldCandidates,
         contractSource = contractSource?.name,
         userContractUri = userContractUri?.toString(),
         userFieldNames = userFieldNames,
@@ -122,6 +137,11 @@ fun PersistedWizardState.applyTo(base: WizardUiState): WizardUiState {
     }
     return base.copy(
         step = Step.entries.getOrNull(migrateStepIndex(step, schemaVersion)) ?: Step.CONTRATO,
+        fieldStates = fieldStates,
+        fieldOrigins = fieldOrigins,
+        fieldCandidates = fieldCandidates,
+        // La pila de deshacer NO se persiste a propósito: deshacer es de la sesión en curso.
+        undoStack = emptyList(),
         contractSource = contractSource?.let { runCatching { ContractSource.valueOf(it) }.getOrNull() },
         userContractUri = userContractUri?.let { android.net.Uri.parse(it) },
         userFieldNames = userFieldNames,

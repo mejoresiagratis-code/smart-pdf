@@ -8,6 +8,44 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.8.1-intrusos-y-persistencia] — 2026-08-06
+
+Cierra los dos huecos que dejó la 0.8.0, ambos de seguridad real, y añade el pulido de
+feedback que faltaba respecto al diseño aprobado.
+
+### Corregido — la detección de documento intruso estaba escrita pero no conectada
+`AutoFillPolicy.flagIntruders()` existía desde la 0.8.0 pero **no la llamaba nadie**: la
+protección contra el escenario del documento de otro titular (caso real: el censal de otra
+persona colado en el lote con el mismo nombre de archivo) no estaba activa.
+
+- `FieldResolver` deduce ahora el **titular de cada documento** a partir de los paquetes de
+  tipo `empresa` (los de tipo `persona` se ignoran a propósito: el NIE del representante de
+  una S.L. es legítimamente distinto del CIF, y evaluarlo daría falsos positivos).
+- El **titular esperado** es el que afirman más documentos. **Ante empate no se acusa a
+  nadie** (conjunto vacío): un aviso falso enseña al usuario a ignorar los avisos.
+- Los candidatos de un documento con otro titular se marcan `risky` con la nota "este
+  documento parece de otro titular (X)" → nunca se autorrellenan y la nota se ve **en la
+  propia alternativa** dentro de la hoja de decisión.
+- Verificado contra los tres casos: lote de ZEB IN NISA SL con el censal intruso (lo
+  detecta), lote limpio del autónomo (no marca nada) y empate (no acusa).
+
+### Corregido — los estados de revisión no sobrevivían a la muerte del proceso
+`fieldStates`, `fieldOrigins` y `fieldCandidates` no se persistían. Al restaurar una sesión
+los valores volvían pero **los conflictos dejaban de estar marcados y el bloqueo del avance
+desaparecía**: se podía llegar a Firma con un conflicto sin resolver.
+
+- Los tres mapas se añaden a `PersistedWizardState` (`FieldState`, `FieldOrigin` y
+  `FieldCandidate` pasan a `@Serializable`).
+- `undoStack` **no** se persiste, a propósito: deshacer es de la sesión en curso.
+
+### Añadido — feedback de las decisiones (v0.8.2 del plan, adelantado)
+- **Snackbar de confirmación** con acción **DESHACER** tras elegir un candidato o marcar un
+  campo como manual. Antes el cambio ocurría en silencio.
+- **Badge por sección** ("N por decidir") en la cabecera de cada bloque del formulario, para
+  no tener que buscar los campos pendientes bajando por todo el formulario.
+
+---
+
 ## [0.8.0-relleno-unificado] — 2026-08-06
 
 ### Cambiado — el asistente pasa de 5 a 4 pasos: "Revisión IA" se funde en "Relleno"

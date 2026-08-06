@@ -29,6 +29,7 @@ enum class Step(val index: Int, val title: String) {
  * Estado de un campo del contrato en el paso de Relleno. Sustituye a la separación
  * "bloques vs campos sueltos" que hacía la antigua pantalla de Revisión IA.
  */
+@kotlinx.serialization.Serializable
 enum class FieldState {
     /** Vacío: ni la IA lo propuso ni el usuario lo escribió. */
     EMPTY,
@@ -55,6 +56,7 @@ enum class FieldState {
  * El documento es lo que permite detectar el "documento intruso"; el motor solo mide
  * consenso técnico y por sí solo no garantiza que el dato sea del cliente correcto.
  */
+@kotlinx.serialization.Serializable
 data class FieldOrigin(
     val document: String,               // p. ej. "Alta en RETA", "Certificado censal"
     val engines: Set<String> = emptySet(),
@@ -63,6 +65,7 @@ data class FieldOrigin(
 )
 
 /** Una alternativa elegible para un campo (las variantes en conflicto). */
+@kotlinx.serialization.Serializable
 data class FieldCandidate(
     val value: String,
     val origin: FieldOrigin,
