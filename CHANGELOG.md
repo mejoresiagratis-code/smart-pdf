@@ -8,6 +8,30 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.8.3-hero-ia] — 2026-08-06
+
+Última pieza visual del diseño aprobado (mockup v2): la cabecera del Relleno pasa de un
+contador plano a un **hero** que resume qué ha hecho la IA.
+
+### Añadido — hero de la IA en la cabecera del Relleno
+- Tarjeta en `tertiaryContainer` (frío, para no competir con el naranja de las acciones)
+  con icono, titular **"La IA ha rellenado el contrato"**, subtítulo con el número de
+  documentos y los motores que respondieron, y contador `X/N` grande.
+- **Rebote real del contador** al cambiar el número de campos completos: `Animatable` +
+  `LaunchedEffect(filledFields)`, con los specs de `motionScheme` **capturados antes** del
+  efecto (`motionScheme` es `@Composable` y no puede llamarse dentro de un `LaunchedEffect`
+  — error ya cometido en este proyecto y anotado en el ROADMAP).
+- Barra de progreso animada con `defaultSpatialSpec()`, redondeada, en tono terciario.
+- El botón "Historial" se mueve a su propia fila para no competir con el hero.
+
+### Notas de prudencia
+- `gapSize` y `drawStopIndicator` de `LinearProgressIndicator` se descartaron: no se usan
+  en ninguna parte del proyecto y no puedo compilar aquí para verificarlos.
+- `@OptIn(ExperimentalMaterial3ExpressiveApi::class)` añadido a `FillStep` —la anotación no
+  se hereda entre funciones, que fue exactamente la causa del build rojo de la 0.8.2.
+
+---
+
 ## [0.8.2-aspecto-calido] — 2026-08-06
 
 Alinea la app con el diseño aprobado (mockup v2): paleta cálida completa, stepper de

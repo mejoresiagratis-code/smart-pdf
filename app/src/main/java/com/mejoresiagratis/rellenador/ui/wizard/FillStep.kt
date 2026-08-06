@@ -1,11 +1,14 @@
 package com.mejoresiagratis.rellenador.ui.wizard
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -17,6 +20,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.ImeAction
@@ -55,6 +60,9 @@ private val SECTIONS = listOf(
  * identificación editable (antes solo lo fijaba la IA, sin forma de corregirlo),
  * copia rápida fiscal → comercio, y fecha en fila compacta.
  */
+// Usa `motionScheme` (M3 Expressive, experimental) para el rebote del contador y el
+// progreso del hero: cada función que lo use necesita su propio @OptIn.
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun FillStep(state: WizardUiState, vm: WizardViewModel) {
     var showHistory by remember { mutableStateOf(false) }
@@ -92,20 +100,87 @@ fun FillStep(state: WizardUiState, vm: WizardViewModel) {
 
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                // (Título "Paso 4 · Relleno" retirado — el stepper ya lo indica.
-                // El contador X/N sube a titleMedium para ocupar el hueco con info útil.)
-                Text("$filledFields de $totalFields campos",
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.weight(1f))
+            // v0.8.3 — hero: resume de un vistazo QUÉ ha hecho la IA y cuánto queda.
+            // Va en terciario (frío) para separarlo del naranja de las acciones, y el
+            // contador rebota al cambiar para que el progreso se note.
+            val aiCount = state.fieldStates.count { it.value == FieldState.AI }
+            val progress by animateFloatAsState(
+                targetValue = if (totalFields == 0) 0f else filledFields.toFloat() / totalFields,
+                animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+                label = "fillProgress"
+            )
+            val bumpSpec = MaterialTheme.motionScheme.fastSpatialSpec<Float>()
+            val settleSpec = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
+            val counterScale = remember { Animatable(1f) }
+            LaunchedEffect(filledFields) {
+                if (filledFields > 0) {
+                    counterScale.animateTo(1.22f, bumpSpec)
+                    counterScale.animateTo(1f, settleSpec)
+                }
+            }
+            Surface(
+                shape = MaterialTheme.shapes.extraLarge,
+                color = MaterialTheme.colorScheme.tertiaryContainer,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            shape = MaterialTheme.shapes.medium,
+                            color = MaterialTheme.colorScheme.tertiary,
+                            modifier = Modifier.size(38.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    Icons.Filled.AutoAwesome,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onTertiary,
+                                    modifier = Modifier.size(19.dp)
+                                )
+                            }
+                        }
+                        Spacer(Modifier.width(11.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                if (aiCount > 0) "La IA ha rellenado el contrato"
+                                else "Completa el contrato",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer
+                            )
+                            Text(
+                                buildString {
+                                    append("${state.docUris.size} documento")
+                                    if (state.docUris.size != 1) append("s")
+                                    if (state.enginesOk.isNotEmpty()) {
+                                        append(" · ")
+                                        append(state.enginesOk.joinToString(", "))
+                                    }
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer
+                            )
+                        }
+                        Text(
+                            "$filledFields/$totalFields",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Black,
+                            color = MaterialTheme.colorScheme.tertiary,
+                            modifier = Modifier.scale(counterScale.value)
+                        )
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    LinearProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier.fillMaxWidth().height(8.dp).clip(CircleShape),
+                        color = MaterialTheme.colorScheme.tertiary,
+                        trackColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.18f)
+                    )
+                }
+            }
+            Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
                 TextButton(onClick = { showHistory = true }) { Text("Historial") }
             }
-            LinearProgressIndicator(
-                progress = { if (totalFields == 0) 0f else filledFields.toFloat() / totalFields },
-                modifier = Modifier.fillMaxWidth().height(6.dp),
-                color = MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.primaryContainer
-            )
 
             // Tipo de identificación — corregible a mano. Antes solo lo fijaba la IA
             // y no había forma de arreglarlo si se equivocaba, pese a que determina
