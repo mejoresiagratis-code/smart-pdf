@@ -241,6 +241,9 @@ private fun FlowRowChips(state: WizardUiState, vm: WizardViewModel) {
  *   (spring-ish, infinito) — es el único que "respira", dirigiendo la atención
  *   (principio Expressive), fiel al mockup de Contrato.
  */
+// `motionScheme` es API experimental de M3 Expressive: cada función que la use necesita su
+// propio @OptIn (el de WizardScreen no se hereda entre funciones del mismo fichero).
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun StepIndicator(current: Step) {
     // v0.8.2 — barras de progreso en vez de círculos numerados. Con 4 pasos, las barras
