@@ -8,6 +8,33 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.9.2-fix-mime-file-uri] — 2026-08-07
+
+### Corregido — «No se pudieron leer los documentos» (regresión de la v0.8.7)
+Desde la v0.8.7 el análisis fallaba **siempre**: al pulsar «Analizar con IA» saltaba
+«No se pudieron leer los documentos». En la v0.8.6 funcionaba.
+
+**Causa:** `DocumentLoader.mimeOf()` resolvía el tipo con
+`ContentResolver.getType(uri)`, que **solo funciona con `content://`**. Para un `file://`
+devuelve `null`. Y precisamente la v0.8.7 introdujo `DocumentStore`, que copia los
+documentos a `filesDir` — desde entonces **todos** los URIs son `file://`.
+
+La cadena completa: `getType()` → `null` → `application/octet-stream` → `load()` no entra
+ni por la rama de imagen ni por la de PDF → devuelve lista vacía → `docGroups.isEmpty()`
+→ error. Los documentos estaban perfectamente copiados y eran legibles; lo único que
+fallaba era decidir de qué tipo eran.
+
+**Solución:** cuando el resolver no sabe (o dice `octet-stream`), se deduce por la
+extensión del nombre, que la copia conserva. Verificado con los ficheros reales del caso
+(`036.PDF`, `Certificado_cuenta.PDF`, `CIF.PDF`, `DNI_24_DNI_2-24_merged.PDF`, y un `.jpg`):
+los cinco vuelven a entrar por su rama. El camino de `content://` no cambia: si el resolver
+responde, manda él.
+
+`WizardViewModel.detectDocType()` no estaba afectado — ya miraba también la extensión del
+nombre además del MIME.
+
+---
+
 ## [0.9.1-consentimiento-y-solo-ue] — 2026-08-06
 
 Segunda tanda del plan web→app. Las dos funciones van juntas porque comparten la misma

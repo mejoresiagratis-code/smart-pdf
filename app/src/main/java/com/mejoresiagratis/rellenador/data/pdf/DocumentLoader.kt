@@ -55,8 +55,37 @@ class DocumentLoader @Inject constructor(
     private fun displayName(uri: Uri): String =
         uri.lastPathSegment?.substringAfterLast('/') ?: "documento"
 
-    private fun mimeOf(uri: Uri): String =
-        context.contentResolver.getType(uri) ?: "application/octet-stream"
+    /**
+     * Tipo MIME del documento.
+     *
+     * ⚠️ `ContentResolver.getType()` solo resuelve `content://`. Para un `file://`
+     * devuelve **null**, y desde la v0.8.7 —cuando `DocumentStore` empezó a copiar los
+     * documentos a `filesDir`— TODOS los URIs son `file://`. El resultado era que todo
+     * caía en `application/octet-stream`, no entraba ni por la rama de imagen ni por la
+     * de PDF, y el análisis fallaba con «No se pudieron leer los documentos».
+     *
+     * Se resuelve por extensión cuando el resolver no sabe. El nombre del fichero se
+     * conserva en la copia (con prefijo de tiempo), así que la extensión siempre está.
+     */
+    private fun mimeOf(uri: Uri): String {
+        context.contentResolver.getType(uri)
+            ?.takeIf { it.isNotBlank() && it != "application/octet-stream" }
+            ?.let { return it }
+
+        val name = (uri.lastPathSegment ?: "").substringAfterLast('/').lowercase()
+        val ext = name.substringAfterLast('.', "")
+        return when (ext) {
+            "pdf" -> "application/pdf"
+            "jpg", "jpeg" -> "image/jpeg"
+            "png" -> "image/png"
+            "webp" -> "image/webp"
+            "gif" -> "image/gif"
+            "heic", "heif" -> "image/heic"
+            "bmp" -> "image/bmp"
+            else -> android.webkit.MimeTypeMap.getSingleton()
+                .getMimeTypeFromExtension(ext) ?: "application/octet-stream"
+        }
+    }
 
     /** Renderiza todas las páginas de un PDF a JPEG (una imagen por página). */
     private fun renderPdf(uri: Uri, targetLongSide: Int = 2000): List<ByteArray> {
