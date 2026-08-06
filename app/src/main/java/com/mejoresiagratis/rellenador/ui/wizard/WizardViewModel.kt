@@ -198,6 +198,19 @@ class WizardViewModel @Inject constructor(
             val url = runCatching { prefs.proxyBaseUrlOverride.first() }.getOrDefault("")
             _state.value = _state.value.copy(proxyBaseUrlOverride = url)
         }
+        // Privacidad (v0.9.1). El consentimiento recordado y el filtro solo-UE sobreviven
+        // a «Empezar otro contrato»: son decisiones del usuario sobre sus datos, no
+        // estado de un contrato concreto.
+        viewModelScope.launch {
+            val consent = runCatching { prefs.consentRemembered.first() }.getOrDefault(false)
+            val eu = runCatching { prefs.euOnly.first() }.getOrDefault(false)
+            _state.value = _state.value.copy(
+                consentRemembered = consent,
+                euOnly = eu,
+                enabledProviders = if (eu) _state.value.enabledProviders.filter { it.eu }.toSet()
+                                   else _state.value.enabledProviders,
+            )
+        }
     }
 
     /** GET al proxy: qué motores tienen clave en servidor. */
@@ -328,6 +341,8 @@ class WizardViewModel @Inject constructor(
         docStore.delete(uri)   // no dejar copias huérfanas ocupando espacio
     }
     fun toggleProvider(p: AiProvider) {
+        // Con el filtro solo-UE activo, un motor de fuera no puede encenderse.
+        if (_state.value.euOnly && !p.eu) return
         val cur = _state.value.enabledProviders.toMutableSet()
         if (!cur.add(p)) cur.remove(p)
         _state.value = _state.value.copy(enabledProviders = cur)
@@ -335,6 +350,43 @@ class WizardViewModel @Inject constructor(
     }
 
     /** Lanza la extracción multi-motor y avanza a Revisión. */
+    /**
+     * Punto de entrada desde el botón «Analizar con IA» (v0.9.1). Si el usuario no ha
+     * marcado «no volver a preguntar», muestra primero el aviso: los documentos llevan
+     * datos personales de terceros y algunos motores procesan fuera de la UE.
+     */
+    fun requestExtraction() {
+        val s = _state.value
+        if (!s.canAdvanceFromDocs) return
+        if (s.consentRemembered) runExtraction()
+        else _state.value = s.copy(showConsent = true)
+    }
+
+    /** El usuario aceptó el aviso. [remember] = no volver a preguntar en este dispositivo. */
+    fun acceptConsent(remember: Boolean) {
+        _state.value = _state.value.copy(showConsent = false, consentRemembered = remember)
+        if (remember) viewModelScope.launch { prefs.setConsentRemembered(true) }
+        runExtraction()
+    }
+
+    fun dismissConsent() {
+        _state.value = _state.value.copy(showConsent = false)
+    }
+
+    /**
+     * Solo motores que procesan en la UE. Al activarlo se desactivan los que no lo son:
+     * dejarlos marcados pero inertes haría creer que siguen participando.
+     */
+    fun setEuOnly(value: Boolean) {
+        val cur = _state.value.enabledProviders
+        val kept = if (value) cur.filter { it.eu }.toSet() else cur
+        _state.value = _state.value.copy(euOnly = value, enabledProviders = kept)
+        viewModelScope.launch {
+            prefs.setEuOnly(value)
+            if (kept != cur) prefs.setEnabled(kept.toList())
+        }
+    }
+
     fun runExtraction() {
         val s = _state.value
         if (!s.canAdvanceFromDocs) return

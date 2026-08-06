@@ -8,6 +8,51 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.9.1-consentimiento-y-solo-ue] — 2026-08-06
+
+Segunda tanda del plan web→app. Las dos funciones van juntas porque comparten la misma
+pregunta: **a dónde van los datos del cliente**.
+
+### Añadido — aviso previo antes de mandar documentos a la IA
+Los documentos que se analizan son DNI, NIE, certificados censales y datos bancarios **de
+terceros**. Enviarlos a un proveedor de IA es una comunicación de datos personales, y
+varios motores procesan fuera de la UE. La app web ya paraba aquí desde su versión F7; la
+Android los enviaba directamente — justo al revés de lo esperable, porque la Android es la
+que se usa a diario con clientes reales.
+
+- Nuevo `ConsentSheet`: cuántos documentos se van a enviar, advertencia de datos de
+  terceros, y **los motores separados en dos bloques** — los que salen de la UE en
+  `errorContainer`, los que procesan dentro en `tertiaryContainer`. Ese es el dato que
+  cambia la decisión, así que va destacado y no enterrado en un párrafo.
+- El botón «Analizar» **está deshabilitado** hasta marcar la casilla de autorización.
+- Casilla «no volver a preguntar en este dispositivo», persistida
+  (`ai_consent_remembered_v1`).
+- `runExtraction()` deja de ser el punto de entrada de la UI: ahora es
+  `requestExtraction()`, que abre el aviso salvo que ya esté recordado. Verificado que no
+  queda ninguna llamada directa desde la interfaz.
+- Si todos los motores activos son europeos, el bloque de advertencia **no aparece**: no
+  conviene acostumbrar al usuario a descartar un aviso que casi nunca aplica.
+
+### Añadido — modo «solo motores europeos»
+Interruptor en el acordeón de Motores IA, persistido (`eu_only_engines_v1`).
+
+- Va **arriba del listado**: es un filtro que decide qué motores son elegibles, y leerlo
+  después de haber elegido sería llegar tarde.
+- Al activarlo **apaga de verdad** los motores no europeos, no los deja marcados pero
+  inertes: un chip encendido que no participa es una mentira visual.
+- Sus chips quedan atenuados y sin respuesta, pero **siguen visibles**, para que se vea que
+  existen y por qué no se pueden usar ahora.
+- `toggleProvider()` respeta el filtro: con solo-UE activo, un motor de fuera no puede
+  encenderse.
+
+### Notas
+- Ambas preferencias **sobreviven a «Empezar otro contrato»**: son decisiones del usuario
+  sobre sus datos, no estado de un contrato concreto.
+- `AiProvider.eu` ya existía; no hizo falta tocar el modelo de motores.
+- Sin cambios en el prompt → la paridad con la web no se ve afectada.
+
+---
+
 ## [0.9.0-errores-de-motor-visibles] — 2026-08-06
 
 Primera tanda del plan web→app. Arregla una **regresión introducida en la v0.8.0**.

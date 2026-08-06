@@ -93,6 +93,12 @@ data class WizardUiState(
     val docUris: List<Uri> = emptyList(),
     val availableProviders: List<AiProvider> = emptyList(),   // los que tienen clave en servidor (GET)
     val enabledProviders: Set<AiProvider> = emptySet(),
+    /** Solo motores que procesan en la UE. Desactiva y bloquea el resto (v0.9.1). */
+    val euOnly: Boolean = false,
+    /** El usuario marcó «no volver a preguntar» en el aviso previo al análisis. */
+    val consentRemembered: Boolean = false,
+    /** El aviso está en pantalla, esperando decisión. No se persiste. */
+    val showConsent: Boolean = false,
 
     val busy: Boolean = false,
     val busyMsg: String = "",

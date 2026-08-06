@@ -2,6 +2,7 @@ package com.mejoresiagratis.rellenador.data.repository
 
 import android.content.Context
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -152,6 +153,30 @@ class PrefsRepository @Inject constructor(
 
     suspend fun setProxyBaseUrlOverride(url: String) {
         context.dataStore.edit { it[proxyUrlKey] = url.trim() }
+    }
+
+    // ── Privacidad (v0.9.1) ──────────────────────────────────────────────────
+    private val consentKey = booleanPreferencesKey("ai_consent_remembered_v1")
+    private val euOnlyKey = booleanPreferencesKey("eu_only_engines_v1")
+
+    /**
+     * El usuario marcó «no volver a preguntar» en el aviso previo al análisis. Se guarda
+     * aparte del resto de ajustes porque es una decisión informada sobre datos personales:
+     * no debe borrarse al reiniciar una sesión de contrato, pero sí al borrar datos.
+     */
+    val consentRemembered: Flow<Boolean> =
+        context.dataStore.data.map { it[consentKey] ?: false }
+
+    suspend fun setConsentRemembered(value: Boolean) {
+        context.dataStore.edit { it[consentKey] = value }
+    }
+
+    /** Solo motores con procesamiento en la UE. Se recuerda entre sesiones. */
+    val euOnly: Flow<Boolean> =
+        context.dataStore.data.map { it[euOnlyKey] ?: false }
+
+    suspend fun setEuOnly(value: Boolean) {
+        context.dataStore.edit { it[euOnlyKey] = value }
     }
 
     companion object {

@@ -4,7 +4,7 @@ Estado real del proyecto y próximas tandas planificadas. Este documento sustitu
 "roadmap" informal que vivía en las notas de continuidad de las sesiones. Se actualiza
 al final de cada tanda con lo que quede pendiente.
 
-Última actualización: **2026-08-06** (versión `0.9.0-errores-de-motor-visibles`, versionCode 57).
+Última actualización: **2026-08-06** (versión `0.9.1-consentimiento-y-solo-ue`, versionCode 58).
 
 ---
 
@@ -34,6 +34,7 @@ al final de cada tanda con lo que quede pendiente.
 | **0.7.7** | "Estructura detectada" en Paso 1 (páginas, campos, huecos de firma) + hotfix de scope en `ContractStep`. |
 | **0.7.8** | **Tipo de documento por CONTENIDO**: `DocumentLoader.firstPagesText()` (PDFBox) + `DocumentTypeDetector.fromContent()` — el diálogo "Analizando con…" muestra "Certificado de situación censal", "Alta en RETA"… en vez de `document:17077`. Fix causa raíz SAF (`OpenableColumns.DISPLAY_NAME`); el nombre de archivo real viaja a la IA como contexto. |
 | **0.7.9** | **Tipo por IA (visión)** para fotos/escaneos sin capa de texto: campo `tipo_documento` en el prompt (vocabulario cerrado), callback `onDocTypeDetected`; la detección local tiene prioridad. ⚠️ Pendiente replicar `tipo_documento` en el prompt de la app web (paridad). |
+| **0.9.1** | **Aviso previo (RGPD) antes de mandar documentos a la IA**: `ConsentSheet` con los motores separados por región, casilla obligatoria y «no volver a preguntar» persistido. **Modo solo motores europeos**: apaga y bloquea los de fuera de la UE. Ambas preferencias sobreviven a «Empezar otro contrato». |
 | **0.9.0** | **Regresión corregida**: los fallos de motor eran invisibles desde la v0.8.0 (se borró con `ReviewStep` el único panel que los mostraba). Nuevo `EngineFailure` que traduce el error crudo a causa legible + consejo, y aviso plegable en el hero de Relleno. |
 | **0.8.7** | **Persistencia de documentos (Fase 2)**: nuevo `DocumentStore` que copia los documentos a `filesDir/docs/` al añadirlos, así sobreviven a la muerte del proceso. Limpieza al quitar un documento y al empezar contrato nuevo. |
 | **0.8.6** | Cuatro fallos de uso real: scroll que faltaba en Documentación (+ scroll anidado retirado), hoja de Ajustes desplegada del todo (`skipPartiallyExpanded`), "Dejar en blanco" ahora vacía de verdad el campo, y la fecha del contrato es la de la firma y no la extraída de los documentos (`DATE_KEYS`). |

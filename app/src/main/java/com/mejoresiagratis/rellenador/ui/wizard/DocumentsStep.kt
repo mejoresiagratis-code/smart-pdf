@@ -28,6 +28,7 @@ import androidx.compose.material.icons.outlined.UploadFile
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
@@ -191,6 +192,16 @@ fun DocumentsStep(state: WizardUiState, vm: WizardViewModel) {
                 }
             }
 
+            // v0.9.1 — aviso previo obligatorio antes de mandar documentos a la IA.
+            if (state.showConsent) {
+                ConsentSheet(
+                    engines = state.enabledProviders.toList().sortedBy { it.displayName },
+                    docCount = state.docUris.size,
+                    onAccept = vm::acceptConsent,
+                    onDismiss = vm::dismissConsent,
+                )
+            }
+
             // Sección Motores IA — acordeón terciario.
             ExpressiveAccordion(
                 title = "Motores IA",
@@ -206,16 +217,45 @@ fun DocumentsStep(state: WizardUiState, vm: WizardViewModel) {
                 if (state.availableProviders.isEmpty()) {
                     Text("Comprobando motores disponibles…", style = MaterialTheme.typography.bodySmall)
                 }
+
+                // v0.9.1 — filtro de región. Va ARRIBA del listado a propósito: decide qué
+                // motores son elegibles, así que leerlo después de haber elegido sería
+                // llegar tarde.
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp)
+                ) {
+                    Switch(
+                        checked = state.euOnly,
+                        onCheckedChange = { if (!state.busy) vm.setEuOnly(it) },
+                        enabled = !state.busy
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Solo motores europeos", style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            if (state.euOnly) "Los datos no salen de la UE"
+                            else "Algunos motores procesan fuera de la UE",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer
+                        )
+                    }
+                }
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     state.availableProviders.forEach { p ->
+                        // Con el filtro solo-UE, los de fuera se ven atenuados y no
+                        // responden: se mantienen a la vista para que quede claro que
+                        // existen y por qué no se pueden usar ahora.
+                        val blocked = state.euOnly && !p.eu
                         EngineChip(
                             provider = p,
                             selected = p in state.enabledProviders,
                             active = state.busy && state.activeProvider == p,
-                            onClick = { if (!state.busy) vm.toggleProvider(p) }
+                            onClick = { if (!state.busy && !blocked) vm.toggleProvider(p) },
+                            modifier = Modifier.alpha(if (blocked) 0.38f else 1f)
                         )
                     }
                 }
@@ -239,7 +279,7 @@ fun DocumentsStep(state: WizardUiState, vm: WizardViewModel) {
             ) {
                 OutlinedButton(onClick = vm::back, enabled = !state.busy) { Text("Atrás") }
                 ExpressiveButton(
-                    onClick = vm::runExtraction,
+                    onClick = vm::requestExtraction,
                     text = "Analizar con IA",
                     enabled = state.canAdvanceFromDocs && !state.busy,
                     trailingIcon = Icons.AutoMirrored.Filled.ArrowForward,
