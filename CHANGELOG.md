@@ -8,6 +8,34 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.8.7-documentos-persistentes] — 2026-08-06
+
+### Añadido — los documentos sobreviven a la muerte del proceso (Fase 2 de robustez)
+Pendiente marcado como **alta prioridad** en el ROADMAP desde la v0.6.5.
+
+El selector devuelve un `content://` cuyo permiso de lectura es **efímero**: vive mientras
+viva el proceso. Si Android mataba la app en segundo plano —algo habitual mientras el
+comercial hace fotos o consulta WhatsApp—, al volver el URI restaurado ya no se podía abrir
+y **había que volver a añadir todos los documentos**. Hasta ahora solo se avisaba de ello.
+
+- Nuevo **`DocumentStore`**: copia los documentos a `filesDir/docs/` al añadirlos y
+  devuelve URIs `file://`, que no dependen del proveedor original.
+- `takePersistableUriPermission` se descartó como solución general: solo funciona si quien
+  abrió el selector concedió el permiso como persistible, y aquí los documentos llegan por
+  rutas muy variadas (WhatsApp, cámara, Descargas…). Copiar los bytes es lo único que no
+  depende del proveedor.
+- La UI muestra los documentos **de inmediato** y se sustituyen por la copia al terminar,
+  para que añadir no dé sensación de espera.
+- Las copias llevan prefijo `<millis>_` porque dos documentos pueden llamarse igual (muy
+  típico con WhatsApp entre lotes distintos). El prefijo se oculta en la lista y en el
+  nombre que viaja a la IA.
+- `removeDocument` borra su copia, y `resetSession` limpia la carpeta entera: sin eso las
+  copias se acumularían indefinidamente.
+- Si una copia falla se conserva el URI original: mejor un documento con permiso efímero
+  que perderlo.
+
+---
+
 ## [0.8.6-fixes-uso-real] — 2026-08-06
 
 Cuatro fallos detectados usando la app con un alta real.

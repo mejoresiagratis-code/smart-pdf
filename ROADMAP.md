@@ -4,7 +4,7 @@ Estado real del proyecto y próximas tandas planificadas. Este documento sustitu
 "roadmap" informal que vivía en las notas de continuidad de las sesiones. Se actualiza
 al final de cada tanda con lo que quede pendiente.
 
-Última actualización: **2026-08-06** (versión `0.8.6-fixes-uso-real`, versionCode 55).
+Última actualización: **2026-08-06** (versión `0.8.7-documentos-persistentes`, versionCode 56).
 
 ---
 
@@ -34,6 +34,7 @@ al final de cada tanda con lo que quede pendiente.
 | **0.7.7** | "Estructura detectada" en Paso 1 (páginas, campos, huecos de firma) + hotfix de scope en `ContractStep`. |
 | **0.7.8** | **Tipo de documento por CONTENIDO**: `DocumentLoader.firstPagesText()` (PDFBox) + `DocumentTypeDetector.fromContent()` — el diálogo "Analizando con…" muestra "Certificado de situación censal", "Alta en RETA"… en vez de `document:17077`. Fix causa raíz SAF (`OpenableColumns.DISPLAY_NAME`); el nombre de archivo real viaja a la IA como contexto. |
 | **0.7.9** | **Tipo por IA (visión)** para fotos/escaneos sin capa de texto: campo `tipo_documento` en el prompt (vocabulario cerrado), callback `onDocTypeDetected`; la detección local tiene prioridad. ⚠️ Pendiente replicar `tipo_documento` en el prompt de la app web (paridad). |
+| **0.8.7** | **Persistencia de documentos (Fase 2)**: nuevo `DocumentStore` que copia los documentos a `filesDir/docs/` al añadirlos, así sobreviven a la muerte del proceso. Limpieza al quitar un documento y al empezar contrato nuevo. |
 | **0.8.6** | Cuatro fallos de uso real: scroll que faltaba en Documentación (+ scroll anidado retirado), hoja de Ajustes desplegada del todo (`skipPartiallyExpanded`), "Dejar en blanco" ahora vacía de verdad el campo, y la fecha del contrato es la de la firma y no la extraída de los documentos (`DATE_KEYS`). |
 | **0.8.5** | Paso de Firma: hueco reservado para el snackbar (overlay anclado abajo que tapaba los últimos controles) y previsualización con altura proporcional a la pantalla (62%, entre 320 y 560 dp) en vez de 560 dp fijos. |
 | **0.8.4** | `removeFrameLines()` en `SignatureProcessor`: la firma extraída de foto ya no arrastra el recuadro impreso ni la raya de pauta. Criterio triple (cobertura ≥75% · grosor ≤4 · pegada al borde o span ≥90%), calibrado contra una firma real cuyo trazo vertical cubre el 78% de la altura. |
@@ -49,7 +50,8 @@ al final de cada tanda con lo que quede pendiente.
 
 ### 🔴 Alta prioridad
 
-- **Persistencia de documentos (Fase 2 de robustez)**
+- ~~**Persistencia de documentos (Fase 2 de robustez)**~~ ✅ *Completado en v0.8.7* — `DocumentStore`
+  copia los documentos a `filesDir/docs/` al añadirlos. Texto original:
   Copiar los documentos aportados a almacenamiento privado de la app al añadirlos (o
   llamar a `takePersistableUriPermission` cuando sea posible con el picker usado). Hoy,
   si el proceso muere en segundo plano, los `Uri`s persistidos pueden volverse inaccesibles

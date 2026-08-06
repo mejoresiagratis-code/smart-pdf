@@ -56,7 +56,8 @@ class WizardViewModel @Inject constructor(
     private val exporter: PdfExporter,
     private val templateMapper: TemplateMapper,
     private val filler: AcroFormFiller,
-    private val pageDetector: SignaturePageDetector
+    private val pageDetector: SignaturePageDetector,
+    private val docStore: com.mejoresiagratis.rellenador.data.pdf.DocumentStore
 ) : ViewModel() {
 
     private var previewRenderer: PdfPageRenderer? = null
@@ -84,6 +85,10 @@ class WizardViewModel @Inject constructor(
             } else null
         }.getOrNull()
             ?: uri.lastPathSegment?.substringAfterLast('/')
+                // Las copias locales (v0.8.7) llevan un prefijo "<millis>_" para evitar
+                // colisiones de nombre; se quita para mostrar y para mandar a la IA el
+                // nombre real del fichero.
+                ?.replace(Regex("^\\d{10,}_"), "")
             ?: "documento"
 
     /**
@@ -165,6 +170,9 @@ class WizardViewModel @Inject constructor(
         viewModelScope.launch {
             runCatching { prefs.clearWizardSession() }
         }
+        // Borra las copias locales de los documentos del contrato anterior: si no, se
+        // acumularían indefinidamente en el almacenamiento de la app.
+        docStore.clear()
         previewRenderer?.close()
         previewRenderer = null
         _restoreWarning.value = null
@@ -296,11 +304,28 @@ class WizardViewModel @Inject constructor(
     }
 
     // ---- Paso 2: documentación ----
+    /**
+     * Añade documentos copiándolos a almacenamiento propio de la app (v0.8.7). El permiso
+     * de lectura de un `content://` del selector es efímero: si Android mata el proceso en
+     * segundo plano, al volver ya no se puede abrir. Con la copia local, la sesión se
+     * restaura completa.
+     *
+     * Se muestran de inmediato (para que la UI responda al instante) y se sustituyen por
+     * la copia en cuanto termina, que es cuestión de milisegundos.
+     */
     fun addDocuments(uris: List<Uri>) {
         _state.value = _state.value.copy(docUris = (_state.value.docUris + uris).distinct())
+        viewModelScope.launch {
+            val persisted = docStore.persist(uris)
+            val replacement = uris.zip(persisted).toMap()
+            _state.value = _state.value.copy(
+                docUris = _state.value.docUris.map { replacement[it] ?: it }.distinct()
+            )
+        }
     }
     fun removeDocument(uri: Uri) {
         _state.value = _state.value.copy(docUris = _state.value.docUris - uri)
+        docStore.delete(uri)   // no dejar copias huérfanas ocupando espacio
     }
     fun toggleProvider(p: AiProvider) {
         val cur = _state.value.enabledProviders.toMutableSet()

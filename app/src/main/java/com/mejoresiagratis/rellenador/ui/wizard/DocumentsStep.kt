@@ -166,7 +166,16 @@ fun DocumentsStep(state: WizardUiState, vm: WizardViewModel) {
                         state.docUris.forEach { uri ->
                             ElevatedCard(shape = MaterialTheme.shapes.medium) {
                                 ListItem(
-                                    headlineContent = { Text(uri.lastPathSegment?.substringAfterLast('/') ?: "documento") },
+                                    // Las copias locales llevan prefijo "<millis>_" para
+                                    // evitar colisiones de nombre; no se enseña al usuario.
+                                    headlineContent = {
+                                        Text(
+                                            uri.lastPathSegment
+                                                ?.substringAfterLast('/')
+                                                ?.replace(Regex("^\\d{10,}_"), "")
+                                                ?: "documento"
+                                        )
+                                    },
                                     trailingContent = {
                                         IconButton(
                                             onClick = { vm.removeDocument(uri) },
