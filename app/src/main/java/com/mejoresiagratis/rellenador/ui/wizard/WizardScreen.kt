@@ -102,7 +102,6 @@ fun WizardScreen(vm: WizardViewModel = hiltViewModel(), onOpenSettings: () -> Un
                 when (state.step) {
                     Step.CONTRATO -> ContractStep(state, vm)
                     Step.DOCUMENTOS -> DocumentsStep(state, vm)
-                    Step.REVISION -> ReviewStep(state, vm)
                     Step.RELLENO -> FillStep(state, vm)
                     Step.FIRMA -> SignatureStep(state, vm)
                 }

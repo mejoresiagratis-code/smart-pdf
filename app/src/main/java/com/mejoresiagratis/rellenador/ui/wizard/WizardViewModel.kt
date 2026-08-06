@@ -9,8 +9,7 @@ import androidx.lifecycle.viewModelScope
 import com.mejoresiagratis.rellenador.data.model.AiProvider
 import com.mejoresiagratis.rellenador.data.model.ContractFields
 import com.mejoresiagratis.rellenador.data.model.DateAutofill
-import com.mejoresiagratis.rellenador.data.model.PackageApplier
-import com.mejoresiagratis.rellenador.data.model.Paquete
+import com.mejoresiagratis.rellenador.data.model.FieldResolver
 import android.graphics.Bitmap
 import androidx.core.graphics.scale
 import com.mejoresiagratis.rellenador.data.model.SignatureData
@@ -412,15 +411,28 @@ class WizardViewModel @Inject constructor(
             // Autofill de fechas (Tanda D): rellena Fecha/de/año actuales si están vacías.
             prefill.putAll(DateAutofill.values(prefill))
 
+            // v0.8.0: la extracción va DIRECTA a Relleno (ya no existe Revisión IA).
+            // Aquí se decide qué se autorrellena y qué queda marcado para decisión.
+            val resolved = FieldResolver.resolve(
+                proposals = result.proposals,
+                packages = result.packages,
+                alreadyFilled = prefill,
+            )
+            prefill.putAll(resolved.autoValues)
+
             _state.value = _state.value.copy(
-                busy = false, step = Step.REVISION,
+                busy = false, step = Step.RELLENO,
                 proposals = result.proposals, packages = result.packages,
                 tipoIdentificacion = result.tipoIdentificacion, enginesOk = result.enginesOk,
                 fieldValues = prefill,
+                fieldStates = resolved.states,
+                fieldOrigins = resolved.origins,
+                fieldCandidates = resolved.candidates,
+                undoStack = emptyList(),
                 // NO se rellena `error` aquí a propósito: los fallos por motor ya se
-                // ven en el panel colapsable "Ver motores no disponibles" de ReviewStep
-                // (engineErrors). Duplicarlos en el banner rojo genérico era redundante
-                // y aparecía siempre visible aunque el usuario no quisiera verlo.
+                // ven en el panel colapsable "Ver motores no disponibles" (engineErrors).
+                // Duplicarlos en el banner rojo genérico era redundante y aparecía
+                // siempre visible aunque el usuario no quisiera verlo.
                 engineErrors = result.errors,
                 activeProvider = null, finishedProviders = emptySet(),
                 activeDocLabel = null, progressCurrent = 0, progressTotal = 0
@@ -430,10 +442,93 @@ class WizardViewModel @Inject constructor(
 
     // ---- Paso 3: revisión / relleno ----
     fun setFieldValue(key: String, value: String) {
-        _state.value = _state.value.copy(fieldValues = _state.value.fieldValues + (key to value))
+        pushUndo(labelOf(key), mapOf(key to value), FieldState.USER)
     }
     fun clearField(key: String) {
-        _state.value = _state.value.copy(fieldValues = _state.value.fieldValues - key)
+        pushUndo(labelOf(key), mapOf(key to ""), FieldState.EMPTY)
+    }
+
+    // ── Relleno unificado (v0.8.0) ───────────────────────────────────────────
+
+    private fun labelOf(key: String): String =
+        ContractFields.CANON.firstOrNull { it.key == key }?.label ?: key
+
+    /**
+     * Aplica un cambio de campos registrando el estado ANTERIOR para poder deshacerlo.
+     * Es el único punto que escribe en `fieldValues` desde la UI, así que todo cambio
+     * del usuario es reversible.
+     */
+    private fun pushUndo(label: String, delta: Map<String, String>, newState: FieldState) {
+        val s = _state.value
+        val prevValues = delta.keys.associateWith { s.fieldValues[it] }
+        val prevStates = delta.keys.associateWith { s.fieldStates[it] }
+        val prevOrigins = delta.keys.associateWith { s.fieldOrigins[it] }
+        val values = s.fieldValues.toMutableMap()
+        val states = s.fieldStates.toMutableMap()
+        delta.forEach { (k, v) ->
+            if (v.isBlank()) { values.remove(k); states[k] = FieldState.EMPTY }
+            else { values[k] = v; states[k] = newState }
+        }
+        _state.value = s.copy(
+            fieldValues = values,
+            fieldStates = states,
+            undoStack = (s.undoStack + UndoEntry(label, prevValues, prevStates, prevOrigins)).takeLast(20),
+        )
+    }
+
+    /**
+     * Elige uno de los candidatos de un campo en conflicto o dudoso. Aplica también los
+     * campos enlazados (CP/Población/Provincia de una dirección) en una sola acción
+     * deshacible, para que elegir una dirección no deje media dirección de otra.
+     */
+    fun chooseCandidate(key: String, candidate: FieldCandidate) {
+        val s = _state.value
+        val delta = mapOf(key to candidate.value) + candidate.linked
+        val prevValues = delta.keys.associateWith { s.fieldValues[it] }
+        val prevStates = delta.keys.associateWith { s.fieldStates[it] }
+        val prevOrigins = delta.keys.associateWith { s.fieldOrigins[it] }
+        val values = s.fieldValues.toMutableMap().apply { putAll(delta) }
+        val states = s.fieldStates.toMutableMap().apply {
+            delta.keys.forEach { this[it] = FieldState.USER }
+        }
+        val origins = s.fieldOrigins.toMutableMap().apply {
+            delta.keys.forEach { this[it] = candidate.origin }
+        }
+        _state.value = s.copy(
+            fieldValues = values, fieldStates = states, fieldOrigins = origins,
+            undoStack = (s.undoStack + UndoEntry(labelOf(key), prevValues, prevStates, prevOrigins))
+                .takeLast(20),
+        )
+    }
+
+    /** Marca un campo dudoso/conflictivo como "lo relleno a mano": deja de bloquear. */
+    fun dismissField(key: String) {
+        val s = _state.value
+        _state.value = s.copy(
+            fieldStates = s.fieldStates + (key to FieldState.EMPTY),
+            undoStack = (s.undoStack + UndoEntry(
+                labelOf(key),
+                mapOf(key to s.fieldValues[key]),
+                mapOf(key to s.fieldStates[key]),
+                mapOf(key to s.fieldOrigins[key]),
+            )).takeLast(20),
+        )
+    }
+
+    /** Deshace la última acción del paso de Relleno. */
+    fun undoLast() {
+        val s = _state.value
+        val last = s.undoStack.lastOrNull() ?: return
+        val values = s.fieldValues.toMutableMap()
+        val states = s.fieldStates.toMutableMap()
+        val origins = s.fieldOrigins.toMutableMap()
+        last.previousValues.forEach { (k, v) -> if (v == null) values.remove(k) else values[k] = v }
+        last.previousStates.forEach { (k, v) -> if (v == null) states.remove(k) else states[k] = v }
+        last.previousOrigins.forEach { (k, v) -> if (v == null) origins.remove(k) else origins[k] = v }
+        _state.value = s.copy(
+            fieldValues = values, fieldStates = states, fieldOrigins = origins,
+            undoStack = s.undoStack.dropLast(1),
+        )
     }
 
     /**
@@ -464,10 +559,6 @@ class WizardViewModel @Inject constructor(
 
     /** Aplica un paquete en bloque (dirección/empresa/persona/banco).
      *  Para direcciones, targetBlock2=true lo manda al bloque de comercio (_2). */
-    fun applyPackage(paquete: Paquete, targetBlock2: Boolean = false) {
-        val delta = PackageApplier.apply(paquete, targetBlock2)
-        _state.value = _state.value.copy(fieldValues = _state.value.fieldValues + delta)
-    }
 
 
     /** Abre el contrato activo (por defecto o del usuario) para leerlo. */

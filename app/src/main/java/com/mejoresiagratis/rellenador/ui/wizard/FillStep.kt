@@ -1,5 +1,6 @@
 package com.mejoresiagratis.rellenador.ui.wizard
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -9,10 +10,15 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.ImeAction
@@ -100,6 +106,41 @@ fun FillStep(state: WizardUiState, vm: WizardViewModel) {
                     ) { Text(tipo) }
                 }
             }
+
+            // v0.8.0 — aviso de los campos que la IA NO rellenó a propósito (conflicto
+            // entre documentos o procedencia dudosa). Bloquean el avance a Firma: son
+            // justo los que provocan los errores caros si pasan desapercibidos.
+            val pending = state.pendingDecisions()
+            if (pending.isNotEmpty()) {
+                Surface(
+                    shape = MaterialTheme.shapes.medium,
+                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        Modifier.padding(14.dp),
+                        horizontalArrangement = Arrangement.spacedBy(11.dp)
+                    ) {
+                        Icon(
+                            Icons.Filled.Warning, contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onTertiaryContainer
+                        )
+                        Column {
+                            Text(
+                                if (pending.size == 1) "1 campo necesita tu decisión"
+                                else "${pending.size} campos necesitan tu decisión",
+                                style = MaterialTheme.typography.titleSmall
+                            )
+                            Text(
+                                "No los he rellenado solo: hay documentos que se contradicen " +
+                                    "o que podrían no ser de este cliente.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer
+                            )
+                        }
+                    }
+                }
+            }
         }
         HorizontalDivider()
 
@@ -183,10 +224,22 @@ fun FillStep(state: WizardUiState, vm: WizardViewModel) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = vm::back) { Text("Atrás") }
+            // Deshacer: revierte la última elección o edición del Relleno. Solo activo si
+            // hay algo que deshacer (la pila NO se persiste entre sesiones a propósito).
+            FilledTonalIconButton(
+                onClick = vm::undoLast,
+                enabled = state.undoStack.isNotEmpty()
+            ) {
+                Icon(Icons.Filled.Refresh, contentDescription = "Deshacer el último cambio")
+            }
+            val pendingCount = state.pendingDecisions().size
             ExpressiveButton(
                 onClick = vm::next,
-                text = "Ir a la firma",
-                trailingIcon = Icons.AutoMirrored.Filled.ArrowForward,
+                text = if (pendingCount > 0) {
+                    if (pendingCount == 1) "Resuelve 1 campo" else "Resuelve $pendingCount campos"
+                } else "Ir a la firma",
+                enabled = pendingCount == 0,
+                trailingIcon = if (pendingCount == 0) Icons.AutoMirrored.Filled.ArrowForward else null,
                 modifier = Modifier.weight(1f)
             )
         }
@@ -200,60 +253,207 @@ private fun FieldRow(key: String, field: CanonField?, state: WizardUiState, vm: 
     val result = FieldValidator.validate(key, value, state.tipoIdentificacion, state.fieldValues[provKey])
     val isError = result?.ok == false
 
-    // Candidatos originales propuestos por la IA para este campo (de Revisión IA) —
-    // permite verlos y cambiar de opción sin volver al paso 3, incluso en campos que
-    // ya se rellenaron solos (por un paquete aplicado o el candidato de mayor
-    // consenso). Solo se muestra el selector si hay MÁS de un candidato — con uno
-    // solo no hay nada entre lo que elegir.
-    val candidates = remember(state.proposals, key) {
-        state.proposals.find { it.fieldKey == key }?.candidates.orEmpty()
-    }
-    var showCandidates by remember { mutableStateOf(false) }
+    // v0.8.0 — el paso de Relleno absorbe la antigua "Revisión IA":
+    //  · fieldStates    dice si el valor lo puso la IA, si hay conflicto o si es dudoso
+    //  · fieldOrigins   de qué DOCUMENTO salió (clave para detectar un documento intruso)
+    //  · fieldCandidates alternativas elegibles, con su procedencia
+    val fState = state.fieldStates[key] ?: FieldState.EMPTY
+    val origin = state.fieldOrigins[key]
+    val candidates = state.fieldCandidates[key].orEmpty()
+    val needsDecision = fState == FieldState.CONFLICT || fState == FieldState.WARN
+    var showSheet by rememberSaveable(key) { mutableStateOf(false) }
 
-    Column {
+    val scheme = MaterialTheme.colorScheme
+    // Tinte suave según estado. La IA se marca con el terciario (frío) para que se
+    // distinga del naranja de marca, que queda reservado a las acciones.
+    val tint = when (fState) {
+        FieldState.AI -> scheme.tertiaryContainer.copy(alpha = 0.34f)
+        FieldState.CONFLICT -> scheme.errorContainer.copy(alpha = 0.55f)
+        FieldState.WARN -> scheme.tertiary.copy(alpha = 0.10f)
+        else -> Color.Transparent
+    }
+
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.medium)
+            .background(tint)
+            .padding(vertical = if (fState == FieldState.EMPTY) 0.dp else 6.dp)
+    ) {
         OutlinedTextField(
             value = value,
             onValueChange = { vm.setFieldValue(key, it) },
             label = { Text(field?.label ?: key) },
             singleLine = true,
-            isError = isError,
+            isError = isError || fState == FieldState.CONFLICT,
             keyboardOptions = keyboardFor(key),
-            trailingIcon = if (candidates.size > 1) {
-                {
-                    Box {
-                        IconButton(onClick = { showCandidates = true }) {
+            placeholder = if (needsDecision) {
+                { Text(if (fState == FieldState.CONFLICT) "Elige una opción" else "Revisa la procedencia") }
+            } else null,
+            trailingIcon = when {
+                needsDecision -> {
+                    {
+                        IconButton(onClick = { showSheet = true }) {
                             Icon(
-                                Icons.Filled.KeyboardArrowDown,
-                                contentDescription = "Ver ${candidates.size} sugerencias para este campo"
+                                Icons.Filled.Warning,
+                                contentDescription = "Este campo necesita tu decisión",
+                                tint = if (fState == FieldState.CONFLICT) scheme.error else scheme.tertiary
                             )
-                        }
-                        DropdownMenu(expanded = showCandidates, onDismissRequest = { showCandidates = false }) {
-                            candidates.forEach { c ->
-                                DropdownMenuItem(
-                                    text = {
-                                        Column {
-                                            Text(c.value, style = MaterialTheme.typography.bodyMedium)
-                                            Text(
-                                                c.sources.joinToString(", "),
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                    },
-                                    onClick = { vm.setFieldValue(key, c.value); showCandidates = false }
-                                )
-                            }
                         }
                     }
                 }
-            } else null,
+                candidates.size > 1 -> {
+                    {
+                        IconButton(onClick = { showSheet = true }) {
+                            Icon(
+                                Icons.Filled.KeyboardArrowDown,
+                                contentDescription = "Ver ${candidates.size} alternativas"
+                            )
+                        }
+                    }
+                }
+                else -> null
+            },
             modifier = Modifier.fillMaxWidth()
         )
+
         if (isError) {
-            Text(result?.message ?: "",
-                color = MaterialTheme.colorScheme.error,
+            Text(
+                result?.message ?: "",
+                color = scheme.error,
                 style = MaterialTheme.typography.labelSmall,
-                modifier = Modifier.padding(start = 12.dp, top = 2.dp))
+                modifier = Modifier.padding(start = 12.dp, top = 2.dp)
+            )
+        }
+
+        // Procedencia: qué documento aportó el dato y qué motores lo respaldan.
+        if (origin != null && value.isNotBlank()) {
+            Row(
+                Modifier.padding(start = 12.dp, top = 3.dp, end = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    origin.document,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = scheme.onSurfaceVariant
+                )
+                if (origin.engines.isNotEmpty()) {
+                    Text(
+                        "· ${origin.engines.joinToString(", ")}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = scheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+
+    if (showSheet) {
+        CandidateSheet(
+            fieldLabel = field?.label ?: key,
+            state = fState,
+            candidates = candidates,
+            onPick = { vm.chooseCandidate(key, it); showSheet = false },
+            onManual = { vm.dismissField(key); showSheet = false },
+            onDismiss = { showSheet = false },
+        )
+    }
+}
+
+/**
+ * Hoja de decisión para un campo en conflicto o de procedencia dudosa. Muestra cada
+ * alternativa CON SU DOCUMENTO DE ORIGEN — es lo que permite al comercial detectar que un
+ * valor viene de un documento que no es de este cliente, algo que el consenso de motores
+ * por sí solo no revela (dos motores pueden coincidir leyendo el documento equivocado).
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CandidateSheet(
+    fieldLabel: String,
+    state: FieldState,
+    candidates: List<FieldCandidate>,
+    onPick: (FieldCandidate) -> Unit,
+    onManual: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 28.dp)) {
+            Text(fieldLabel, style = MaterialTheme.typography.titleLarge)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                when (state) {
+                    FieldState.CONFLICT ->
+                        "Los documentos no coinciden. Elige cuál va al contrato — debajo de cada opción ves de qué documento sale."
+                    FieldState.WARN ->
+                        "Estos valores salen de documentos que podrían no ser de este cliente. Compruébalos antes de usarlos."
+                    else -> "Alternativas encontradas en los documentos."
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = scheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(14.dp))
+
+            candidates.forEach { c ->
+                ElevatedCard(
+                    onClick = { onPick(c) },
+                    colors = CardDefaults.elevatedCardColors(
+                        containerColor = if (c.origin.risky) scheme.tertiaryContainer
+                        else scheme.surfaceContainerHigh
+                    ),
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp)
+                ) {
+                    Column(Modifier.padding(14.dp)) {
+                        Text(c.value, style = MaterialTheme.typography.titleSmall)
+                        if (c.origin.note.isNotBlank()) {
+                            Spacer(Modifier.height(3.dp))
+                            Text(
+                                c.origin.note,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = scheme.onSurfaceVariant
+                            )
+                        }
+                        Spacer(Modifier.height(7.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            AssistChip(
+                                onClick = { onPick(c) },
+                                label = { Text(c.origin.document) },
+                                modifier = Modifier.height(28.dp)
+                            )
+                            if (c.origin.engines.isNotEmpty()) {
+                                Text(
+                                    c.origin.engines.joinToString(", "),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = scheme.onSurfaceVariant
+                                )
+                            }
+                            if (c.origin.risky) {
+                                Text(
+                                    "revisar",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = scheme.tertiary
+                                )
+                            }
+                        }
+                        if (c.linked.isNotEmpty()) {
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                "Rellena también: ${c.linked.entries.joinToString(" · ") { it.value }}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = scheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+
+            OutlinedButton(onClick = onManual, modifier = Modifier.fillMaxWidth()) {
+                Text("Dejar en blanco · lo relleno a mano")
+            }
         }
     }
 }

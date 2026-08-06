@@ -9,13 +9,66 @@ import com.mejoresiagratis.rellenador.data.model.SignatureStamp
 import java.io.File
 
 /** Los 5 pasos del flujo, fieles a la app web. */
+/**
+ * Pasos del asistente. **4 pasos desde v0.8.0**: la antigua "Revisión IA" (índice 2)
+ * desapareció y su función se fundió en RELLENO — el formulario llega prerrellenado por
+ * la IA, con los conflictos marcados en el propio campo.
+ *
+ * ⚠️ El índice se PERSISTE en `PersistedWizardState.step`. Al eliminar REVISION todos los
+ * índices posteriores se desplazan, así que las sesiones guardadas con el esquema antiguo
+ * necesitan migración — ver `PersistedWizardState.SCHEMA_VERSION` y `migrateStepIndex()`.
+ */
 enum class Step(val index: Int, val title: String) {
     CONTRATO(0, "Contrato"),
     DOCUMENTOS(1, "Documentación"),
-    REVISION(2, "Revisión IA"),
-    RELLENO(3, "Relleno"),
-    FIRMA(4, "Firma");
+    RELLENO(2, "Relleno"),
+    FIRMA(3, "Firma");
 }
+
+/**
+ * Estado de un campo del contrato en el paso de Relleno. Sustituye a la separación
+ * "bloques vs campos sueltos" que hacía la antigua pantalla de Revisión IA.
+ */
+enum class FieldState {
+    /** Vacío: ni la IA lo propuso ni el usuario lo escribió. */
+    EMPTY,
+
+    /** Rellenado automáticamente por la IA con garantías suficientes (ver `AutoFillPolicy`). */
+    AI,
+
+    /** Varios documentos proponen valores distintos: el usuario debe elegir. Bloquea el avance. */
+    CONFLICT,
+
+    /**
+     * Hay propuesta, pero su procedencia es dudosa (documento cuyo titular no casa con el
+     * resto del lote, o dato que suele pertenecer a un tercero: arrendador, gestoría,
+     * banco). NO se autorrellena; el usuario decide. Bloquea el avance.
+     */
+    WARN,
+
+    /** Escrito o confirmado por el usuario. Nunca lo pisa la IA. */
+    USER,
+}
+
+/**
+ * Procedencia de un valor: de qué DOCUMENTO salió y qué MOTORES lo respaldan.
+ * El documento es lo que permite detectar el "documento intruso"; el motor solo mide
+ * consenso técnico y por sí solo no garantiza que el dato sea del cliente correcto.
+ */
+data class FieldOrigin(
+    val document: String,               // p. ej. "Alta en RETA", "Certificado censal"
+    val engines: Set<String> = emptySet(),
+    val note: String = "",
+    val risky: Boolean = false,         // dato que típicamente es de un tercero
+)
+
+/** Una alternativa elegible para un campo (las variantes en conflicto). */
+data class FieldCandidate(
+    val value: String,
+    val origin: FieldOrigin,
+    /** Campos que se rellenan junto a este al elegirlo (CP/Población/Provincia de una dirección). */
+    val linked: Map<String, String> = emptyMap(),
+)
 
 /** Origen del contrato base. */
 enum class ContractSource { DEFAULT, USER }
@@ -59,6 +112,19 @@ data class WizardUiState(
     // Valores finales confirmados por el usuario (campo canónico -> valor)
     val fieldValues: Map<String, String> = emptyMap(),
 
+    // ── Relleno unificado (v0.8.0) ────────────────────────────────────────────
+    /** Estado por campo. Ausente = [FieldState.EMPTY]. */
+    val fieldStates: Map<String, FieldState> = emptyMap(),
+    /** De dónde salió el valor actual de cada campo (documento + motores). */
+    val fieldOrigins: Map<String, FieldOrigin> = emptyMap(),
+    /** Alternativas elegibles por campo (conflictos y valores dudosos). */
+    val fieldCandidates: Map<String, List<FieldCandidate>> = emptyMap(),
+    /**
+     * Pila de deshacer. NO se persiste: deshacer es de la sesión en curso.
+     * Cada entrada guarda el valor/estado/origen previos de los campos que cambió.
+     */
+    val undoStack: List<UndoEntry> = emptyList(),
+
     // Firma
     val signature: SignatureData? = null,
     val stamps: List<SignatureStamp> = emptyList(),
@@ -85,3 +151,19 @@ data class WizardUiState(
     val canAdvanceFromContrato get() = contractSource != null
     val canAdvanceFromDocs get() = docUris.isNotEmpty() && enabledProviders.isNotEmpty()
 }
+
+/**
+ * Una acción deshacible del paso de Relleno. Guarda el estado ANTERIOR de los campos
+ * tocados, de modo que deshacer sea exacto (incluye el caso "el campo no existía":
+ * `value = null` ⇒ al deshacer se elimina la clave).
+ */
+data class UndoEntry(
+    val label: String,
+    val previousValues: Map<String, String?>,
+    val previousStates: Map<String, FieldState?>,
+    val previousOrigins: Map<String, FieldOrigin?>,
+)
+
+/** Campos que bloquean el avance a Firma mientras sigan sin decidir. */
+fun WizardUiState.pendingDecisions(): List<String> =
+    fieldStates.filterValues { it == FieldState.CONFLICT || it == FieldState.WARN }.keys.toList()

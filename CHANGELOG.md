@@ -8,6 +8,57 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.8.0-relleno-unificado] — 2026-08-06
+
+### Cambiado — el asistente pasa de 5 a 4 pasos: "Revisión IA" se funde en "Relleno"
+La pantalla de Revisión IA obligaba a leer tarjetas abstractas de bloques, aplicarlas a
+ciegas y luego bajar al formulario a comprobar el resultado. Ahora la extracción va
+**directa al formulario, ya prerrellenado**, con el estado de cada campo visible en el
+propio campo.
+
+- **`Step`**: `CONTRATO · DOCUMENTOS · RELLENO · FIRMA` (antes 5, con `REVISION` en el 2).
+- **`ReviewStep.kt` eliminado** (`git rm`) junto con su rama en `WizardScreen` y el
+  `applyPackage()` del ViewModel, que solo usaba esa pantalla.
+- **Migración de sesiones persistidas** (`PersistedWizardState`): el paso se guarda como
+  índice, así que al quitar uno todos los posteriores se desplazan. Nuevo campo
+  `schemaVersion` + `migrateStepIndex()`: `REVISION(2)→RELLENO(2)`, `RELLENO(3)→RELLENO(2)`,
+  `FIRMA(4)→FIRMA(3)`. Sin esto, una sesión guardada en Relleno reabría en **Firma** y una
+  guardada en Firma caía a **Contrato**, perdiendo el trabajo.
+
+### Añadido — autorrelleno con control de procedencia (`AutoFillPolicy` + `FieldResolver`)
+Nuevos estados por campo (`FieldState`): `AI` (autorrellenado), `CONFLICT` (documentos que
+se contradicen), `WARN` (procedencia dudosa), `USER`, `EMPTY`.
+
+- **No se autorrellena por consenso de motores a secas.** `Candidate.sources` son MOTORES,
+  no documentos, y en producción solo hay dos activos → el consenso máximo es 2. Un
+  documento intruso (caso real: el censal de otra persona con el mismo nombre de archivo)
+  lo leen ambos motores y produce consenso 2/2, el máximo, con el dato equivocado.
+  `AutoFillPolicy` mira además **de qué documento** sale el valor y si esa fuente es
+  legítima para ese campo (un IBAN de un contrato de alquiler es del arrendador; un
+  representante del Modelo 036 suele ser la gestoría) → esos casos quedan en `WARN`.
+- **Conflictos y dudosos NO se rellenan solos** y **bloquean el avance a Firma**: el botón
+  pasa a "Resuelve N campos". Son justo los que provocan los errores caros.
+- **`FieldOrigin`**: cada valor recuerda su documento de origen y los motores que lo
+  respaldan; se muestra bajo el campo.
+
+### Añadido — decisión y deshacer en el propio formulario
+- **`CandidateSheet`** (`ModalBottomSheet`): al tocar un campo en conflicto o dudoso se
+  abre la hoja con las alternativas, **cada una con su documento de origen**, sus motores
+  y los campos enlazados que rellenará (elegir una dirección rellena CP/Población/Provincia
+  en la misma acción, evitando medias direcciones mezcladas).
+- **Deshacer** (`undoStack`, máx. 20): toda escritura pasa por `pushUndo`, así que cualquier
+  elección o edición es reversible desde el botón de la barra inferior. No se persiste: es
+  de la sesión en curso.
+- **Aviso de pendientes** en la cabecera del Relleno, con el número de campos por decidir.
+
+### Notas
+- `PackageApplier` se conserva (utilidad pura, sin usos activos): `FieldResolver` resuelve
+  el destino fiscal/`_2` por sí mismo a partir del `tipo` del paquete.
+- Sin cambios en el prompt ni en el JSON de la IA → **la paridad con la web no se ve
+  afectada** por esta tanda.
+
+---
+
 ## [0.7.10-dns-fallback-doh] — 2026-08-05
 
 ### Corregido — "Unable to resolve host datingtrck.com" pese a que el dominio resuelve bien

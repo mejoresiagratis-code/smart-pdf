@@ -7,20 +7,20 @@ extracción multi-IA de los documentos del distribuidor (DNI/NIE, tarjeta CIF,
 certificado censal, Modelo 036, certificado bancario, contrato de alquiler,
 escrituras, alta en RETA…).
 
-**Versión actual:** `0.7.10-dns-fallback-doh` (versionCode 48) — ver `CHANGELOG.md`.
+**Versión actual:** `0.8.0-relleno-unificado` (versionCode 49) — ver `CHANGELOG.md`.
 
-## Flujo (5 pasos)
+## Flujo (4 pasos)
 1. **Contrato** — el de assets (`contrato-base.pdf`) o un PDF del usuario
    (con auto-mapeo de campos por similitud y editor de mapeo manual).
    Muestra la "Estructura detectada" (páginas, campos, huecos de firma).
 2. **Documentación** — fotos/PDFs del cliente + selección de motores IA.
-3. **Revisión IA** — bloques detectados (dirección fiscal/comercio, empresa,
-   representante, banco) aplicables de un toque + confirmación campo a campo
-   con candidatos y consenso de motores.
-4. **Relleno** — todos los campos canónicos editables con validación en vivo
-   (DNI/NIE/CIF con dígito de control, IBAN mod-97, CP↔provincia) y selector
-   de candidatos alternativos por campo.
-5. **Firma** — dibujar, extraer de foto (con IA `locate_signature`, borrador y
+3. **Relleno** — el formulario llega **ya prerrellenado por la IA** (desde v0.8.0
+   absorbe la antigua "Revisión IA"). Cada campo muestra su estado —autorrellenado,
+   en conflicto o de procedencia dudosa— y **de qué documento salió**. Los conflictos
+   se resuelven en una hoja inferior con las alternativas y su origen; nada que sea
+   dudoso se rellena solo, y bloquea el avance hasta decidirlo. Validación en vivo
+   (DNI/NIE/CIF con dígito de control, IBAN mod-97, CP↔provincia) y deshacer.
+4. **Firma** — dibujar, extraer de foto (con IA `locate_signature`, borrador y
    recorte manual) o reutilizar guardadas; estampado calibrado en las 5 páginas
    de firma reales (24, 30, 33, 45, 54); previsualización navegable de las 54
    páginas; PDF final para compartir o guardar.
@@ -37,9 +37,10 @@ escrituras, alta en RETA…).
 
 ## Arquitectura
 ```
-ui/wizard/       WizardScreen + 5 pasos + WizardViewModel (orquestador)
+ui/wizard/       WizardScreen + 4 pasos + WizardViewModel (orquestador)
 ui/components/   ExpressiveAccordion, ProviderLogo, diálogos de análisis
 data/model/      AiProvider (9 motores), Extraction (CANON 22 campos, paquetes),
+                 FieldResolver + AutoFillPolicy (autorrelleno por procedencia),
                  Signature, ContractProfile, DateAutofill
 data/remote/     ProxyApi, MultiAiExtractor (fan-out+merge+earlyStop),
                  ExtractionPrompt (VERBATIM web), AiJsonParser,

@@ -33,6 +33,12 @@ import kotlinx.serialization.Serializable
  */
 @Serializable
 data class PersistedWizardState(
+    /**
+     * Versión del esquema. Ausente (0) = sesiones guardadas ANTES de v0.8.0, cuando el
+     * asistente tenía 5 pasos e incluía "Revisión IA" en el índice 2. Al eliminarlo, los
+     * índices se desplazaron y hay que migrarlos — ver [migrateStepIndex].
+     */
+    val schemaVersion: Int = 0,
     val step: Int = 0,
     val contractSource: String? = null,        // "DEFAULT" | "USER" | null
     val userContractUri: String? = null,
@@ -78,7 +84,8 @@ data class PersistedStamp(
 fun WizardUiState.toPersisted(): PersistedWizardState {
     val sig = signature
     return PersistedWizardState(
-        step = step.index,
+        schemaVersion = SCHEMA_VERSION,
+    step = step.index,
         contractSource = contractSource?.name,
         userContractUri = userContractUri?.toString(),
         userFieldNames = userFieldNames,
@@ -114,7 +121,7 @@ fun PersistedWizardState.applyTo(base: WizardUiState): WizardUiState {
         )
     }
     return base.copy(
-        step = Step.entries.getOrNull(step) ?: Step.CONTRATO,
+        step = Step.entries.getOrNull(migrateStepIndex(step, schemaVersion)) ?: Step.CONTRATO,
         contractSource = contractSource?.let { runCatching { ContractSource.valueOf(it) }.getOrNull() },
         userContractUri = userContractUri?.let { android.net.Uri.parse(it) },
         userFieldNames = userFieldNames,
@@ -135,3 +142,29 @@ fun PersistedWizardState.applyTo(base: WizardUiState): WizardUiState {
         totalPages = totalPages
     )
 }
+
+/** Versión actual del esquema de sesión persistida (v0.8.0: asistente de 4 pasos). */
+const val SCHEMA_VERSION = 1
+
+/**
+ * Traduce el índice de paso guardado al esquema actual.
+ *
+ * Esquema 0 (5 pasos, hasta v0.7.10):
+ *   0 CONTRATO · 1 DOCUMENTOS · 2 REVISION · 3 RELLENO · 4 FIRMA
+ * Esquema 1 (4 pasos, desde v0.8.0):
+ *   0 CONTRATO · 1 DOCUMENTOS · 2 RELLENO · 3 FIRMA
+ *
+ * Sin esta migración, una sesión guardada en RELLENO (3) reabriría en FIRMA, y una
+ * guardada en FIRMA (4) caería al índice inexistente 4 → CONTRATO, perdiendo el trabajo.
+ * REVISION (2) se traduce a RELLENO, que es donde vive ahora esa función.
+ */
+fun migrateStepIndex(saved: Int, schemaVersion: Int): Int =
+    if (schemaVersion >= SCHEMA_VERSION) saved
+    else when (saved) {
+        0 -> 0   // CONTRATO   → CONTRATO
+        1 -> 1   // DOCUMENTOS → DOCUMENTOS
+        2 -> 2   // REVISION   → RELLENO (absorbe la revisión)
+        3 -> 2   // RELLENO    → RELLENO
+        4 -> 3   // FIRMA      → FIRMA
+        else -> 0
+    }
