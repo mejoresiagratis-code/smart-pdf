@@ -18,9 +18,22 @@ object ExtractionPrompt {
         // rol del documento actual dentro del conjunto — sin este contexto, un DNI/NIE
         // procesado en aislamiento parece un autónomo aunque el conjunto tenga un CIF.
         // Solo se usan los nombres, NO el contenido de otros documentos.
-        contextDocNames: List<String> = emptyList()
+        contextDocNames: List<String> = emptyList(),
+        // Mapeo canónica -> nombre REAL del campo, cuando el PDF cargado usa nombres
+        // propios (un contrato que no es el de MASORANGE). Sin esta guía la IA devuelve
+        // claves que no existen en ese PDF y no se rellena nada.
+        // Bloque copiado LITERALMENTE de `tplHint` en rellenador-pro.html (línea 1459).
+        fieldMapping: Map<String, String> = emptyMap()
     ): String {
         val fieldsJson = Json.encodeToString(ListSerializer(String.serializer()), fieldNames)
+        val tplHint = if (fieldMapping.isEmpty()) "" else buildString {
+            append("\nGUÍA DE CAMPOS (este contrato usa nombres propios; cada campo del PDF significa esto):\n")
+            append(fieldMapping.entries.joinToString("\n") { (canon, real) ->
+                val lbl = ContractFields.CANON.firstOrNull { it.key == canon }?.label ?: canon
+                "- «$real» = $lbl"
+            })
+            append("\nUsa EXACTAMENTE esos nombres de campo como claves en \"sugerencias\".\n")
+        }
         val contextBlock = if (contextDocNames.size >= 2) {
             val listado = contextDocNames.joinToString("\n") { "  - $it" }
             """
@@ -37,7 +50,7 @@ $listado
         return contextBlock + """Eres un asistente meticuloso de back-office que rellena un contrato de distribución de telecomunicaciones (España). Vas a recibir UN documento — puede llegar como una sola imagen o como VARIAS imágenes seguidas si son las distintas páginas de ese mismo documento (trátalas todas como partes de un único documento, no como documentos distintos) — y debes extraer datos del DISTRIBUIDOR / punto de venta para mapearlos a los campos listados.
 
 CAMPOS DEL PDF (claves EXACTAS): $fieldsJson
-
+$tplHint
 INSTRUCCIONES IMPORTANTES:
 1) REGLA DE ORO — NO INVENTES NI DEDUZCAS. Transcribe SOLO valores que aparezcan LITERALMENTE en ESTE documento. Si un campo no está en el documento, OMÍTELO (no lo incluyas en el JSON). Prohibido: deducir, completar, suponer, traducir, calcular o COPIAR un valor de un campo a otro o de un bloque a otro. Ante la duda, omite. Es mejor un JSON corto y correcto que uno largo con suposiciones.
 2) SOLO DATOS DEL DISTRIBUIDOR / PUNTO DE VENTA. El documento puede contener datos de terceros (el operador Orange/MASORANGE, el banco como entidad, notaría, gestoría, testigos…). IGNÓRALOS. Extrae únicamente la identidad, dirección, cuenta e identificación del representante del DISTRIBUIDOR (el cliente/PdV). Si no estás seguro de a quién pertenece un dato, omítelo.

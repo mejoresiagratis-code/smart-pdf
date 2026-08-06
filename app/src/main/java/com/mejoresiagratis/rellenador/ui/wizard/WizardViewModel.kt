@@ -432,6 +432,14 @@ class WizardViewModel @Inject constructor(
             val result = runCatching {
                 extractor.extract(
                     docGroups, s.enabledProviders.toList(), docNames = docNames,
+                    // v0.9.3 — se mandan los campos que el PDF tiene DE VERDAD, no una
+                    // lista fija transcrita a mano. Si el usuario cargó su propio
+                    // contrato, `userFieldNames` son sus nombres reales y `fieldMapping`
+                    // traduce cada uno a su significado canónico para que la IA no
+                    // devuelva claves inexistentes.
+                    fieldNames = s.userFieldNames.takeIf { it.isNotEmpty() }
+                        ?: ContractFields.CANON.map { it.key },
+                    fieldMapping = s.fieldMapping,
                     // Tanda 2 — el motor activo se refleja en vivo en el chip/indicador;
                     // al terminar un motor se marca como completado (queda con el tick
                     // aunque otro empiece justo después, por eso se añade sin quitar).

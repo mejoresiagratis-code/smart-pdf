@@ -8,6 +8,45 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.9.3-campos-reales-del-pdf] — 2026-08-07
+
+Tercera tanda del plan web→app. La de más valor técnico: elimina de raíz que se «olviden»
+campos.
+
+### Cambiado — el prompt lleva los campos que el PDF tiene DE VERDAD
+Hasta ahora la app mandaba siempre `ContractFields.CANON`, una lista **fija y transcrita a
+mano**. Si el PDF tenía un campo que no estaba en esa lista, la IA ni siquiera sabía que
+existía — así se «olvidaron» campos en su día. La web nunca tuvo ese problema porque
+construye la lista leyendo el PDF cargado.
+
+- `MultiAiExtractor.extract()` acepta `fieldNames`, y el ViewModel le pasa
+  `state.userFieldNames` cuando el usuario ha cargado su propio contrato.
+- Con el contrato de assets no cambia nada: el valor por defecto sigue siendo `CANON`,
+  así que el comportamiento del caso habitual es idéntico al de antes.
+- `ExtractionPrompt.build()` ya aceptaba `fieldNames`; solo faltaba que alguien le pasara
+  algo distinto del valor por defecto.
+
+### Añadido — guía de campos cuando el contrato usa nombres propios
+Si el PDF no es el de MASORANGE, sus campos se llaman de otra forma («RAZON_SOCIAL» en vez
+de «Nombre  Razón Social»). Sin una guía, la IA devuelve claves que no existen en ese PDF
+y no se rellena nada.
+
+- Nuevo parámetro `fieldMapping` (canónica → nombre real). Genera el bloque
+  **GUÍA DE CAMPOS**, insertado entre «CAMPOS DEL PDF» e «INSTRUCCIONES», exactamente
+  donde lo pone la web.
+- **Copiado literalmente de `tplHint` de `rellenador-pro.html` (línea 1459)**, incluidas
+  las comillas angulares y la frase final. Al ser el mismo texto, **la paridad del prompt
+  se mantiene**: esta tanda no obliga a tocar la web.
+- El mapeo ya existía en el estado (`fieldMapping`, del editor de plantillas): no hizo
+  falta lógica nueva, solo llevarlo hasta el prompt.
+
+### Verificado
+Simulado el prompt en los dos escenarios: con el contrato de assets sale idéntico al
+actual (sin bloque de guía); con un PDF de nombres propios aparecen los campos reales y su
+traducción.
+
+---
+
 ## [0.9.2-fix-mime-file-uri] — 2026-08-07
 
 ### Corregido — «No se pudieron leer los documentos» (regresión de la v0.8.7)

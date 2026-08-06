@@ -73,6 +73,11 @@ class MultiAiExtractor @Inject constructor(
         // Un nombre por GRUPO (archivo), no por página — ya no hace falta desambiguar
         // "(pág. N/M)" porque cada llamada ya cubre el archivo entero.
         docNames: List<String> = emptyList(),
+        // v0.9.3 — campos REALES del PDF cargado y, si usa nombres propios, su mapeo a
+        // las claves canónicas. Por defecto se usa CANON, así que ningún llamador
+        // existente cambia de comportamiento.
+        fieldNames: List<String> = ContractFields.CANON.map { it.key },
+        fieldMapping: Map<String, String> = emptyMap(),
         // Tanda 2 — callbacks opcionales para reflejar en la UI qué motor está
         // trabajando ahora mismo (chip activo + MotorLoadingIndicator). Defaults
         // no-op: no cambia el comportamiento de ningún llamador existente.
@@ -109,7 +114,11 @@ class MultiAiExtractor @Inject constructor(
         // Nombres de archivo del conjunto para el contexto del prompt (CIF+DNI en
         // documentos separados, etc.) — ya no hace falta desambiguar sufijos de página,
         // cada nombre en docNames ya corresponde 1:1 a un archivo real.
-        val prompt = ExtractionPrompt.build(contextDocNames = docNames.distinct())
+        val prompt = ExtractionPrompt.build(
+            fieldNames = fieldNames,
+            contextDocNames = docNames.distinct(),
+            fieldMapping = fieldMapping,
+        )
         // acumulador: campo -> (valor -> fuentes)
         val agg = LinkedHashMap<String, LinkedHashMap<String, MutableSet<String>>>()
         val perProviderStatus = LinkedHashMap<String, String>()  // último estado por motor (agrupado)
