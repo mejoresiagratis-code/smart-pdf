@@ -8,6 +8,46 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.9.0-errores-de-motor-visibles] — 2026-08-06
+
+Primera tanda del plan web→app. Arregla una **regresión introducida en la v0.8.0**.
+
+### Corregido — los fallos de motor eran invisibles desde la v0.8.0
+`WizardViewModel` seguía calculando `engineErrors` tras cada extracción, pero el único
+composable que los mostraba —el panel plegable «Ver motores no disponibles» de
+`ReviewStep`— **se borró al fundir Revisión IA dentro de Relleno**. Desde entonces, si
+Gemini agotaba cuota o Groq devolvía 429, la extracción salía con menos datos y el usuario
+no tenía forma de saber por qué. Peor aún: el hero anuncia «La IA ha rellenado el
+contrato», así que el silencio hacía parecer que la IA no había encontrado nada, cuando en
+realidad ni había llegado a ejecutarse.
+
+### Añadido — causa legible en vez del error crudo
+Los mensajes de los proveedores son inservibles para un comercial en la calle
+(`HTTP 429 — Resource has been exhausted (e.g. check quota)`). Nuevo `EngineFailure` que
+los traduce a seis causas con su consejo, portando la idea de `shortCause()` de la web:
+
+| Causa | Consejo que se muestra |
+|---|---|
+| límite o cuota alcanzada | Vuelve a intentarlo en unos minutos o usa otro motor |
+| clave no válida o sin permiso | Revisa la clave de ese motor en la config del proxy |
+| documento demasiado grande | Ese motor no lo admite; los demás sí lo han analizado |
+| problema de red | Comprueba la conexión; en WiFi, prueba con datos móviles |
+| respuesta incompleta | Suele arreglarse repitiendo el análisis |
+| servicio no disponible | Fallo temporal del proveedor, no de la app |
+
+- `EngineIssue(engine, failure, detail)` conserva el mensaje crudo para diagnosticar.
+- La clasificación se hace en `MultiAiExtractor`, donde está el mensaje original, para que
+  la UI no tenga que interpretar cadenas de error.
+- Verificado contra 10 mensajes reales de producción (incluidos el 429 de Gemini y el
+  `Unable to resolve host` del incidente de DNS): 10/10 bien clasificados.
+
+### Añadido — aviso plegable en el hero de Relleno
+«N motores no participaron», desplegable con la causa y el consejo de cada uno. Va dentro
+del hero, no en un banner de error aparte, porque es contexto de *qué ha hecho la IA* —no
+un fallo de la app— y así no compite con los campos que sí requieren decisión.
+
+---
+
 ## [0.8.7-documentos-persistentes] — 2026-08-06
 
 ### Añadido — los documentos sobreviven a la muerte del proceso (Fase 2 de robustez)

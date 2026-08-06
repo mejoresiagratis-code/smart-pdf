@@ -41,7 +41,9 @@ class MultiAiExtractor @Inject constructor(
         val tipoIdentificacion: String?,
         val packages: List<Paquete>,
         val enginesOk: Set<String>,
-        val errors: List<String>
+        val errors: List<String>,
+        /** Mismos fallos, ya clasificados por causa legible (v0.9.0). */
+        val issues: List<EngineIssue> = emptyList()
     )
 
     /** Orden fiable (0.2.0): prioriza los motores que suelen ir bien. */
@@ -240,6 +242,11 @@ class MultiAiExtractor @Inject constructor(
         val tipoId = tipoVotes.maxByOrNull { it.value }?.key   // mayoría
         // Errores agrupados por motor (una línea por motor, no una por documento).
         val errors = perProviderStatus.map { (name, status) -> "$name: $status" }
-        return Result(proposals, tipoId, allPackages, enginesOk, errors)
+        // Se clasifica aquí, donde está el mensaje crudo del proveedor, para que la UI
+        // no tenga que interpretar cadenas de error.
+        val issues = perProviderStatus.map { (name, status) ->
+            EngineIssue(engine = name, failure = EngineFailure.from(status), detail = status)
+        }
+        return Result(proposals, tipoId, allPackages, enginesOk, errors, issues)
     }
 }

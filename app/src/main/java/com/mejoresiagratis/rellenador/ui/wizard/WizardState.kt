@@ -1,5 +1,7 @@
 package com.mejoresiagratis.rellenador.ui.wizard
 
+import com.mejoresiagratis.rellenador.data.model.EngineIssue
+
 import android.net.Uri
 import com.mejoresiagratis.rellenador.data.model.AiProvider
 import com.mejoresiagratis.rellenador.data.model.FieldProposal
@@ -95,7 +97,14 @@ data class WizardUiState(
     val busy: Boolean = false,
     val busyMsg: String = "",
     val error: String? = null,
-    val engineErrors: List<String> = emptyList(),  // detalle por motor (panel Revisión IA)
+    val engineErrors: List<String> = emptyList(),   // mensaje crudo por motor
+    /**
+     * Fallos por motor ya clasificados (v0.9.0). Al fundir Revisión IA en Relleno
+     * (v0.8.0) se borró el único panel que mostraba `engineErrors`, y los fallos de
+     * motor pasaron a ser invisibles: si Gemini agotaba cuota, la extracción salía con
+     * menos datos y el usuario no sabía por qué.
+     */
+    val engineIssues: List<EngineIssue> = emptyList(),
 
     // Tanda 2 — progreso en vivo de la extracción multi-motor (MotorLoadingIndicator)
     val activeProvider: AiProvider? = null,

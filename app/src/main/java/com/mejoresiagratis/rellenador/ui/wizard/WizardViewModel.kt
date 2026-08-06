@@ -463,6 +463,7 @@ class WizardViewModel @Inject constructor(
                 // Duplicarlos en el banner rojo genérico era redundante y aparecía
                 // siempre visible aunque el usuario no quisiera verlo.
                 engineErrors = result.errors,
+                engineIssues = result.issues,
                 activeProvider = null, finishedProviders = emptySet(),
                 activeDocLabel = null, progressCurrent = 0, progressTotal = 0
             )

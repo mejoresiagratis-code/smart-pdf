@@ -1,5 +1,8 @@
 package com.mejoresiagratis.rellenador.ui.wizard
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.*
@@ -169,6 +172,54 @@ fun FillStep(state: WizardUiState, vm: WizardViewModel) {
                             modifier = Modifier.scale(counterScale.value)
                         )
                     }
+                    // v0.9.0 — motores que no participaron. Al borrar ReviewStep (v0.8.0)
+                    // esto dejó de verse: la extracción salía con menos datos y no había
+                    // forma de saber que Gemini había agotado cuota. Va aquí, dentro del
+                    // hero, porque es contexto de "qué ha hecho la IA", no un error de la app.
+                    if (state.engineIssues.isNotEmpty()) {
+                        var issuesOpen by rememberSaveable { mutableStateOf(false) }
+                        Spacer(Modifier.height(6.dp))
+                        TextButton(
+                            onClick = { issuesOpen = !issuesOpen },
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                        ) {
+                            Icon(
+                                Icons.Filled.Warning, contentDescription = null,
+                                modifier = Modifier.size(15.dp),
+                                tint = MaterialTheme.colorScheme.onTertiaryContainer
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                if (state.engineIssues.size == 1) "1 motor no participó"
+                                else "${state.engineIssues.size} motores no participaron",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer
+                            )
+                        }
+                        AnimatedVisibility(
+                            visible = issuesOpen,
+                            enter = expandVertically(MaterialTheme.motionScheme.defaultSpatialSpec()),
+                            exit = shrinkVertically(MaterialTheme.motionScheme.fastSpatialSpec())
+                        ) {
+                            Column(Modifier.padding(start = 4.dp, top = 2.dp)) {
+                                state.engineIssues.forEach { issue ->
+                                    Text(
+                                        issue.summary,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onTertiaryContainer
+                                    )
+                                    Text(
+                                        issue.failure.hint,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                        modifier = Modifier.padding(bottom = 5.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
                     Spacer(Modifier.height(12.dp))
                     LinearProgressIndicator(
                         progress = { progress },
