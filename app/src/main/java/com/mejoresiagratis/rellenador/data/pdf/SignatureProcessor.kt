@@ -176,6 +176,101 @@ class SignatureProcessor @Inject constructor() {
      *   esquina cuando cualquier píxel oscuro (sombra, arruga) se colaba como "trazo".
      * @return el bitmap de firma listo, o null si no hay trazo.
      */
+    /**
+     * Elimina LÍNEAS DE MARCO y rayas de pauta: los bordes del recuadro donde se firma, o
+     * la línea sobre la que se escribe. No las quitaba nada hasta ahora, y por eso el
+     * recorte salía con el marco del recuadro alrededor de la firma.
+     *
+     * Por qué `despeckle` no las quita: descarta componentes PEQUEÑAS (motas), y una línea
+     * de marco es enorme — es de las componentes más grandes de la imagen, así que
+     * sobrevivía siempre.
+     *
+     * Cómo se distinguen de un trazo manuscrito: una línea de marco es **recta, fina y
+     * larguísima** — ocupa casi todo el ancho (o alto) en una sola fila (o columna). Un
+     * trazo de firma, aunque tenga tramos horizontales, nunca concentra tanta tinta en una
+     * única fila: se reparte en varias por su inclinación y grosor variable.
+     *
+     * @param coverage fracción del ancho/alto que debe cubrir una fila/columna para
+     *   considerarse marco. Se sube a 0.75 tras medir una firma real: su trazo vertical
+     *   más largo cubría el **78%** de la altura, peligrosamente cerca de un 0.55 inicial.
+     * @param maxThickness grosor máximo (en filas/columnas consecutivas) de lo que se
+     *   considera línea. Más gruesa que esto ya no es una raya impresa.
+     * @param edgeMargin franja exterior (fracción) donde vive un marco. Fuera de ella solo
+     *   se borra si la línea es prácticamente completa (≥ [fullSpan]), que es el caso de
+     *   una raya de pauta bajo la firma.
+     */
+    private fun removeFrameLines(
+        isInk: BooleanArray,
+        w: Int,
+        h: Int,
+        coverage: Float = 0.75f,
+        maxThickness: Int = 4,
+        edgeMargin: Float = 0.18f,
+        fullSpan: Float = 0.90f,
+    ): BooleanArray {
+        val out = isInk.copyOf()
+        val rowInk = IntArray(h)
+        val colInk = IntArray(w)
+        for (y in 0 until h) {
+            var n = 0
+            val base = y * w
+            for (x in 0 until w) if (isInk[base + x]) n++
+            rowInk[y] = n
+        }
+        for (x in 0 until w) {
+            var n = 0
+            for (y in 0 until h) if (isInk[y * w + x]) n++
+            colInk[x] = n
+        }
+
+        val rowLimit = (w * coverage).toInt()
+        val colLimit = (h * coverage).toInt()
+
+        /**
+         * Un grupo de filas/columnas es marco si es FINO y además, o bien está pegado al
+         * borde (donde vive el recuadro), o bien cruza la imagen casi entera (raya de
+         * pauta). Un trazo vertical de firma queda en el centro y no llega al 90%, así
+         * que sobrevive — que es exactamente el fallo que esto evita.
+         */
+        fun isFrame(start: Int, end: Int, maxInk: Int, span: Int, total: Int): Boolean {
+            if (end - start + 1 > maxThickness) return false
+            val nearEdge = start < total * edgeMargin || end > total * (1f - edgeMargin)
+            return nearEdge || maxInk >= span * fullSpan
+        }
+
+        // Filas: se agrupan las consecutivas que superan el umbral.
+        var y = 0
+        while (y < h) {
+            if (rowInk[y] >= rowLimit) {
+                var end = y
+                var peak = rowInk[y]
+                while (end + 1 < h && rowInk[end + 1] >= rowLimit) { end++; peak = max(peak, rowInk[end]) }
+                if (isFrame(y, end, peak, w, h)) {
+                    for (yy in y..end) {
+                        val base = yy * w
+                        for (x in 0 until w) out[base + x] = false
+                    }
+                }
+                y = end + 1
+            } else y++
+        }
+        var x = 0
+        while (x < w) {
+            if (colInk[x] >= colLimit) {
+                var end = x
+                var peak = colInk[x]
+                while (end + 1 < w && colInk[end + 1] >= colLimit) { end++; peak = max(peak, colInk[end]) }
+                if (isFrame(x, end, peak, h, w)) {
+                    for (xx in x..end) {
+                        for (yy in 0 until h) out[yy * w + xx] = false
+                    }
+                }
+                x = end + 1
+            } else x++
+        }
+        return out
+    }
+
     fun processInk(src: Bitmap, threshold: Int, tint: Int, bg: Background, applyBoundingCrop: Boolean = true): Bitmap? {
         val w = src.width; val h = src.height
         val px = IntArray(w * h); src.getPixels(px, 0, w, 0, 0, w, h)
@@ -196,9 +291,13 @@ class SignatureProcessor @Inject constructor() {
             // una firma real podía quedar reducida a un fragmento irreconocible.
             isInk[i] = !(lum > threshold * 1.15 || Color.alpha(c) < 40)
         }
-        // Motas de ruido aisladas (textura de papel, grano) fuera — el trazo real es,
-        // con diferencia, la(s) componente(s) grande(s); no se recorta nada del trazo.
-        val keep = despeckle(isInk, w, h)
+        // 1) Fuera marcos y rayas de pauta (el recuadro donde se firma). Va ANTES del
+        //    despeckle: al partir el marco, sus restos quedan como fragmentos pequeños
+        //    que el despeckle limpia después.
+        val noFrames = removeFrameLines(isInk, w, h)
+        // 2) Motas de ruido aisladas (textura de papel, grano) fuera — el trazo real es,
+        //    con diferencia, la(s) componente(s) grande(s); no se recorta nada del trazo.
+        val keep = despeckle(noFrames, w, h)
 
         var minX = w; var minY = h; var maxX = 0; var maxY = 0; var found = false
         for (i in px.indices) {

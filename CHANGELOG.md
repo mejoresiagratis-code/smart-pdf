@@ -8,6 +8,38 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.8.4-firma-sin-marcos] — 2026-08-06
+
+### Corregido — la firma extraída de una foto arrastraba el marco del recuadro
+Al extraer la firma de un documento, el recorte incluía **el recuadro impreso donde se
+firma** (y, si la había, la raya de pauta). Nada del procesado las eliminaba.
+
+**Por qué `despeckle` no bastaba**: descarta componentes *pequeñas* (motas de papel), y una
+línea de marco es de las componentes **más grandes** de la imagen, así que sobrevivía
+siempre. Además, al entrar en la bounding box, el recorte final se estiraba hasta el
+recuadro y la firma quedaba pequeña y descentrada dentro de un marco.
+
+**Nuevo paso `removeFrameLines()`**, antes del despeckle (así los restos del marco quedan
+como fragmentos pequeños que el despeckle limpia después). Una línea impresa es *recta,
+fina y larguísima*: cubre casi todo el ancho (o alto) en una sola fila (o columna). Se
+borra una fila/columna solo si cumple las tres condiciones:
+
+1. **cobertura ≥ 75%** del ancho/alto,
+2. **grosor ≤ 4** filas/columnas consecutivas (más gruesa ya no es una raya impresa), y
+3. **está pegada al borde** (franja exterior del 18%, donde vive el recuadro) **o** cruza
+   la imagen casi entera (≥ 90%, que es el caso de una raya de pauta interior).
+
+**Calibrado contra una firma real, no a ojo**: en la firma de referencia el trazo vertical
+largo cubre el **78%** de la altura. Con el umbral inicial del 55% que probé primero, ese
+trazo se habría borrado en una firma fina o de baja resolución. De ahí las condiciones 1 y
+3, que lo dejan fuera por posición (está centrado) y por no llegar al 90%.
+
+Verificado en tres escenarios: firma real dentro de recuadro, la misma a 1/4 de resolución
+(trazos finos, el caso de riesgo) y raya de pauta bajo la firma. En los tres: **100% del
+marco eliminado, 0 píxeles de trazo perdidos**.
+
+---
+
 ## [0.8.3-hero-ia] — 2026-08-06
 
 Última pieza visual del diseño aprobado (mockup v2): la cabecera del Relleno pasa de un
