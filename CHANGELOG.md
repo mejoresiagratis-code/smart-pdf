@@ -8,6 +8,54 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.10.3-editor-de-etiquetas] — 2026-08-31
+
+**Fase 4 (la de verdad, no confundir con la "Fase 4 (COMPLETADA)" del archivo histórico — ver
+nota de la 0.10.2).** Dos ficheros nuevos, nada existente modificado. Aún sin enganchar al
+asistente: `LabelEditor` recibe un `FormSchema` y lo devuelve por callback; nadie en la app
+construye todavía ese `FormSchema` para un PDF real del usuario ni lo pasa a este editor — ese
+cableado (elegir PDF → `PdfFieldInspector` → `FormSchemaBuilder` → opcionalmente `FieldLabeler`
+→ este editor → persistir) queda pendiente y es distinto de la fase 5 (que es enganchar
+`FillStep`, no este editor).
+
+### Añadido — `data/model/SchemaEditing.kt`
+Ediciones manuales puras sobre un `FormSchema`, sin dependencia de Compose ni de ViewModel:
+- `setFieldLabel(schema, name, label)`: cambia la etiqueta de TODOS los `FormField` cuyo
+  `name` coincide, en cualquier sección/contenedor (campo suelto, celda de tabla, bloque
+  repetido). El mismo mecanismo cubre "un campo suelto" (name único → uno solo) y "un grupo de
+  opción RADIO completo" (varios widgets comparten `name` — v0.10.2 — → todos a la vez), sin
+  necesitar ningún concepto de "id de grupo" nuevo: `name` ya es la agrupación nativa del
+  AcroForm.
+- `setColumnLabel(schema, sectionId, columnId, label)`: la cabecera de una `TableColumn`
+  entera, sin tocar las celdas (la etiqueta visible de una celda es la de su columna).
+- `setSectionTitle(schema, sectionId, title)`.
+- `radioGroups(section)`: agrupa los `FieldKind.RADIO` de una sección por `name`, listos para
+  mostrarse como una fila editable cada uno.
+
+**Diferencia con `SchemaLabeling.apply()` (fase 3)**: aquí SIEMPRE se marca
+`LabelSource.USUARIO`, sin mirar el `labelSource` anterior — es, precisamente, la corrección
+que `SchemaLabeling` debe respetar después. Si aquí también evitáramos pisar `USUARIO`, la
+misma persona no podría cambiar de opinión sobre su propia corrección.
+
+### Añadido — `ui/wizard/LabelEditor.kt`
+Editor por sección: título editable, campos sueltos y bloques repetidos campo a campo, tablas
+por columna (no celda a celda), grupos de opción como una sola fila con sus opciones debajo en
+solo lectura. Cada campo/columna/grupo lleva un chip (`nombre PDF` / `IA` / `manual`) para saber
+de qué fiarse.
+
+⚠️ **No confundir con `ui/wizard/MappingEditor.kt`**, que sigue siendo del flujo legado
+Orange/CANON (mapea un PDF propio a las 22 claves fijas) — se detectó la colisión de nombre al
+planificar esta fase y no se reutiliza.
+
+### Limitación conocida — bloques repetidos
+Un `REPEATED_BLOCK` (ej. "Dirección de instalación 1..4" en Conectividad) se edita bloque a
+bloque: cada bloque tiene sus propios nombres de AcroForm, así que `setFieldLabel` no propaga
+de un bloque a sus hermanos. Corregir las 4 direcciones de instalación exige 4 ediciones, no 1.
+Arreglarlo pediría una clave de posición común entre bloques que hoy no existe en el modelo —
+anotado como mejora futura, no como bloqueo.
+
+---
+
 ## [0.10.2-deteccion-de-radios] — 2026-08-31
 
 **Hueco encontrado al planificar la fase 4** (editor de mapeo/etiquetas): pedía poder editar
