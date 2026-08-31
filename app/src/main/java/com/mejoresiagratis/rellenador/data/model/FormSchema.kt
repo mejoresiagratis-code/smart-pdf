@@ -451,6 +451,31 @@ object BuiltinSchemas {
     }
 
     /**
+     * Pares canónicos del bloque fiscal y su equivalente en el bloque de comercio/PdV.
+     * Tanda 5·2b — lo usa `copyFiscalToComercio`, que antes llevaba dentro los literales
+     * `"Dirección"`/`"CP"`/`"Población"`/`"Provincia"` y construía el destino concatenando
+     * `"_2"`: una convención de nombre de Orange que no significa nada en otro AcroForm.
+     */
+    private val FISCAL_A_COMERCIO_CANONICAL: Map<String, String> = mapOf(
+        CanonicalKeys.DIRECCION to CanonicalKeys.DIRECCION_2,
+        CanonicalKeys.CP to CanonicalKeys.CP_2,
+        CanonicalKeys.POBLACION to CanonicalKeys.POBLACION_2,
+        CanonicalKeys.PROVINCIA to CanonicalKeys.PROVINCIA_2,
+    )
+
+    /**
+     * Pares `(nombre real fiscal, nombre real comercio)` de dirección, resueltos por canónica.
+     * Sólo incluye los pares que existan de verdad a los dos lados; si a un formulario le falta
+     * el bloque de comercio, ese par simplemente no sale y la copia no lo intenta.
+     */
+    fun fiscalToComercioKeyPairs(): List<Pair<String, String>> =
+        FISCAL_A_COMERCIO_CANONICAL.mapNotNull { (fiscal, comercio) ->
+            val from = realKeyFor(fiscal) ?: return@mapNotNull null
+            val to = realKeyFor(comercio) ?: return@mapNotNull null
+            from to to
+        }
+
+    /**
      * Construye el esquema del contrato de Orange a partir de `CANON`.
      *
      * @param fingerprint huella real del PDF; se calcula al cargarlo, no se puede fijar aquí.

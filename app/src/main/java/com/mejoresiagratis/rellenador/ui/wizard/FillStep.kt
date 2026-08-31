@@ -677,13 +677,24 @@ private fun CompactDateField(label: String, key: String, state: WizardUiState, v
     )
 }
 
-/** Teclado adecuado por tipo de campo. */
+/** Teclado adecuado por tipo de campo.
+ *
+ * Tanda 5·2b — decidía por `norm(key.substringBefore("_"))`, heurística sobre el nombre; ahora
+ * por canónica, con el nombre como respaldo (docs/PLAN_FASE_5.md, hallazgo 2.6). Un teclado
+ * equivocado no corrompe datos, pero con Aire salían todos como texto: teclear un CP o un
+ * teléfono en el teclado alfabético es peor de lo que parece en un formulario de 481 campos.
+ */
 private fun keyboardFor(key: String): KeyboardOptions {
-    val b = FieldNormalizer.norm(key.substringBefore("_"))
+    val canonical = BuiltinSchemas.canonicalFor(key)
+    val b by lazy { FieldNormalizer.norm(key.substringBefore("_")) }
     val type = when {
-        b == "telefono" -> KeyboardType.Phone
-        b.startsWith("email") -> KeyboardType.Email
-        b == "cp" -> KeyboardType.Number
+        canonical == CanonicalKeys.TELEFONO || (canonical == null && b == "telefono") ->
+            KeyboardType.Phone
+        canonical == CanonicalKeys.EMAIL_COMERCIAL ||
+            canonical == CanonicalKeys.EMAIL_FACTURACION ||
+            (canonical == null && b.startsWith("email")) -> KeyboardType.Email
+        canonical == CanonicalKeys.CP || canonical == CanonicalKeys.CP_2 ||
+            (canonical == null && b == "cp") -> KeyboardType.Number
         else -> KeyboardType.Text
     }
     return KeyboardOptions(keyboardType = type, imeAction = ImeAction.Next)

@@ -648,10 +648,13 @@ class WizardViewModel @Inject constructor(
      */
     fun copyFiscalToComercio() {
         val s = _state.value
-        val keys = listOf("Dirección", "CP", "Población", "Provincia")
-        val delta = keys.mapNotNull { k ->
-            s.fieldValues[k]?.takeIf { it.isNotBlank() }?.let { "${k}_2" to it }
-        }.toMap()
+        // Tanda 5·2b — los pares fiscal→comercio se resuelven por canónica en vez de
+        // concatenar "_2" al nombre (docs/PLAN_FASE_5.md, hallazgo 2.6).
+        val delta = com.mejoresiagratis.rellenador.data.model.BuiltinSchemas
+            .fiscalToComercioKeyPairs()
+            .mapNotNull { (from, to) ->
+                s.fieldValues[from]?.takeIf { it.isNotBlank() }?.let { to to it }
+            }.toMap()
         if (delta.isNotEmpty()) {
             _state.value = s.copy(fieldValues = s.fieldValues + delta)
         }

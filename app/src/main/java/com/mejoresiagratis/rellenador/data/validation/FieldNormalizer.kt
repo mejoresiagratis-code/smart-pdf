@@ -1,9 +1,18 @@
 package com.mejoresiagratis.rellenador.data.validation
 
+import com.mejoresiagratis.rellenador.data.model.BuiltinSchemas
+import com.mejoresiagratis.rellenador.data.model.CanonicalKeys
 import java.text.Normalizer
 
 /**
  * Normalización de valores por campo (normVal de la web) + coherencia CP/provincia.
+ *
+ * Tanda 5·2b — `normVal` decidía por el NOMBRE del campo normalizado, igual que hacía
+ * `FieldValidator` antes de la 5·2, con el mismo resultado: con los nombres de Aire no casa
+ * ninguna rama, el valor se devuelve tal cual y **el IBAN deja de compactarse y el CP deja de
+ * rellenarse con ceros sin decir nada** (docs/PLAN_FASE_5.md, hallazgo 2.5, aplicado aquí).
+ * Ahora decide primero por la clave canónica, y la heurística de nombre queda de respaldo para
+ * los campos sin canónica.
  */
 object FieldNormalizer {
 
@@ -27,17 +36,26 @@ object FieldNormalizer {
     fun normVal(fieldName: String, raw: String?): String {
         var v = (raw ?: "").trim()
         if (v.isEmpty()) return v
-        val b = norm(baseOf(fieldName))
+
+        // Canónica primero; heurística de nombre sólo si el campo no tiene (ver cabecera).
+        val canonical = BuiltinSchemas.canonicalFor(fieldName)
+        val b by lazy { norm(baseOf(fieldName)) }
+
         return when {
-            b.contains("datosbancarios") || b.contains("iban") ->
+            canonical == CanonicalKeys.IBAN ||
+                (canonical == null && (b.contains("datosbancarios") || b.contains("iban"))) ->
                 v.uppercase().replace(Regex("[\\s.\\-–—]"), "")
-            b == "nie" || b == "nifrepresentante" ->
+            canonical == CanonicalKeys.IDENTIFICACION ||
+                canonical == CanonicalKeys.REPRESENTANTE_NIF ||
+                (canonical == null && (b == "nie" || b == "nifrepresentante")) ->
                 v.uppercase().replace(Regex("[\\s.\\-]"), "")
-            b == "cp" -> {
+            canonical == CanonicalKeys.CP || canonical == CanonicalKeys.CP_2 ||
+                (canonical == null && b == "cp") -> {
                 val d = v.replace(Regex("\\D"), "")
                 if (d.isNotEmpty() && d.length < 5) d.padStart(5, '0') else v
             }
-            b == "nombrerepresentante" && v.contains(",") -> {
+            (canonical == CanonicalKeys.REPRESENTANTE_NOMBRE ||
+                (canonical == null && b == "nombrerepresentante")) && v.contains(",") -> {
                 val parts = v.split(",").map { it.trim() }
                 if (parts.size == 2 && parts[0].isNotEmpty() && parts[1].isNotEmpty())
                     "${parts[1]} ${parts[0]}" else v

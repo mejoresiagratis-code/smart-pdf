@@ -3,7 +3,8 @@
 > Escrito el 2026-08-31 sobre `0.10.5-etiquetado-enganchado` (versionCode 75), **leyendo el
 > código**, no el ROADMAP.
 >
-> **Estado: 5·0 y 5·1 hechas en `0.10.6-fase5-costura` (versionCode 76). La siguiente es la 5·2.**
+> **Estado: 5·0 y 5·1 en `0.10.6` (verde), 5·2 en `0.10.7` (verde), 5·2b en `0.10.8`. La
+> siguiente es la 5·3, y las tres decisiones que la bloqueaban están tomadas — ver §4.**
 > Las referencias `fichero:línea` de la sección 2 son de antes del refactor: `FillStep.kt:47` ya no
 > tiene las secciones, están en `FillSections.kt`. El resto sigue en pie.
 >
@@ -107,6 +108,7 @@ contra la que comparar. Si primero se cambia lo que se dibuja y luego la clave, 
 | ~~**5·0**~~ ✅ | Quitar el `putIfAbsent` incondicional del responsable (2.4). *Hecho en `0.10.6`: se inyecta sólo si la plantilla tiene el campo. Colgarlo de `ValueOrigin.AJUSTES` se deja para la 5·4, cuando haya esquema de verdad en el relleno.* | Bajo | `missingFields` deja de mentir con un PDF que no sea de Orange. |
 | ~~**5·1**~~ ✅ | `FillStep` recibe las secciones como parámetro. *Hecho en `0.10.6`: `FillSections.kt` con `FillSection` + `canonFillSections()`; `WizardScreen` se las pasa. El denominador del progreso se deriva de las secciones y da el mismo 21.* | Bajo | **La app se comporta idéntica.** Verificado con una prueba contra la lista original transcrita literal. |
 | **5·2** | Validación, hermano del CP, fecha y tipo de identificación pasan a colgar de `canonical` (2.5, 2.6). Fuente todavía `CANON`, que ya tiene su mapeo canónico. | Medio | Orange sigue validando exactamente igual: mismos mensajes, mismos campos en rojo. |
+| ~~**5·2b**~~ ✅ | Tanda que no estaba en el plan original, abierta al ejecutar la 5·2: los mismos acoplamientos por nombre quedaban en otros cinco sitios (`normVal`, `DateAutofill`, `copyFiscalToComercio`, `keyboardFor`, `coverageKeys`). *Hecho en `0.10.8`.* Va antes de la 5·3 porque manipulan claves de campo: si la 5·3 les cambia la clave por debajo estando aún en literales, se rompen a la vez que la migración y no se sabe cuál fue. | Bajo | Cuatro de cinco son cero-cambio en Orange. `normVal` cambia en 3 campos (bug de espacios, ver `CONTINUIDAD.md` §5). |
 | **5·3** | **La clave.** `fieldValues`/`fieldStates`/`fieldOrigins`/`fieldCandidates`/`UndoEntry` pasan a indexarse por nombre real; `fieldMapping` desaparece de la salida (2.3). Migración de `PersistedWizardState` v1→v2 y de `ContractProfile.campos` del historial y los perfiles exportados. | **Alto** | Sesión guardada con la versión anterior que se restaura sin perder nada; perfil del historial que se aplica bien. **Tanda sola, nada más dentro.** |
 | **5·4** | El `FormSchema` del PDF subido alimenta las secciones de verdad, con caída a `CANON` si no hay esquema. | Medio | Un PDF de Aire muestra SUS campos. Aquí ya no hay migración: la clave es la correcta desde 5·3. |
 | **5·5** | Tablas con filas dinámicas, catálogo **local** (lleva comisiones: no sale del dispositivo), `cuota total = cantidad × cuota unitaria`. | Alto | Funcionalidad nueva, no refactor. Se planifica al llegar. |
@@ -127,22 +129,42 @@ cambia comportamiento en Orange, así que son baratas de verificar.
 
 ---
 
-## 4. Lo que hay que decidir antes de la 5·3
+## 4. Decisiones para la 5·3 — TOMADAS (2026-08-31, por Pablo)
 
-No son cosas que se puedan resolver leyendo el código; hacen falta decisiones.
+Eran tres. Ya no bloquean.
 
-1. **Qué pasa con los perfiles del historial ya guardados.** Están indexados por clave canónica de
-   Orange. Migrarlos exige saber a qué PDF pertenecían, y `ContractProfile` guarda `fingerprint`,
-   así que **se puede**, pero sólo para los que casen con un esquema conocido. Para el resto:
-   ¿se dejan como legado de sólo lectura, o se descartan?
-2. **Si `fieldMapping` desaparece de la salida, qué pasa con `MappingEditor`**, el editor de mapeo
-   del flujo legado Orange/CANON. Con esquemas ya no hace falta, pero borrarlo rompe el camino
-   «subo un PDF propio parecido al de Orange» que hoy funciona.
-3. **Los datos compartidos del expediente.** `Expediente` y `CanonicalKeys` (0.9.9) existen para
-   que un dato extraído una vez sirva a los cuatro PDFs de Aire. Si en 5·3 la clave de los valores
-   pasa a ser el nombre real, hay dos niveles: valor canónico del expediente y valor por campo de
-   cada formulario. Conviene decidir en cuál vive la verdad **antes** de escribir la migración, no
-   después.
+1. **Perfiles del historial ya guardados → migración PEREZOSA**, al leerlos, como se hizo con
+   `schemas_v1`. `history_*` no se reescribe en bloque.
+
+   *Y resulta más fácil de lo que este plan asumía*: no hay que «saber a qué PDF pertenecían»,
+   porque `ContractProfile` **ya guarda su propio `fieldMapping`** además de `campos` y
+   `fingerprint` (`ContractProfile.kt:17`). Cada perfil lleva dentro su tabla de traducción:
+   - perfil de Orange (`fieldMapping` vacío) → la clave canónica **ya es** el nombre real:
+     migración identidad;
+   - perfil de un PDF propio → `campos[canónica]` se reindexa con `fieldMapping[canónica] ?: canónica`.
+
+   No queda ningún perfil huérfano. Hará falta una marca de versión en `ContractProfile` para no
+   re-migrar lo ya migrado.
+
+2. **`MappingEditor` no se toca en la 5·3.** Sólo se usa con `needsMapping = true`, y el mapeo
+   sigue haciendo falta para saber dónde va cada dato extraído. Se retira en la 5·4, cuando el
+   esquema alimente `FillStep` de verdad.
+
+3. **La verdad del dato vive en el VALOR POR NOMBRE REAL de campo.** `Expediente.compartidos`
+   (canónicas) se queda como está —existe, sin usar— y pasa a ser la capa de **propagación** entre
+   formularios en la fase de expediente, no la de verdad. Razones:
+   - el almacén por nombre real es **obligatorio** (los 400+ campos de Aire sin canónica: tarifas,
+     TEKI, casillas, firmas); el canónico es opcional. La verdad va en lo obligatorio;
+   - hoy `Expediente.documents` siempre tiene un elemento y no está enganchado al asistente, así
+     que el problema de propagación no existe todavía: decidir ahora su regla de conflicto sería
+     especular sobre un caso que no se puede probar;
+   - **es reversible en un sentido y no en el otro**: de valores por nombre real se puede derivar
+     `compartidos` vía `FormField.canonical` y luego invertir el flujo; empezando por la canónica
+     ya tendrías dos almacenes y desmontarlo costaría otra migración.
+
+   Señal que lo confirma: en Orange, `Dirección` y `Dirección_2` tienen canónicas **distintas**
+   (`direccion`/`direccion_2`) porque son dos datos, no uno compartido. Las canónicas ya se están
+   usando como identificador de campo lógico más que de dato único.
 
 ---
 

@@ -4,8 +4,8 @@
 > o su contenido; con eso y el repo tiene el contexto completo. **No hace falta reenviar los
 > PDFs de Aire**: su análisis está en `docs/ANALISIS_FORMULARIOS_AIRE.md`.
 >
-> **Actualizado**: 2026-08-31, tras `0.10.7-fase5-validacion-canonica` (⚠️ pendiente de verde,
-> igual que la 0.10.6 antes de esta). Este documento **caduca**: la primera regla de abajo
+> **Actualizado**: 2026-08-31, tras `0.10.8-fase5-heuristicas-canonicas` (⚠️ pendiente de verde).
+> La 0.10.7 SÍ salió verde. Este documento **caduca**: la primera regla de abajo
 > existe precisamente porque lo que aquí se afirma puede estar viejo.
 
 Habla en **español de España**.
@@ -22,30 +22,26 @@ git clone https://github.com/mejoresiagratis-code/smart-pdf
 cd smart-pdf && git log --oneline -8
 ```
 
-El último commit **de código** debería ser `0.10.7-fase5-validacion-canonica` · versionCode 77.
+El último commit **de código** debería ser `0.10.8-fase5-heuristicas-canonicas` · versionCode 78.
 Por encima puede haber commits solo de documentación, que no suben versión. Si el último código
 no es ése, este documento está desfasado: manda `git log` y la cabecera del `CHANGELOG.md`.
 
-### ⚠️ Build pendiente de verde (arrastrado desde la 0.10.6)
+### ⚠️ Build pendiente de verde
 
-Ni la 0.10.6 ni la 0.10.7 se han visto verdes en Actions todavía. Antes de escribir código nuevo,
-comprueba el estado real del workflow, no te fíes de este documento.
+La **0.10.6 y la 0.10.7 salieron verdes**. La 0.10.8 está sin verificar en Actions: míralo antes
+de escribir código nuevo.
 
-Lo que sí se comprobó en local con `kotlinc` (ver la técnica en la sección 6) para la 0.10.6:
-`data/model` completo, `FieldLabeler` y `VisionLabelPass` typecheckean sin errores ni avisos, y una
-prueba de comportamiento contra el `SchemaLabeling` real confirma la traducción de identificadores.
-Lo que **no** se pudo verificar es todo lo que depende de Android o de pdfbox de verdad: el render
-de páginas, `pageSize()` y la llamada al proxy. Si el build falla, mira ahí primero — y en
-`LabelEditorScreen`, que es lo único con Compose de esa tanda.
+Lo que sí se comprobó para la 0.10.8 (tanda 5·2b) fue el comportamiento, no la compilación:
+simulación en Python del dispatch de `normVal` antes/después sobre los 21 campos de `CANON`, y
+comprobación de que `realKeyFor` devuelve los mismos literales que las constantes que sustituye
+(`DateAutofill`, `fiscalToComercioKeyPairs`, `keyboardFor`). No se ha pasado `kotlinc` en local.
+Los ficheros tocados no traen dependencias nuevas salvo dos imports de `BuiltinSchemas`/
+`CanonicalKeys` en `FieldNormalizer` — ojo con un ciclo de paquetes si el build falla ahí:
+`data.validation` pasa a depender de `data.model`, y `data.model` NO debe depender de
+`data.validation` (hoy no lo hace).
 
-Para la 0.10.7 (tanda 5·2) se comprobó por simulación en Python el dispatch de `FieldValidator`
-sobre los 21 campos de `CANON`, antes/después — ver sección 5. No se ha compilado con `kotlinc`
-en local; los tres ficheros tocados (`FormSchema.kt`, `FieldValidator.kt`, `FillStep.kt`) no
-tienen dependencias nuevas, así que el riesgo de tipo es bajo, pero no está verificado.
-
-Si sale verde, lo siguiente no es código: es **probarlo en el móvil con un PDF real de Aire**.
-La lógica está verificada, pero la calidad de las etiquetas que devuelve la visión sólo se ve
-usándolo.
+Si sale verde, lo siguiente **no es código**: es probar el etiquetado en el móvil con un PDF real
+de Aire, que sigue pendiente desde la 0.10.5.
 
 ---
 
@@ -88,7 +84,8 @@ con cuatro formularios rellenables propios: contrato de empresas (481 campos), p
 | 0.10.4 | Fase 4 **cableada**: el editor ya es alcanzable con un PDF real · verde ✅ |
 | 0.10.5 | Fase 3 **cerrada**: `VisionLabelPass` engancha el etiquetado por visión · verde ✅ |
 | 0.10.6 | Fase 5, tandas **5·0 y 5·1**: campo fantasma arreglado + costura de secciones ⚠️ sin verde |
-| 0.10.7 | Fase 5, tanda **5·2**: validación, hermano del CP y `FECHA_KEYS` cuelgan de `canonical` ⚠️ sin verde |
+| 0.10.7 | Fase 5, tanda **5·2**: validación, hermano del CP y `FECHA_KEYS` cuelgan de `canonical` · verde ✅ |
+| 0.10.8 | Fase 5, tanda **5·2b**: `normVal`, `DateAutofill`, copia fiscal, teclado y cobertura, por canónica ⚠️ sin verde |
 
 ### Qué está enganchado y qué no
 
@@ -120,7 +117,10 @@ Por orden. La primera no es código.
   las tres cosas de una pasada.
 - **Fase 5 — relleno dinámico**: es la que hace que un PDF de Aire se rellene de punta a punta, y
   la que toca `WizardViewModel` (1126 líneas). **No la ataques de una vez: está partida en seis
-  tandas en `docs/PLAN_FASE_5.md`.** Las 5·0, 5·1 y 5·2 están hechas (0.10.6 y 0.10.7). **La
+  tandas en `docs/PLAN_FASE_5.md`.** Hechas: 5·0 y 5·1 (0.10.6), 5·2 (0.10.7) y 5·2b (0.10.8,
+  tanda añadida al ejecutar). **Las tres decisiones que bloqueaban la 5·3 ya están tomadas y
+  registradas en `docs/PLAN_FASE_5.md` §4** — la verdad del dato va en el valor por nombre real,
+  los perfiles se migran al leerlos, y `MappingEditor` no se toca hasta la 5·4. **La
   siguiente es la 5·3: la migración de datos** (`fieldValues`/`fieldStates`/`fieldOrigins`/
   `fieldCandidates`/`UndoEntry` pasan a indexarse por nombre real; `PersistedWizardState` v1→v2;
   `ContractProfile.campos` del historial y los perfiles exportados). Es la de **riesgo alto** del
@@ -145,6 +145,13 @@ Por orden. La primera no es código.
   que queda expuesto** — misma clase de caso que el de las casillas, justo abajo. Verificar en
   dispositivo metiendo un NIF de representante o un IBAN inválidos en el contrato de Orange:
   ahora deben salir en rojo.
+- **El IBAN se escribe compactado desde la 0.10.8 (tanda 5·2b), y antes no.** Mismo bug de
+  espacios que el punto anterior, pero en `FieldNormalizer.normVal`: `"Datos bancarios del
+  DISTRIBUIDOR"` nunca casaba con `"datosbancarios"`, así que el valor que devolvía la IA iba al
+  PDF tal cual, con sus espacios. Ahora se compacta, que es lo que hace la app web (paridad).
+  Por lo mismo, el NIF del representante se pasa a mayúsculas y se le quitan puntos/guiones, y un
+  «Apellidos, Nombre» se invierte a «Nombre Apellidos». **Verificar en el PDF final** que el IBAN
+  sale sin espacios y que el nombre del representante no se ha dado la vuelta cuando no debía.
 - **Casillas del contrato de Orange.** La 0.9.7 cambió el estado de activación de `/On` al real
   del PDF. Si `/On` tampoco encajaba antes, las CIF/NIF/NIE llevarían sin marcarse desde siempre
   sin que nadie lo supiera (el fallo era silencioso). Si ahora se marcan, **no es una regresión**.

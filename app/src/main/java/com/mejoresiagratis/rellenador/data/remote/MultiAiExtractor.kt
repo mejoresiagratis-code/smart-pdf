@@ -134,9 +134,11 @@ class MultiAiExtractor @Inject constructor(
         }
 
         // Campos de texto canónicos que cuentan para "cobertura" (excluye fechas y responsable).
+        // Tanda 5·2b — antes el excluido era el literal `setOf("Fecha", "de", "año")`; ahora es
+        // `DATE_KEYS`, que es la misma lista con un solo dueño (docs/PLAN_FASE_5.md, 2.6).
         val coverageKeys = com.mejoresiagratis.rellenador.data.model.ContractFields.CANON
             .map { it.key }
-            .filterNot { it in setOf("Fecha", "de", "año") }
+            .filterNot { it in com.mejoresiagratis.rellenador.data.model.ContractFields.DATE_KEYS }
 
         fun allCovered(): Boolean = coverageKeys.all { agg[it]?.isNotEmpty() == true }
 
