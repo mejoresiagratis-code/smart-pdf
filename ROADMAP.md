@@ -4,7 +4,7 @@ Estado real del proyecto y próximas tandas planificadas. Este documento sustitu
 "roadmap" informal que vivía en las notas de continuidad de las sesiones. Se actualiza
 al final de cada tanda con lo que quede pendiente.
 
-Última actualización: **2026-08-31** (versión `0.10.1-etiquetado-por-vision`, versionCode 71).
+Última actualización: **2026-08-31** (versión `0.10.2-deteccion-de-radios`, versionCode 72).
 
 > **Cambio de contexto (2026-08-31):** Pablo ya no trabaja con Orange/MASORANGE. La
 > prioridad pasa a ser multi-contrato de verdad, con los PDFs de la empresa nueva
@@ -104,6 +104,9 @@ paso. Build verde y verificación en el móvil antes de seguir.
 | **0.9.3** | El prompt lleva los **campos reales del PDF cargado** en vez de la lista fija `CANON` (causa de que se «olvidaran» campos), y una **guía de campos** cuando el contrato usa nombres propios — copiada literal de `tplHint` de la web, así que la paridad se mantiene. |
 | **0.9.4** | **Fase 1 del roadmap multi-formulario** (`roadmap-multiformulario.html`): `PdfFieldInspector`, lee los widgets del AcroForm en orden de lectura real (página → fila con tolerancia 6pt → columna), coordenadas origen arriba-izquierda. Verificado contra el Modelo 145 (60 campos). Utilidad pura, sin UI ni cambios de comportamiento — base para la fase 2 (esquema dinámico). |
 | **0.9.9** | **Fase 2 · tanda 3 de 3 — cierra la fase**: persistencia de esquemas por huella (`schemas_v1`), `Expediente`/`ExpedienteDocument` con datos compartidos por `CanonicalKeys`, y `SchemaMigration` desde `templates_v1`. La migración es **perezosa y no destructiva**: `templates_v1` no se toca, se convierte al pedir el esquema y volver atrás es dejar de leer la clave nueva. `WizardViewModel` sin tocar. |
+| **0.10.0** | **Fase 2 cerrada del todo — `FormSchemaBuilder`**: detecta tablas por geometría (nunca por nombre), verificado contra los 4 PDFs de Aire (contrato: 5 tablas; portabilidad: 1 tabla 25×7; conectividad: 1 tabla de 10 filas, con el defecto de origen de filas 07/08 superpuestas reflejado, no tapado; SEPA: 0 tablas, correcto). Fichero nuevo, sin enganchar. |
+| **0.10.1** | **Fase 3 — `FieldLabeler`**: etiquetado por visión, se pregunta por columna y no por celda (7 preguntas en vez de 175 en una tabla 25×7). `SchemaLabeling.apply()` nunca pisa `LabelSource.USUARIO`. Deuda: usa `task=locate_signature` del proxy por no haber una tarea propia. Fichero nuevo, sin enganchar. |
+| **0.10.2** | Hueco detectado planificando la fase 4: `FormSchemaBuilder` nunca emitía `FieldKind.RADIO` (todo botón salía CHECKBOX/TEXT), así que no existía ningún grupo de opción en ningún esquema. Ahora `PdfFieldInspector` lee `isRadio`/`onState` por widget (verificado contra el fuente real de `pdfbox-android 2.0.27.0`, tag `v2.0.27.0` — no se repite el error de la 0.9.8.1 de asumir un método inexistente) y `FormSchemaBuilder` los propaga. `name` sigue siendo la clave de agrupación; no hace falta campo nuevo. |
 | **0.9.8.2** | **Nombres consistentes**: commit, run de Actions, zip del artefacto y APK pasan a llamarse igual (`rellenador-<versionName>`). El APK deja de ser `app-debug.apk` y se quita `run-name`, que metía el mensaje entero del commit en el título del run. |
 | **0.9.8.1** | **Arreglo de compilación**: las 0.9.7 y 0.9.8 se subieron sin build verde y no compilaban. `PDRadioButton.getSelectableValues()` no existe en `pdfbox-android 2.0.27.0` (reescrito con `PDCheckBox.check()`/`unCheck()` y `PDButton.getOnValues()`), y el enum `FieldOrigin` chocaba con el `data class` homónimo de `ui.wizard` que importan `FieldResolver` y `AutoFillPolicy` (renombrado a `ValueOrigin`). |
 | **0.9.8** | **Fase 2 · tanda 2 de 3**: `FormSchema.kt` — modelo de esquema dinámico. `CanonicalKeys` (vocabulario transversal del expediente), `ValueOrigin` (DOCUMENTO/AJUSTES/PLATAFORMA/CATALOGO/CALCULADO/FIRMA), `FormField` con `onState`, `optionLabel` y `combGroup`, `FormSection` con SIMPLE/TABLE/REPEATED_BLOCK, `TableColumn`/`TableRow` definidos por geometría, y `BuiltinSchemas.orangeDistribution()` derivado de `CANON`. Sólo estructuras nuevas: no se persiste ni se usa aún. |
@@ -128,6 +131,18 @@ paso. Build verde y verificación en el móvil antes de seguir.
 ## Próximas tandas
 
 ### 🔴 Alta prioridad
+
+- **Fase 4 — editor de mapeo/etiquetas** (siguiente). Revisar y corregir a mano las etiquetas
+  que proponga `FieldLabeler`, marcando la corrección como `LabelSource.USUARIO` (que
+  `SchemaLabeling.apply()` ya respeta y nunca pisa). Debe permitir editar de una vez: un campo
+  suelto, una `TableColumn` entera, y un **grupo de opción (RADIO) entero** — para esto último
+  ya no hace falta ningún modelo nuevo: agrupar `section.fields.filter { it.kind ==
+  FieldKind.RADIO }.groupBy { it.name }` (v0.10.2). Dos avisos para quien la escriba:
+  1. **El nombre `MappingEditor` ya está cogido** (`ui/wizard/MappingEditor.kt`, del flujo
+     legado Orange/CANON — mapea el PDF propio del usuario a las 22 claves fijas, no tiene
+     nada que ver con esta fase). El editor nuevo necesita otro nombre de fichero/composable.
+  2. Sigue sin tocar `WizardViewModel` ni `FillStep` — trabaja solo sobre un `FormSchema` en
+     memoria, igual que las fases 2 y 3.
 
 - ~~**Persistencia de documentos (Fase 2 de robustez)**~~ ✅ *Completado en v0.8.7* — `DocumentStore`
   copia los documentos a `filesDir/docs/` al añadirlos. Texto original:

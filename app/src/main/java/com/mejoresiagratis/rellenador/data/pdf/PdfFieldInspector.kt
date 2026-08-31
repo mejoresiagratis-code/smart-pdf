@@ -1,6 +1,9 @@
 package com.mejoresiagratis.rellenador.data.pdf
 
+import com.tom_roush.pdfbox.cos.COSName
 import com.tom_roush.pdfbox.pdmodel.PDDocument
+import com.tom_roush.pdfbox.pdmodel.interactive.annotation.PDAnnotationWidget
+import com.tom_roush.pdfbox.pdmodel.interactive.form.PDButton
 import com.tom_roush.pdfbox.pdmodel.interactive.form.PDCheckBox
 import java.io.InputStream
 import javax.inject.Inject
@@ -35,7 +38,42 @@ class PdfFieldInspector @Inject constructor() {
         val width: Float,
         val height: Float,
         val isCheckbox: Boolean,
+        /**
+         * `true` si el campo es un grupo de opción (radio): varias casillas comparten el mismo
+         * [name] (es el mecanismo nativo del AcroForm para agrupar radios) y se distinguen por
+         * [onState]. Verificado contra `PDButton.isRadioButton()` en el fuente real de
+         * `pdfbox-android 2.0.27.0` — no se asume `is PDRadioButton`, porque el flag vive en la
+         * clase base y es la forma verificada de comprobarlo (ver nota de `AcroFormFiller` sobre
+         * `PDRadioButton.getSelectableValues()`, que no existe en esta versión).
+         */
+        val isRadio: Boolean = false,
+        /**
+         * Valor de activación de ESTE widget concreto (no del campo entero): la clave de
+         * `/AP /N` que no es `Off`. Para un grupo de opción, cada casilla física tiene un
+         * `onState` distinto (`PAGO_UNICO`, `FINANCIADO`…) aunque compartan [name]. Nulo para
+         * TEXT o si el widget no declara estados (PDF mal formado).
+         */
+        val onState: String? = null,
     )
+
+    /**
+     * Estado de activación propio de un widget de botón (checkbox o radio), leído de su propio
+     * diccionario de apariencia `/AP /N`. Es el mismo mecanismo que ya usa `AcroFormFiller`
+     * para ESCRIBIR el estado correcto (v0.9.7); aquí se usa para LEER cuál es, widget a widget,
+     * cuando varios comparten `name` (radio). Verificado contra el fuente real: `PDAnnotation`
+     * expone `getAppearance()` → `PDAppearanceDictionary.getNormalAppearance()` →
+     * `PDAppearanceEntry`, y si `isSubDictionary()` sus claves son los estados posibles de ESE
+     * widget (incluyendo `Off`).
+     */
+    private fun widgetOnState(widget: PDAnnotationWidget): String? =
+        runCatching {
+            widget.appearance?.normalAppearance
+                ?.takeIf { it.isSubDictionary }
+                ?.subDictionary
+                ?.keys
+                ?.map { it.name }
+                ?.firstOrNull { it != COSName.Off.name }
+        }.getOrNull()
 
     fun inspect(input: InputStream): List<Field> = runCatching {
         PDDocument.load(input).use { doc ->
@@ -45,6 +83,11 @@ class PdfFieldInspector @Inject constructor() {
 
             for (field in form.fieldTree) {
                 val isCb = field is PDCheckBox
+                // PDCheckBox hereda de PDButton, así que isCb va primero (mismo orden que
+                // AcroFormFiller.applyButtonValue): un radio nunca es también checkbox.
+                val isRadioField = !isCb && (field as? PDButton)?.let { btn ->
+                    runCatching { btn.isRadioButton }.getOrDefault(false)
+                } == true
                 val name = field.fullyQualifiedName ?: continue
                 for (widget in field.widgets) {
                     val rect = widget.rectangle ?: continue
@@ -59,6 +102,8 @@ class PdfFieldInspector @Inject constructor() {
                         width = rect.width,
                         height = rect.height,
                         isCheckbox = isCb,
+                        isRadio = isRadioField,
+                        onState = if (isCb || isRadioField) widgetOnState(widget) else null,
                     )
                 }
             }

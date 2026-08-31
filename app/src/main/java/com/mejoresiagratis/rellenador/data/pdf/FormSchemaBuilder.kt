@@ -190,10 +190,18 @@ class FormSchemaBuilder @Inject constructor() {
         // (`Campo de texto 116`) lo sustituirá el etiquetado por visión de la fase 3; por eso
         // queda marcado como NOMBRE_REAL y no como USUARIO.
         label = f.name,
-        kind = if (f.isCheckbox) FieldKind.CHECKBOX else FieldKind.TEXT,
+        kind = when {
+            f.isCheckbox -> FieldKind.CHECKBOX
+            f.isRadio -> FieldKind.RADIO
+            else -> FieldKind.TEXT
+        },
         origin = ValueOrigin.DOCUMENTO,
         page = f.page,
         order = order,
+        // Estado real de ESTE widget (`Sí`, `PAGO_UNICO`…). Para RADIO, distintos widgets con
+        // el mismo `name` (= grupo de opción) traen valores distintos aquí; agrupar por `name`
+        // es lo que permitirá al futuro editor de mapeo tratar el grupo como una sola unidad.
+        onState = f.onState,
         labelSource = LabelSource.NOMBRE_REAL,
     )
 
@@ -211,15 +219,20 @@ class FormSchemaBuilder @Inject constructor() {
             .sortedBy { it.second }
 
         val columns = xs.mapIndexed { i, (key, x) ->
+            val cellsInColumn = rows.flatMap { row -> row.filter { xKey(it.x) == key } }
             TableColumn(
                 id = "c$key",
                 label = "Columna ${i + 1}",   // la etiqueta real la pone la fase 3
                 x = x,
-                // Si TODA la columna son casillas, es una columna de casillas.
-                kind = if (rows.all { row ->
-                        row.filter { xKey(it.x) == key }.all { it.isCheckbox }
-                    } && rows.any { row -> row.any { xKey(it.x) == key } }
-                ) FieldKind.CHECKBOX else FieldKind.TEXT,
+                kind = when {
+                    cellsInColumn.isEmpty() -> FieldKind.TEXT
+                    // Si TODA la columna son casillas, es una columna de casillas.
+                    cellsInColumn.all { it.isCheckbox } -> FieldKind.CHECKBOX
+                    // Si TODA la columna son radios (p.ej. las 4 columnas de "Provisión" en
+                    // Portabilidad: prefijo `Check Box4..7`, un grupo de opción por fila).
+                    cellsInColumn.all { it.isRadio } -> FieldKind.RADIO
+                    else -> FieldKind.TEXT
+                },
                 origin = ValueOrigin.CATALOGO,
             )
         }

@@ -8,6 +8,43 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.10.2-deteccion-de-radios] — 2026-08-31
+
+**Hueco encontrado al planificar la fase 4** (editor de mapeo/etiquetas): pedía poder editar
+la etiqueta de "un grupo de opción completo" (radio), pero `FormSchemaBuilder` (v0.10.0) nunca
+emitía `FieldKind.RADIO` — todo widget de botón salía como `CHECKBOX` o `TEXT`. No había ningún
+grupo de opción en ningún esquema generado hasta ahora. Esta versión cierra ese hueco. Aditivo,
+nada existente se comporta distinto para TEXT/CHECKBOX; aún sin enganchar al asistente.
+
+### Añadido — `PdfFieldInspector.Field.isRadio` / `.onState`
+- `isRadio`: `true` cuando el campo es un grupo de opción. Se comprueba con
+  `PDButton.isRadioButton()`, no con `is PDRadioButton`, porque el flag vive en la clase base
+  (`PDButton`) — y porque `PDRadioButton.getSelectableValues()` **no existe** en
+  `pdfbox-android 2.0.27.0` (ya costó un build roto en la 0.9.8.1; esta vez se verificó contra
+  el fuente real del tag `v2.0.27.0` antes de escribir una sola línea).
+- `onState`: el valor de activación **de ese widget concreto**, no del campo entero — la clave
+  de `/AP /N` que no es `Off`. Necesario porque en un grupo de opción varios widgets comparten
+  el mismo `name` (es el mecanismo nativo del AcroForm para agrupar radios) y sólo se
+  distinguen por su propio estado (`PAGO_UNICO`, `FINANCIADO`…). Mismo mecanismo que ya usa
+  `AcroFormFiller` para ESCRIBIR el estado correcto (v0.9.7), aquí usado para LEERLO widget a
+  widget. Verificado contra el fuente real: `PDAnnotation.getAppearance()` →
+  `PDAppearanceDictionary.getNormalAppearance()` → `PDAppearanceEntry.getSubDictionary()`.
+
+### Añadido — `FormSchemaBuilder`
+- `toField()` ahora produce `FieldKind.RADIO` (antes solo CHECKBOX/TEXT) y propaga `onState`.
+- `TableColumn.kind` reconoce columnas donde TODA la columna son radios (ej. las 4 columnas de
+  «Provisión» en Portabilidad — 100 checkboxes `Check Box4..7` que en realidad son grupos de
+  opción por fila), no solo columnas de checkbox puro.
+
+### No incluido en esta tanda (queda para el editor)
+No hace falta ningún campo nuevo de "id de grupo": `name` ya es la clave natural de
+agrupación de un radio (es cómo el propio AcroForm los agrupa). El futuro editor de mapeo sólo
+necesita `section.fields.filter { it.kind == RADIO }.groupBy { it.name }` para tratar cada
+grupo como una unidad. `optionLabel` (el texto de cada opción, ej. "PAGO ÚNICO") se deja sin
+poblar aquí — lo pone la fase 3/4 de etiquetado, no la geometría.
+
+---
+
 ## [0.10.1-etiquetado-por-vision] — 2026-08-31
 
 **Fase 3.** Fichero nuevo, nada existente modificado. Aún sin enganchar al asistente.
