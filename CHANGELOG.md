@@ -8,6 +8,61 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.9.8-modelo-de-esquema] — 2026-08-31
+
+Fase 2, tanda 2 de 3. **Sólo estructuras nuevas**: un fichero añadido, cero ficheros existentes
+modificados aparte de la versión y la documentación. Nada de esto se persiste ni se usa todavía
+en el asistente — eso es la tanda 3, aislada por ser la de riesgo alto.
+
+### Añadido — `FormSchema.kt`, el modelo de esquema dinámico
+Sustituye la premisa de `ContractFields.CANON` (lista fija de 21 campos del contrato de Orange),
+que era la causa de que subir cualquier otro PDF detectara bien sus campos pero siguiera
+mostrando los 22 de siempre.
+
+- **`CanonicalKeys`** — vocabulario canónico **transversal al expediente** (razón social,
+  identificación, domicilio, representante, IBAN, BIC…). Es lo que permite extraer el dato una
+  vez y rellenar los cuatro formularios de Aire, que piden lo mismo con nombres distintos
+  (`Nombre o razón social` / `NOMBRE DEL DEUDOR` / `Titular`). Ojo: **no es lo mismo que
+  `CANON`** — `CANON` son nombres reales de campos de un PDF concreto; esto es vocabulario de
+  negocio, independiente de cualquier documento.
+- **`FieldOrigin`** — de dónde sale cada valor: `DOCUMENTO`, `AJUSTES` (constantes del
+  distribuidor), `PLATAFORMA` (lo que sale de TEKI después del alta y la IA no puede proponer),
+  `CATALOGO` (filas de tarifa, que la IA no debe tocar), `CALCULADO`, `FIRMA`.
+- **`FormField`** — con `onState` para el estado de activación real (v0.9.7), `optionLabel`
+  para los grupos de opción, y `combGroup`/`combIndex` para el caso de **un valor lógico
+  troceado en varias casillas** (el BIC del SEPA son 11 campos de un carácter).
+- **`FormSection`** con `SectionKind`: `SIMPLE`, `TABLE` y `REPEATED_BLOCK` (los cuatro
+  bloques idénticos de «Dirección de instalación» de Conectividad, que se repiten pero no son
+  tabla porque no comparten x).
+- **`TableColumn` / `TableRow`** — la columna se define por su **x**, no por el nombre. Es
+  obligatorio: en una misma fila de la tabla de Telefonía Fija conviven `TF cantidad 01` y
+  `Campo de texto 116`. Las celdas se asignan por posición, que también es lo que resuelve los
+  checkboxes de fila de Portabilidad (nombres tipo `Check Box4.4.5.10.5`, donde el prefijo da
+  la columna y la `y` la fila).
+- **`FormSchema`** — identificado por la misma huella que ya usa `TemplateFingerprint`, para
+  que subir dos veces el mismo PDF reutilice el esquema ya etiquetado. Lleva `schemaVersion`
+  desde el primer día, para no tener que adivinarlo después (la lección de la 0.8.0).
+- **`BuiltinSchemas.orangeDistribution()`** — el contrato de Orange deja de ser «el formulario
+  de la app» y pasa a ser **un esquema más**. Se **deriva** de `ContractFields.CANON` en vez de
+  reescribirlo: esos nombres son frágiles (dobles espacios, sufijos `_2`, la casilla llamada
+  literalmente `undefined`) y están verificados contra el AcroForm real; duplicarlos sería
+  pedir que se desincronicen.
+
+### Verificado
+Las 21 claves de `CANON` tienen su clave canónica y ninguna clave del mapeo se ha inventado
+(comprobado por script contra el fichero, no a ojo). El responsable comercial queda como
+`FieldOrigin.AJUSTES` — es el caso que dio origen a ese valor — y las tres casillas de tipo de
+identificación dejan `onState` a nulo a propósito: el estado real se resuelve contra el
+documento al rellenar (v0.9.7), no se declara en el esquema.
+
+### Lo que NO entra aquí (y por qué)
+El constructor que convierte la salida de `PdfFieldInspector` en un `FormSchema` —con detección
+de tablas por geometría— **no está**. Necesita decisiones que aún dependen de la tanda 3
+(cómo se persiste) y de la fase 3 (cómo se etiqueta lo que no tiene nombre útil). Meterlo aquí
+habría convertido una tanda sin riesgo en una con bastante.
+
+---
+
 ## [0.9.7-estado-real-de-casillas] — 2026-08-31
 
 Primera de las tres tandas en que se ha partido la fase 2 (ver `ROADMAP.md`). Es la única que
