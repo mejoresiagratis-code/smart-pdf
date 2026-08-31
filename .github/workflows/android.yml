@@ -1,11 +1,19 @@
 name: Android CI
 
-# Título visible en la lista de Actions.
-# En `push`, GitHub ya usaba el mensaje del commit; en `workflow_dispatch` no hay commit
-# en el evento y se quedaba en "Android CI #NNN", sin decir qué se estaba compilando.
-# El operador `||` de las expresiones actúa como "si es nulo, usa esto otro".
-run-name: >-
-  ${{ github.event.head_commit.message || format('Compilación manual · {0}', github.sha) }}
+# Sin `run-name` a propósito.
+#
+# Antes se fijaba a `github.event.head_commit.message`, que es el mensaje ENTERO —título y
+# cuerpo—, así que el título del run salía como un muro de texto cortado. Las expresiones de
+# Actions no tienen función para partir cadenas, así que no se puede recortar a la primera
+# línea desde aquí.
+#
+# Sin `run-name`, GitHub usa su valor por defecto, que para un `push` es exactamente **la
+# primera línea del commit**. Como los títulos de commit siguen ahora el formato
+# `rellenador-<versionName>`, el título del run coincide con el nombre del artefacto y con el
+# del APK de dentro.
+#
+# En `workflow_dispatch` no hay commit y el título vuelve a ser "Android CI #N"; para saber qué
+# se compiló está el paso «Resumen del build», que imprime versión y versionCode.
 
 on:
   push:
@@ -48,11 +56,18 @@ jobs:
       - name: Compilar APK debug
         run: ./gradlew assembleDebug --stacktrace
 
+      # Gradle siempre lo llama `app-debug.apk`. Al descargar varios a la vez, todos se
+      # llaman igual y hay que abrirlos para saber cuál es cuál. Se renombra al mismo
+      # nombre que el artefacto, así el zip y el APK de dentro coinciden.
+      - name: Renombrar el APK con la version
+        run: |
+          SRC=$(find app/build/outputs/apk/debug -name '*.apk' | head -1)
+          mv "$SRC" "app/build/outputs/apk/debug/rellenador-${{ steps.ver.outputs.name }}.apk"
+
       - name: Subir APK como artefacto
         uses: actions/upload-artifact@v4
         with:
-          # Con la versión en el nombre no hay que abrir el APK para saber cuál es
-          # cuando hay varios descargados a la vez.
+          # Mismo nombre que el APK de dentro: zip, APK y título del commit coinciden.
           name: rellenador-${{ steps.ver.outputs.name }}
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: warn

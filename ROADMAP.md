@@ -4,7 +4,7 @@ Estado real del proyecto y próximas tandas planificadas. Este documento sustitu
 "roadmap" informal que vivía en las notas de continuidad de las sesiones. Se actualiza
 al final de cada tanda con lo que quede pendiente.
 
-Última actualización: **2026-08-31** (versión `0.9.8.1-arreglo-de-compilacion`, versionCode 66).
+Última actualización: **2026-08-31** (versión `0.9.8.2-nombres-consistentes`, versionCode 67).
 
 > **Cambio de contexto (2026-08-31):** Pablo ya no trabaja con Orange/MASORANGE. La
 > prioridad pasa a ser multi-contrato de verdad, con los PDFs de la empresa nueva
@@ -103,6 +103,7 @@ paso. Build verde y verificación en el móvil antes de seguir.
 | **0.7.9** | **Tipo por IA (visión)** para fotos/escaneos sin capa de texto: campo `tipo_documento` en el prompt (vocabulario cerrado), callback `onDocTypeDetected`; la detección local tiene prioridad. ⚠️ Pendiente replicar `tipo_documento` en el prompt de la app web (paridad). |
 | **0.9.3** | El prompt lleva los **campos reales del PDF cargado** en vez de la lista fija `CANON` (causa de que se «olvidaran» campos), y una **guía de campos** cuando el contrato usa nombres propios — copiada literal de `tplHint` de la web, así que la paridad se mantiene. |
 | **0.9.4** | **Fase 1 del roadmap multi-formulario** (`roadmap-multiformulario.html`): `PdfFieldInspector`, lee los widgets del AcroForm en orden de lectura real (página → fila con tolerancia 6pt → columna), coordenadas origen arriba-izquierda. Verificado contra el Modelo 145 (60 campos). Utilidad pura, sin UI ni cambios de comportamiento — base para la fase 2 (esquema dinámico). |
+| **0.9.8.2** | **Nombres consistentes**: commit, run de Actions, zip del artefacto y APK pasan a llamarse igual (`rellenador-<versionName>`). El APK deja de ser `app-debug.apk` y se quita `run-name`, que metía el mensaje entero del commit en el título del run. |
 | **0.9.8.1** | **Arreglo de compilación**: las 0.9.7 y 0.9.8 se subieron sin build verde y no compilaban. `PDRadioButton.getSelectableValues()` no existe en `pdfbox-android 2.0.27.0` (reescrito con `PDCheckBox.check()`/`unCheck()` y `PDButton.getOnValues()`), y el enum `FieldOrigin` chocaba con el `data class` homónimo de `ui.wizard` que importan `FieldResolver` y `AutoFillPolicy` (renombrado a `ValueOrigin`). |
 | **0.9.8** | **Fase 2 · tanda 2 de 3**: `FormSchema.kt` — modelo de esquema dinámico. `CanonicalKeys` (vocabulario transversal del expediente), `ValueOrigin` (DOCUMENTO/AJUSTES/PLATAFORMA/CATALOGO/CALCULADO/FIRMA), `FormField` con `onState`, `optionLabel` y `combGroup`, `FormSection` con SIMPLE/TABLE/REPEATED_BLOCK, `TableColumn`/`TableRow` definidos por geometría, y `BuiltinSchemas.orangeDistribution()` derivado de `CANON`. Sólo estructuras nuevas: no se persiste ni se usa aún. |
 | **0.9.7** | **Fase 2 · tanda 1 de 3**: las casillas se marcaban asumiendo el estado `/On`, que no existe en ninguno de los PDFs de Aire (usan `Sí`, `Opción1/2`, `0`…`5`). Nuevo `applyButtonValue()` que resuelve el estado contra el propio documento. Además, el fallo al marcar una casilla era silencioso (`runCatching` sin `onFailure`) y ahora se reporta en `missingFields`. |

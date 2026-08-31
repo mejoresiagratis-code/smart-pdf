@@ -8,6 +8,32 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.9.8.2-nombres-consistentes] — 2026-08-31
+
+Cosmética de entrega. El commit, el run de Actions, el zip del artefacto y el APK de dentro
+pasan a llamarse **igual**: `rellenador-<versionName>`.
+
+### Cambiado — el APK ya no se llama `app-debug.apk`
+Gradle siempre lo llama así, de modo que al descargar varios había que abrirlos para saber cuál
+era cuál. Nuevo paso que lo renombra a `rellenador-<versionName>.apk` antes de subirlo, igual
+que el zip que lo contiene.
+
+### Corregido — el título del run salía como un muro de texto
+`run-name` usaba `github.event.head_commit.message`, que es el mensaje **entero** (título y
+cuerpo). Como los cuerpos eran largos, el título del run salía enorme y cortado.
+
+Se ha quitado `run-name`: sin él, GitHub usa su valor por defecto, que para un `push` es
+exactamente la primera línea del commit. Las expresiones de Actions no tienen función para
+partir cadenas, así que recortarla desde el YAML no era posible. En `workflow_dispatch` el
+título vuelve a ser «Android CI #N»; para saber qué se compiló está el paso «Resumen del
+build», que ya imprime versión y versionCode.
+
+### Norma nueva, documentada en la guía de continuidad
+Título del commit = `rellenador-<versionName>` y nada más. Cuerpo corto (qué y por qué); el
+razonamiento largo vive en este CHANGELOG, que es donde se busca.
+
+---
+
 ## [0.9.8.1-arreglo-de-compilacion] — 2026-08-31
 
 **Las v0.9.7 y v0.9.8 no compilaban.** Ambas se subieron sin build verde, saltándose la regla de

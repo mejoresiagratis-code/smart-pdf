@@ -36,6 +36,20 @@
    (el proxy y la web no viven en este repo).
 4. Versionado: cada tanda con build verde sube `versionCode`+`versionName` y añade su
    entrada al CHANGELOG. Hotfix sobre versión que nunca llegó a verde NO incrementa.
+5. **Formato del mensaje de commit.** El **título** (primera línea) es exactamente
+   `rellenador-<versionName>`, nada más. Con eso coinciden cuatro cosas que antes no
+   coincidían: título del commit, título del run en Actions, nombre del zip del artefacto y
+   nombre del APK de dentro. Ejemplo: `rellenador-0.9.8.1-arreglo-de-compilacion`.
+
+   El **cuerpo** va tras una línea en blanco y se mantiene **corto**: qué cambia y por qué, en
+   unas pocas líneas. El razonamiento largo (verificaciones, tablas, alternativas descartadas)
+   va al `CHANGELOG.md`, que es donde se busca. Antes se duplicaba entero en el cuerpo del
+   commit y, como el `run-name` del workflow usaba el mensaje **completo**, el título del run
+   salía como un muro de texto cortado.
+
+   El workflow ya no fija `run-name`: sin él, GitHub usa por defecto la primera línea del
+   commit, que es justo lo que se busca. Las expresiones de Actions no saben partir cadenas, así
+   que recortarla desde el YAML no era posible.
 
 ---
 
