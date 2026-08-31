@@ -8,6 +8,34 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.9.4-inspector-de-campos] — 2026-08-31
+
+Fase 1 del roadmap multi-formulario (`roadmap-multiformulario.html`). Base invisible:
+no toca ni la interfaz ni el modelo de datos, así que entra sola y con riesgo cero —
+todo lo que viene después (esquema dinámico, etiquetado por IA, editor) la necesita.
+
+### Añadido — `PdfFieldInspector`
+Lee los widgets del AcroForm **en el orden en que se rellenan**: por página, y dentro de
+cada página de arriba abajo y de izquierda a derecha (no el orden interno del PDF, que no
+tiene por qué parecerse al visual).
+
+- Devuelve `Field(name, page, x, y, width, height, isCheckbox)` por widget, con las
+  coordenadas convertidas a origen **arriba-izquierda** en puntos (el eje Y de PDF crece
+  hacia arriba; aquí se invierte).
+- Orden: página → fila (tolerancia de 6 pt) → columna. La tolerancia evita que dos campos
+  de la misma fila se desordenen por un par de puntos de diferencia vertical — pasa
+  constantemente en los formularios de la AEAT, donde las casillas no están perfectamente
+  alineadas.
+- **VERIFICADO contra `Modelo_145_rellenable.pdf`** (60 campos): el orden resultante
+  coincide con el del formulario impreso, sección por sección.
+- Sin dependencias nuevas: usa `pdfbox-android` (`tom-roush`), ya presente en el proyecto.
+
+### Sin cambios de comportamiento
+Es una utilidad pura, sin llamadas desde ningún ViewModel ni pantalla todavía. El
+contrato de distribución (assets) sigue funcionando exactamente igual.
+
+---
+
 ## [0.9.3-campos-reales-del-pdf] — 2026-08-07
 
 Tercera tanda del plan web→app. La de más valor técnico: elimina de raíz que se «olviden»

@@ -4,7 +4,7 @@ Estado real del proyecto y próximas tandas planificadas. Este documento sustitu
 "roadmap" informal que vivía en las notas de continuidad de las sesiones. Se actualiza
 al final de cada tanda con lo que quede pendiente.
 
-Última actualización: **2026-08-07** (versión `0.9.3-campos-reales-del-pdf`, versionCode 60).
+Última actualización: **2026-08-31** (versión `0.9.4-inspector-de-campos`, versionCode 61).
 
 ---
 
@@ -35,6 +35,7 @@ al final de cada tanda con lo que quede pendiente.
 | **0.7.8** | **Tipo de documento por CONTENIDO**: `DocumentLoader.firstPagesText()` (PDFBox) + `DocumentTypeDetector.fromContent()` — el diálogo "Analizando con…" muestra "Certificado de situación censal", "Alta en RETA"… en vez de `document:17077`. Fix causa raíz SAF (`OpenableColumns.DISPLAY_NAME`); el nombre de archivo real viaja a la IA como contexto. |
 | **0.7.9** | **Tipo por IA (visión)** para fotos/escaneos sin capa de texto: campo `tipo_documento` en el prompt (vocabulario cerrado), callback `onDocTypeDetected`; la detección local tiene prioridad. ⚠️ Pendiente replicar `tipo_documento` en el prompt de la app web (paridad). |
 | **0.9.3** | El prompt lleva los **campos reales del PDF cargado** en vez de la lista fija `CANON` (causa de que se «olvidaran» campos), y una **guía de campos** cuando el contrato usa nombres propios — copiada literal de `tplHint` de la web, así que la paridad se mantiene. |
+| **0.9.4** | **Fase 1 del roadmap multi-formulario** (`roadmap-multiformulario.html`): `PdfFieldInspector`, lee los widgets del AcroForm en orden de lectura real (página → fila con tolerancia 6pt → columna), coordenadas origen arriba-izquierda. Verificado contra el Modelo 145 (60 campos). Utilidad pura, sin UI ni cambios de comportamiento — base para la fase 2 (esquema dinámico). |
 | **0.9.2** | **Regresión de la 0.8.7 corregida**: `getType()` devuelve null para `file://`, y desde que `DocumentStore` copia los documentos a `filesDir` todos los URIs lo son → todo caía en `octet-stream` y el análisis fallaba con «No se pudieron leer los documentos». El MIME se deduce ahora por extensión cuando el resolver no sabe. |
 | **0.9.1** | **Aviso previo (RGPD) antes de mandar documentos a la IA**: `ConsentSheet` con los motores separados por región, casilla obligatoria y «no volver a preguntar» persistido. **Modo solo motores europeos**: apaga y bloquea los de fuera de la UE. Ambas preferencias sobreviven a «Empezar otro contrato». |
 | **0.9.0** | **Regresión corregida**: los fallos de motor eran invisibles desde la v0.8.0 (se borró con `ReviewStep` el único panel que los mostraba). Nuevo `EngineFailure` que traduce el error crudo a causa legible + consejo, y aviso plegable en el hero de Relleno. |
