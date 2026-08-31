@@ -8,6 +8,51 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.10.0-constructor-de-esquema] — 2026-08-31
+
+La pieza que faltaba entre la fase 1 (leer los campos) y la fase 3 (etiquetarlos): sin
+estructura no hay nada que etiquetar, porque una tabla de 12 filas no se pregunta 12 veces.
+Fichero nuevo, nada existente modificado.
+
+### Añadido — `FormSchemaBuilder`
+Convierte la salida de `PdfFieldInspector` en un `FormSchema`, **detectando las tablas por
+geometría**:
+
+1. Agrupa los campos en filas visuales (mismo criterio por hueco que el inspector).
+2. Una `x` es **columna** si se repite en ≥4 filas distintas.
+3. Una fila es **de tabla** si ≥3 de sus campos caen en columnas.
+4. Filas de tabla consecutivas que comparten columnas forman una sección `TABLE`. Una fila
+   suelta no hace tabla.
+
+Por geometría y no por nombre porque no hay alternativa: en una misma fila del contrato
+conviven `TF cantidad 01` y `Campo de texto 116`, siendo el segundo la columna «Servicio
+contratado». Y de paso sale gratis lo de los **checkboxes de fila dibujados en otro recuadro**:
+las 100 casillas de «Provisión» de Portabilidad se llaman `Check Box4.4.5.10.5` y aun así caen
+en su fila, porque comparten `y` con ella.
+
+### Verificado contra los cuatro formularios de Aire
+| PDF | Campos | Resultado |
+|---|---|---|
+| Contrato empresas | 488 | 5 tablas (13×7, 13×7, 9×8, 10×7, 10×9) + 47 filas sueltas |
+| Portabilidad fija | 202 | 1 tabla de **25×7** — las 3 columnas de texto **y** las 4 de casillas |
+| Conectividad | 141 | 1 tabla de 10 filas |
+| SEPA | 20 | **0 tablas** |
+
+Las tablas de 13 filas del contrato son las 12 de tarifa más la fila TOTAL. Que el SEPA dé
+**cero** importa tanto como los aciertos: la fila de 11 casillas del BIC no es una tabla sino
+un valor troceado, y el algoritmo no las confunde.
+
+En Conectividad aparece una fila con el doble de celdas de lo esperado. No es un fallo del
+algoritmo: es el defecto conocido de ese PDF, con las filas 07 y 08 superpuestas en la misma
+coordenada. El constructor lo refleja en vez de taparlo, que es lo que hace falta para poder
+avisar.
+
+### Pendiente
+Las etiquetas de columna salen como «Columna 1, 2, 3…» y las de campo como su nombre real. Es
+justo lo que resuelve la fase 3 (etiquetado por visión), que ya tiene dónde apoyarse.
+
+---
+
 ## [0.9.9.1-build-mas-rapido] — 2026-08-31
 
 Sólo CI. El paso «Set up Android SDK» se llevaba **~3 de los ~5 minutos** del build: el runner
