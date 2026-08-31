@@ -22,7 +22,13 @@ import com.mejoresiagratis.rellenador.ui.wizard.WizardViewModel
 @Composable
 fun AjustesScreen(
     vm: WizardViewModel = hiltViewModel(),
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    /**
+     * Abre el editor de etiquetas (v0.10.4). Sin valor por defecto a propósito: si algún día se
+     * añade otra pantalla que muestre Ajustes, debe decidir explícitamente a dónde lleva, en vez
+     * de heredar un no-op silencioso.
+     */
+    onOpenLabelEditor: () -> Unit,
 ) {
     val state by vm.state.collectAsState()
     var name by remember(state.responsableComercial) { mutableStateOf(state.responsableComercial) }
@@ -113,6 +119,25 @@ fun AjustesScreen(
                         )
                     }
                 }
+            }
+
+            HorizontalDivider()
+
+            // --- Herramientas (beta) ---
+            // Vive en Ajustes y no en el asistente a propósito: el editor de etiquetas no es un
+            // paso del flujo de alta, es una herramienta para preparar un formulario nuevo una
+            // vez. Cuando la fase 5 conecte el relleno al FormSchema, este acceso deja de ser
+            // necesario y el análisis pasará a ocurrir dentro del Paso 1.
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Herramientas (beta)", style = MaterialTheme.typography.titleMedium)
+                Text("Analiza un PDF rellenable, agrupa sus campos en secciones y tablas, y " +
+                    "te deja corregir a mano las etiquetas que no se entiendan. El resultado " +
+                    "se guarda para ese PDF: la próxima vez que lo subas se reutiliza.",
+                    style = MaterialTheme.typography.bodySmall)
+                OutlinedButton(
+                    onClick = onOpenLabelEditor,
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("Analizar y etiquetar un PDF") }
             }
 
             HorizontalDivider()

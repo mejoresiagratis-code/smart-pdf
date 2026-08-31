@@ -8,6 +8,86 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.10.4-editor-cableado] — 2026-08-31
+
+**Cierra el pendiente de la 0.10.3**: `LabelEditor` y `SchemaEditing` existían pero *nada* en la
+app les pasaba un `FormSchema` de un PDF real. Ahora hay un camino completo y alcanzable desde la
+interfaz: Ajustes → «Analizar y etiquetar un PDF» → SAF → inspección → esquema → editor →
+persistido por huella en `schemas_v1`.
+
+Sigue **sin tocar el asistente**, que era la condición de la fase 4: ni `WizardViewModel`, ni
+`WizardState`, ni ningún paso. Enganchar el relleno es la fase 5.
+
+`FieldLabeler` (etiquetado por visión) queda **fuera** a propósito: sin él, cada campo llega con
+el nombre real del AcroForm como etiqueta provisional —igual que hoy— y ya es corregible a mano,
+que es lo que hace útil esta tanda por sí sola. Lo que sí se ha hecho es dejarle el terreno
+preparado (ver `FieldRect`).
+
+### Añadido — `ui/wizard/LabelEditorViewModel.kt`
+Orquestador propio, **no** `WizardViewModel`. Al elegir un PDF: `PdfFieldInspector.inspect()` +
+`pageCount()` + `AcroFormFiller.listFields()` → `TemplateFingerprint.of()` →
+`PrefsRepository.findOrMigrateSchema()`, y solo si no hay nada guardado
+`FormSchemaBuilder.build()`. Es decir, **reutiliza** el esquema ya corregido si ese PDF pasó por
+aquí antes (y lo dice en pantalla), en vez de volver a preguntar. El título de partida es el
+nombre del fichero (`SEPA_Aire.pdf` identifica mucho mejor que «Formulario»), editable después.
+
+### Añadido — `ui/wizard/LabelEditorScreen.kt`
+Contenedora: selector SAF, spinner, avisos de «ya se había analizado» y «guardado», y el editor.
+
+### Añadido — `data/model/FieldRect` + `FormField.rect` + `TableColumn.rect`/`page`
+El esquema guardaba `page` pero **perdía la posición dentro de la página**, así que una vez
+construido no se podía recortar la región de un campo sin volver a inspeccionar el PDF — y ese
+recorte es exactamente lo que necesita `FieldLabeler` para preguntar a la visión por un campo sin
+mandarle la página entera. Misma convención que `PdfFieldInspector.Field` (origen
+arriba-izquierda, puntos) para que sea copia y no conversión.
+
+`SCHEMA_VERSION` **no** se toca: el campo es opcional y el `Json` de `AppModule` va con
+`ignoreUnknownKeys = true` y `explicitNulls = false`, así que la compatibilidad es en los dos
+sentidos (esquema nuevo leído por código viejo y al revés) y no hay nada que migrar.
+
+El `rect` de una `TableColumn` es **representativo, no la unión** de sus celdas: es la celda más
+alta, ensanchada al ancho máximo de la columna. La cabecera está justo encima de la primera fila,
+así que ése es el ancla desde el que mirar hacia arriba; la unión de las 25 filas de Portabilidad
+sería media página y no serviría de recorte. El ancla se ordena por `(página, y)` porque una tabla
+puede abarcar varias páginas.
+
+### Añadido — `PdfFieldInspector.pageCount()`
+Aparte de `inspect()` a propósito: la huella necesita el total de páginas del PDF, no el de
+páginas *con campos*. Un contrato de 54 páginas con campos en 6 daría huellas distintas según
+cómo se calculara, y el esquema guardado no se reencontraría nunca — que es justo para lo que
+existe la huella. Devuelve 0 si el PDF no abre, mismo criterio que `inspect()`.
+
+### Añadido — Ajustes › «Herramientas (beta)»
+El acceso vive en Ajustes y no en el asistente porque analizar un formulario nuevo es una tarea
+*previa* que se hace una vez, no un paso del alta. Cuando la fase 5 conecte el relleno al
+`FormSchema`, este acceso deja de hacer falta y el análisis se moverá al Paso 1.
+
+### Cambiado — `RellenadorNavHost`: ruta `etiquetas`
+A diferencia de `ajustes`, esta ruta **no** comparte la instancia de `WizardViewModel`: analizar
+un PDF suelto no debe tocar el paso actual, los documentos ni la firma de la sesión en curso.
+
+### Cambiado — `LabelEditor`: parámetro `backLabel`
+Único cambio a código de la 0.10.3, y es de una línea. Con barra superior propia había dos
+botones llamados «Atrás» que hacían cosas distintas (salir de la pantalla / volver al selector);
+el de abajo ahora se llama «Elegir otro PDF».
+
+### Añadido — dos salidas tempranas al elegir el PDF
+Un PDF ilegible (protegido) o **sin AcroForm** (un escaneo, un documento plano) ya no llega al
+editor: se rechaza con un mensaje que dice cuál de las dos cosas pasa. Sin esto se construía un
+esquema de cero secciones y el editor salía en blanco con un botón «Confirmar etiquetas» que no
+confirmaba nada — y, peor, la huella de un PDF sin campos es `"N|"` para **cualquier** PDF de N
+páginas, así que se habrían guardado unos encima de otros en `schemas_v1`. Se comprueban las dos
+listas (`listFields` y `inspect`), porque un campo sin widget colocado en ninguna página cuenta en
+la primera y no en la segunda.
+
+### Sabido y no arreglado
+`pickPdf()` abre el PDF **tres veces** (campos, páginas, nombres). Sobre el contrato de 488
+campos son tres cargas de PDFBox en `Dispatchers.IO` con spinner en pantalla. Unificarlo pide una
+API nueva del inspector que devuelva las tres cosas de una pasada; se deja anotado antes que
+inventar la firma con prisa.
+
+---
+
 ## [0.10.3-editor-de-etiquetas] — 2026-08-31
 
 **Fase 4 (la de verdad, no confundir con la "Fase 4 (COMPLETADA)" del archivo histórico — ver

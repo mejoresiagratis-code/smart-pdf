@@ -115,6 +115,22 @@ class PdfFieldInspector @Inject constructor() {
     }.getOrDefault(emptyList())
 
     /**
+     * Número de páginas del documento.
+     *
+     * Va aparte de [inspect] a propósito: `TemplateFingerprint.of()` necesita el total de
+     * páginas del PDF, no el de páginas *que tienen campos*, que es lo único deducible de
+     * [inspect]. Un contrato de 54 páginas con campos en 6 daría una huella distinta según cómo
+     * se calculara, y entonces el esquema guardado no se reencontraría nunca al volver a subir
+     * el mismo PDF — que es justo para lo que sirve la huella.
+     *
+     * Devuelve 0 si el documento no se puede abrir, mismo criterio que [inspect] (que devuelve
+     * lista vacía): quien llama ya tiene que tratar el caso de "este PDF no da nada".
+     */
+    fun pageCount(input: InputStream): Int = runCatching {
+        PDDocument.load(input).use { it.numberOfPages }
+    }.getOrDefault(0)
+
+    /**
      * Ordena los campos de UNA página en orden de lectura: filas de arriba abajo y, dentro de
      * cada fila, de izquierda a derecha.
      *

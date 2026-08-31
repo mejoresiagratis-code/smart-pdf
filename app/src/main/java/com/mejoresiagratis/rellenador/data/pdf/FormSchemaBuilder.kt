@@ -1,6 +1,7 @@
 package com.mejoresiagratis.rellenador.data.pdf
 
 import com.mejoresiagratis.rellenador.data.model.FieldKind
+import com.mejoresiagratis.rellenador.data.model.FieldRect
 import com.mejoresiagratis.rellenador.data.model.FormField
 import com.mejoresiagratis.rellenador.data.model.FormSchema
 import com.mejoresiagratis.rellenador.data.model.FormSection
@@ -198,6 +199,9 @@ class FormSchemaBuilder @Inject constructor() {
         origin = ValueOrigin.DOCUMENTO,
         page = f.page,
         order = order,
+        // Geometría tal cual la da el inspector (origen arriba-izquierda, puntos): `FieldRect`
+        // usa la misma convención justamente para que esto sea una copia y no una conversión.
+        rect = FieldRect(x = f.x, y = f.y, width = f.width, height = f.height),
         // Estado real de ESTE widget (`Sí`, `PAGO_UNICO`…). Para RADIO, distintos widgets con
         // el mismo `name` (= grupo de opción) traen valores distintos aquí; agrupar por `name`
         // es lo que permitirá al futuro editor de mapeo tratar el grupo como una sola unidad.
@@ -220,6 +224,18 @@ class FormSchemaBuilder @Inject constructor() {
 
         val columns = xs.mapIndexed { i, (key, x) ->
             val cellsInColumn = rows.flatMap { row -> row.filter { xKey(it.x) == key } }
+
+            // Rect REPRESENTATIVO de la columna = su celda más alta, ensanchada al ancho máximo
+            // de la columna. Dos decisiones, las dos deliberadas:
+            //  · la celda más alta y no la unión de todas: la cabecera está justo encima de la
+            //    primera fila, así que ése es el ancla desde el que la visión debe mirar hacia
+            //    arriba. La unión de 25 filas (Portabilidad) sería media página y no serviría.
+            //  · el ancho máximo y no el de esa celda: si la primera celda es más estrecha que
+            //    el resto, el recorte cortaría el rótulo por los lados.
+            // Se ordena por (página, y) porque una tabla PUEDE abarcar varias páginas: las filas
+            // se acumulan mientras compartan columnas, y `groupIntoRows` va página a página.
+            val anchor = cellsInColumn.minWithOrNull(compareBy({ it.page }, { it.y }))
+
             TableColumn(
                 id = "c$key",
                 label = "Columna ${i + 1}",   // la etiqueta real la pone la fase 3
@@ -234,6 +250,15 @@ class FormSchemaBuilder @Inject constructor() {
                     else -> FieldKind.TEXT
                 },
                 origin = ValueOrigin.CATALOGO,
+                page = anchor?.page ?: 0,
+                rect = anchor?.let {
+                    FieldRect(
+                        x = it.x,
+                        y = it.y,
+                        width = cellsInColumn.maxOf { c -> c.width },
+                        height = it.height,
+                    )
+                },
             )
         }
 

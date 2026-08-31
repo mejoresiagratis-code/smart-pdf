@@ -7,6 +7,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.mejoresiagratis.rellenador.ui.settings.AjustesScreen
+import com.mejoresiagratis.rellenador.ui.wizard.LabelEditorScreen
 import com.mejoresiagratis.rellenador.ui.wizard.WizardScreen
 import com.mejoresiagratis.rellenador.ui.wizard.WizardViewModel
 
@@ -24,7 +25,19 @@ fun RellenadorNavHost() {
             // sin necesidad de recargar nada manualmente.
             val wizardEntry = remember(nav) { nav.getBackStackEntry("wizard") }
             val vm: WizardViewModel = hiltViewModel(wizardEntry)
-            AjustesScreen(vm = vm, onBack = { nav.popBackStack() })
+            AjustesScreen(
+                vm = vm,
+                onBack = { nav.popBackStack() },
+                onOpenLabelEditor = { nav.navigate("etiquetas") },
+            )
+        }
+        composable("etiquetas") {
+            // OJO: aquí NO se comparte el ViewModel del wizard, al contrario que en "ajustes".
+            // El editor de etiquetas tiene su propio LabelEditorViewModel con ciclo de vida
+            // ligado a esta entrada, que es justo lo que se quiere: analizar un PDF suelto no
+            // debe tocar ni el paso actual, ni los documentos, ni la firma de la sesión en
+            // curso. `hiltViewModel()` sin argumentos ya resuelve contra ESTA entrada.
+            LabelEditorScreen(onBack = { nav.popBackStack() })
         }
     }
 }

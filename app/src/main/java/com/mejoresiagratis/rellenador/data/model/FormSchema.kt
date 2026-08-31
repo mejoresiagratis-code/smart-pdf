@@ -156,6 +156,31 @@ enum class LabelSource {
 }
 
 /**
+ * Rectángulo de un widget dentro de su página, con **origen arriba-izquierda y en puntos** —
+ * exactamente la convención de `PdfFieldInspector.Field`, para no tener que convertir nada al
+ * copiarlo.
+ *
+ * Existe para poder **recortar la región de página** que rodea a un campo. Es lo que necesita
+ * `FieldLabeler` para preguntar a la visión «¿cómo se llama esto?» sin mandarle la página
+ * completa, y lo que permite señalar en la previsualización dónde cae un campo. Hasta ahora el
+ * esquema guardaba `page` pero perdía la posición dentro de ella, así que una vez construido el
+ * esquema el recorte era imposible: había que volver a inspeccionar el PDF.
+ *
+ * Opcional a propósito, y por eso **no** se toca `FormSchema.SCHEMA_VERSION`: los esquemas
+ * `BUILTIN` derivados de `CANON` no tienen geometría, y los ya persistidos por la 0.9.9 tampoco.
+ * El `Json` de `AppModule` va con `ignoreUnknownKeys = true` y `explicitNulls = false`, así que
+ * el campo es compatible en los dos sentidos — un esquema nuevo se lee con código viejo y al
+ * revés — y no hay nada que migrar.
+ */
+@Serializable
+data class FieldRect(
+    val x: Float,
+    val y: Float,
+    val width: Float,
+    val height: Float,
+)
+
+/**
  * Un campo del formulario.
  *
  * [name] es el nombre **exacto** del AcroForm, con sus dobles espacios y rarezas incluidas: es
@@ -178,6 +203,12 @@ data class FormField(
     /** Página (0-based) y posición en orden de lectura, de `PdfFieldInspector`. */
     val page: Int = 0,
     val order: Int = 0,
+
+    /**
+     * Posición dentro de [page], si se conoce (ver [FieldRect]). Nulo en los esquemas `BUILTIN`,
+     * que se derivan de una lista de nombres y no de una inspección del PDF.
+     */
+    val rect: FieldRect? = null,
 
     /**
      * Estado de activación **real** del PDF para CHECKBOX y RADIO: `Sí`, `Opción1`, `0`…
@@ -237,6 +268,15 @@ data class TableColumn(
     val kind: FieldKind = FieldKind.TEXT,
     val origin: ValueOrigin = ValueOrigin.CATALOGO,
     val labelSource: LabelSource = LabelSource.NOMBRE_REAL,
+
+    /**
+     * Página y rectángulo **representativos** de la columna, para poder recortarla: no es la
+     * unión de todas sus celdas, sino la celda más alta (ver `FormSchemaBuilder.tableSection`).
+     * La cabecera de una tabla está justo encima de su primera fila, así que ése es el ancla
+     * desde el que buscar el rótulo hacia arriba; la unión de 25 filas sería media página.
+     */
+    val page: Int = 0,
+    val rect: FieldRect? = null,
 )
 
 /**

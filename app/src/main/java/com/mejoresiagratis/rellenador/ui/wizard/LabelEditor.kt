@@ -39,6 +39,12 @@ fun LabelEditor(
     onSchemaChange: (FormSchema) -> Unit,
     onBack: () -> Unit,
     onDone: () -> Unit,
+    /**
+     * Texto del botón de retroceso. Parametrizado porque el contenedor decide qué significa
+     * volver: dentro de un flujo con barra superior propia, "Atrás" en dos sitios distintos que
+     * hacen cosas distintas (salir de la pantalla / volver al selector de PDF) es una trampa.
+     */
+    backLabel: String = "Atrás",
 ) {
     val totalFields = schema.allFields().size
     Column(Modifier.fillMaxSize()) {
@@ -67,7 +73,7 @@ fun LabelEditor(
 
         HorizontalDivider()
         Row(Modifier.padding(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = onBack) { Text("Atrás") }
+            OutlinedButton(onClick = onBack) { Text(backLabel) }
             Button(onClick = onDone, modifier = Modifier.weight(1f)) { Text("Confirmar etiquetas") }
         }
     }
