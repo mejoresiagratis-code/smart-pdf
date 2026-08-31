@@ -8,6 +8,21 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.9.9.1-build-mas-rapido] — 2026-08-31
+
+Sólo CI. El paso «Set up Android SDK» se llevaba **~3 de los ~5 minutos** del build: el runner
+trae `cmdline-tools` 12.0 preinstaladas, la acción las daba por «wrong version» y se bajaba
+otra copia de `dl.google.com` en cada ejecución.
+
+Fijado `cmdline-tools-version: '12.0'` para que use la que ya está.
+
+⚠️ Es un número **acoplado a la imagen del runner de GitHub**. Si algún día actualizan la
+versión preinstalada, este paso volverá a descargar (tarda, no rompe) o fallará si la fijada
+desaparece. Se arregla mirando qué versión dice el log en «Found preinstalled sdkmanager» y
+actualizándola aquí, o quitando la línea para volver al comportamiento automático.
+
+---
+
 ## [0.9.9-persistencia-y-expediente] — 2026-08-31
 
 Fase 2, tanda 3 de 3 — la que cierra la fase. Es la que toca **datos de trabajo reales**, así

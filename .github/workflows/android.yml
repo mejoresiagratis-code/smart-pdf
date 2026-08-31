@@ -35,8 +35,20 @@ jobs:
 
       # Instala un SDK de Android limpio y correcto en el runner.
       # Esto es justo lo que falta en el Codespace (ANDROID_HOME vacio).
+      #
+      # `cmdline-tools-version` fijado a la que YA trae preinstalada el runner. Sin esto la
+      # acción la considera "wrong version", se baja otra copia de dl.google.com y ese paso
+      # solo se lleva ~3 min de los ~5 del build entero.
+      #
+      # OJO: es un número acoplado a la imagen del runner de GitHub. Si algún día actualizan
+      # la preinstalada, este paso se pondrá a descargar otra vez (vuelve a tardar, no
+      # rompe) o fallará si la versión fijada desaparece. Si eso pasa, mirar qué versión
+      # reporta el log en "Found preinstalled sdkmanager" y actualizar aquí, o quitar la
+      # línea para volver al comportamiento automático.
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: '12.0'
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
