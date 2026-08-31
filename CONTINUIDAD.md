@@ -4,8 +4,9 @@
 > o su contenido; con eso y el repo tiene el contexto completo. **No hace falta reenviar los
 > PDFs de Aire**: su análisis está en `docs/ANALISIS_FORMULARIOS_AIRE.md`.
 >
-> **Actualizado**: 2026-08-31, tras `0.10.4-editor-cableado`. Este documento **caduca**: la
-> primera regla de abajo existe precisamente porque lo que aquí se afirma puede estar viejo.
+> **Actualizado**: 2026-08-31, tras `0.10.4-editor-cableado` (build verde confirmado). Este
+> documento **caduca**: la primera regla de abajo existe precisamente porque lo que aquí se
+> afirma puede estar viejo.
 
 Habla en **español de España**.
 
@@ -21,22 +22,24 @@ git clone https://github.com/mejoresiagratis-code/smart-pdf
 cd smart-pdf && git log --oneline -8
 ```
 
-`HEAD` **debería** ser `5f567f3` · `0.10.4-editor-cableado` · versionCode 74. Si no lo es, este
-documento está desfasado: manda `git log` y el `CHANGELOG.md`.
+El último commit **de código** debería ser `5f567f3` · `0.10.4-editor-cableado` · versionCode 74,
+**verificado verde en Actions**. Por encima puede haber commits solo de documentación (este
+fichero, por ejemplo), que no suben versión. Si el último código no es ése, este documento está
+desfasado: manda `git log` y la cabecera del `CHANGELOG.md`.
 
-### ⚠️ Lo segundo: comprobar el build de la 0.10.4
+### La 0.10.4 está verificada — no persigas pistas cerradas
 
-**La 0.10.4 se subió a `main` SIN build verde.** Se preparó en un entorno sin Android SDK, así
-que no se compiló nunca en local. Antes de escribir una línea de código nuevo, mira en Actions
-si ese run salió verde. Si está rojo, arreglarlo es la tanda; los dos sospechosos anotados son:
+La 0.10.4 se subió sin haberse compilado en local (no hay Android SDK aquí) y llevaba dos
+sospechas anotadas. **Las dos están descartadas**, así que no vuelvas a investigarlas:
 
-- la inferencia de tipo del `compareBy({ it.page }, { it.y })` dentro del `minWithOrNull` nuevo
-  de `FormSchemaBuilder.tableSection()` (hay precedente con `sortedWith` en el mismo fichero,
-  pero no es el mismo receptor);
-- el destructuring del `Triple` en el `fold` de `LabelEditorViewModel.pickPdf()`.
+- la inferencia de `compareBy({ it.page }, { it.y })` dentro del `minWithOrNull` de
+  `FormSchemaBuilder.tableSection()` — compila, y el ancla elige bien la celda más alta
+  cruzando páginas, con el ancho máximo de la columna, y devuelve `(0, null)` si está vacía;
+- el destructuring del `Triple` en el `fold` de `LabelEditorViewModel.pickPdf()` — compila y
+  desestructura bien en los cuatro caminos (éxito, PDF ilegible, PDF sin AcroForm, fallo).
 
-Si salió verde, consolida la entrada de la 0.10.4 en el `CHANGELOG.md` (hoy lleva la nota de
-«pendiente de verificación») y sigue con la sección 4.
+Comprobado con `kotlinc` 2.1 y `-Werror`, y el paquete `data/model` entero typecheckea limpio
+(ver la técnica en la sección 6). El run de Actions lo confirmó después.
 
 ---
 
@@ -74,7 +77,7 @@ con cuatro formularios rellenables propios: contrato de empresas (481 campos), p
 | 0.10.1 | Fase 3: `FieldLabeler` — etiquetado por visión |
 | 0.10.2 | `FormSchemaBuilder` nunca emitía `FieldKind.RADIO`; ahora sí |
 | 0.10.3 | Fase 4: `SchemaEditing` + `LabelEditor` (ficheros nuevos, sin enganchar) |
-| 0.10.4 | Fase 4 **cableada**: el editor ya es alcanzable con un PDF real ⚠️ sin verificar |
+| 0.10.4 | Fase 4 **cableada**: el editor ya es alcanzable con un PDF real · verde ✅ |
 
 ### Qué está enganchado y qué no
 
@@ -114,7 +117,6 @@ Por orden. Las dos primeras son pequeñas y no tocan el asistente.
 
 ## 5. Pendiente de verificar (no lo des por bueno)
 
-- **El build de la 0.10.4.** Ver la sección 1.
 - **Casillas del contrato de Orange.** La 0.9.7 cambió el estado de activación de `/On` al real
   del PDF. Si `/On` tampoco encajaba antes, las CIF/NIF/NIE llevarían sin marcarse desde siempre
   sin que nadie lo supiera (el fallo era silencioso). Si ahora se marcan, **no es una regresión**.
@@ -140,9 +142,25 @@ Por orden. Las dos primeras son pequeñas y no tocan el asistente.
 - **Una tanda, una versión, un build verde** antes de la siguiente. Subir `versionCode` y
   `versionName` siempre, y añadir la entrada al `CHANGELOG.md`. Un hotfix sobre una versión que
   nunca llegó a verde NO incrementa.
-- **Aquí no se compila Android.** No hay SDK y la red no llega a `dl.google.com`. El juez del
-  build es GitHub Actions, con el workflow `.github/workflows/android.yml` (de Pablo — no tocarlo
-  sin pedirle el contenido actual). El APK sale como artefacto `rellenador-<versionName>`.
+- **Aquí no se compila Android.** No hay SDK y la red no llega a `dl.google.com` ni a Maven
+  Central. El juez del build es GitHub Actions, con el workflow `.github/workflows/android.yml`
+  (de Pablo — no tocarlo sin pedirle el contenido actual). El APK sale como artefacto
+  `rellenador-<versionName>`.
+- **Pero el Kotlin puro SÍ se puede typecheckear en local, y merece la pena.** `github.com` está
+  permitido, así que el compilador se baja de las releases de JetBrains:
+
+  ```
+  curl -sSLO https://github.com/JetBrains/kotlin/releases/download/v2.1.0/kotlin-compiler-2.1.0.zip
+  unzip -q kotlin-compiler-2.1.0.zip   # queda en ./kotlinc/bin
+  ```
+
+  Con eso se comprueba de verdad todo lo que no dependa de Android ni de pdfbox: el paquete
+  `data/model` completo compila con cuatro stubs de una línea (`@Serializable`/`@SerialName` de
+  `kotlinx.serialization`, `android.net.Uri`, `android.graphics.Color.rgb` y el enum
+  `SignatureProcessor.Background`). Los stubs no alteran la comprobación de tipos del código
+  real. Y cualquier patrón dudoso —inferencia genérica, desestructuración— se aísla en un fichero
+  suelto con los mismos tipos y se compila con `-Werror` en segundos. Es mucho mejor que subir a
+  ver qué dice el CI: dos builds se rompieron por no hacer justo esto.
 - **El APK no puede ir «en el mismo commit».** Es la salida del CI *después* del push, por
   definición. Y commitear un zip con los fuentes no compila nada: Gradle compila el árbol de
   fuentes, así que un commit-zip da un build verde del código viejo.
