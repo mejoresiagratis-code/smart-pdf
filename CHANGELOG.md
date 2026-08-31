@@ -8,6 +8,45 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.10.1-etiquetado-por-vision] — 2026-08-31
+
+**Fase 3.** Fichero nuevo, nada existente modificado. Aún sin enganchar al asistente.
+
+### Añadido — `FieldLabeler`
+Muchos campos no tienen ningún nombre útil: bloques enteros del contrato de Aire se llaman
+`Campo de texto 116` o `Casilla de verificación 27`. El nombre no dice qué se escribe ahí; sólo
+la página impresa lo dice. Por eso el etiquetado va por **imagen** y no por texto — y el Modelo
+145, que originó el plan, además tiene el texto en mojibake, así que ni leyéndolo serviría.
+
+Se le manda la página renderizada más una lista de rectángulos en **porcentaje** de la página, y
+devuelve la etiqueta impresa que rotula cada uno. El flujo (proxy, orden de motores, tolerancia
+a caídas) es el mismo de `SignatureLocator`, funcionando desde la v0.2.1. **Groq queda fuera**
+igual que allí: no tiene visión real, es un motor de texto que se inventa el JSON — y aquí eso
+es peor que no responder, porque una etiqueta inventada parece correcta y nadie la revisa.
+
+### Se pregunta por columna, no por celda
+Aquí se ve para qué servía la v0.10.0. Una tabla de 25×7 son **175 celdas pero sólo 7
+preguntas**, y además la etiqueta correcta de una celda *es* la de su columna. Sin la detección
+de tablas previa, esta fase habría costado cientos de llamadas y dado peores respuestas.
+
+### Añadido — `SchemaLabeling.apply()`
+Aplica las etiquetas al esquema devolviendo uno nuevo, con una regla que no se negocia:
+**nunca pisa una etiqueta `LabelSource.USUARIO`**. Si alguien la corrigió a mano, su criterio
+manda sobre cualquier reetiquetado automático. Sin esto, volver a analizar un documento borraría
+el trabajo del usuario en silencio, que es el peor tipo de fallo: no da error y no se nota hasta
+mucho después.
+
+### Sobre el prompt
+Instrucción explícita de **omitir** el rectángulo cuyo rótulo no esté claro, en vez de aproximar,
+y de copiar el texto impreso literal sin reformular. Es la misma lógica que ya llevaba el prompt
+de extracción: preferible un hueco visible a un dato plausible pero falso.
+
+⚠️ El prompt usa `task = "locate_signature"`, que es la tarea de visión que expone el proxy hoy.
+Funciona, pero el nombre engaña. Si algún día se toca el proxy, conviene añadir una tarea propia
+(`label_fields`) — anotado como deuda, no como bloqueo.
+
+---
+
 ## [0.10.0-constructor-de-esquema] — 2026-08-31
 
 La pieza que faltaba entre la fase 1 (leer los campos) y la fase 3 (etiquetarlos): sin
