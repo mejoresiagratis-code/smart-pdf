@@ -4,7 +4,7 @@
 > o su contenido; con eso y el repo tiene el contexto completo. **No hace falta reenviar los
 > PDFs de Aire**: su análisis está en `docs/ANALISIS_FORMULARIOS_AIRE.md`.
 >
-> **Actualizado**: 2026-08-31, tras `0.10.4-editor-cableado` (build verde confirmado). Este
+> **Actualizado**: 2026-08-31, tras `0.10.5-etiquetado-enganchado` (⚠️ pendiente de verde). Este
 > documento **caduca**: la primera regla de abajo existe precisamente porque lo que aquí se
 > afirma puede estar viejo.
 
@@ -22,24 +22,25 @@ git clone https://github.com/mejoresiagratis-code/smart-pdf
 cd smart-pdf && git log --oneline -8
 ```
 
-El último commit **de código** debería ser `5f567f3` · `0.10.4-editor-cableado` · versionCode 74,
-**verificado verde en Actions**. Por encima puede haber commits solo de documentación (este
-fichero, por ejemplo), que no suben versión. Si el último código no es ése, este documento está
-desfasado: manda `git log` y la cabecera del `CHANGELOG.md`.
+El último commit **de código** debería ser `0.10.5-etiquetado-enganchado` · versionCode 75. Por
+encima puede haber commits solo de documentación, que no suben versión. Si el último código no es
+ése, este documento está desfasado: manda `git log` y la cabecera del `CHANGELOG.md`.
 
-### La 0.10.4 está verificada — no persigas pistas cerradas
+### ⚠️ Lo segundo: comprobar el build de la 0.10.5
 
-La 0.10.4 se subió sin haberse compilado en local (no hay Android SDK aquí) y llevaba dos
-sospechas anotadas. **Las dos están descartadas**, así que no vuelvas a investigarlas:
+**La 0.10.5 está pendiente de verde en Actions.** Míralo antes de escribir código nuevo. La
+0.10.4 anterior sí está verificada.
 
-- la inferencia de `compareBy({ it.page }, { it.y })` dentro del `minWithOrNull` de
-  `FormSchemaBuilder.tableSection()` — compila, y el ancla elige bien la celda más alta
-  cruzando páginas, con el ancho máximo de la columna, y devuelve `(0, null)` si está vacía;
-- el destructuring del `Triple` en el `fold` de `LabelEditorViewModel.pickPdf()` — compila y
-  desestructura bien en los cuatro caminos (éxito, PDF ilegible, PDF sin AcroForm, fallo).
+Lo que sí se comprobó en local con `kotlinc` (ver la técnica en la sección 6): `data/model`
+completo, `FieldLabeler` y `VisionLabelPass` typecheckean sin errores ni avisos, y una prueba de
+comportamiento contra el `SchemaLabeling` real confirma la traducción de identificadores. Lo que
+**no** se pudo verificar es todo lo que depende de Android o de pdfbox de verdad: el render de
+páginas, `pageSize()` y la llamada al proxy. Si el build falla, mira ahí primero — y en
+`LabelEditorScreen`, que es lo único con Compose de la tanda.
 
-Comprobado con `kotlinc` 2.1 y `-Werror`, y el paquete `data/model` entero typecheckea limpio
-(ver la técnica en la sección 6). El run de Actions lo confirmó después.
+Si sale verde, lo siguiente no es código: es **probarlo en el móvil con un PDF real de Aire**.
+La lógica está verificada, pero la calidad de las etiquetas que devuelve la visión sólo se ve
+usándolo.
 
 ---
 
@@ -78,6 +79,7 @@ con cuatro formularios rellenables propios: contrato de empresas (481 campos), p
 | 0.10.2 | `FormSchemaBuilder` nunca emitía `FieldKind.RADIO`; ahora sí |
 | 0.10.3 | Fase 4: `SchemaEditing` + `LabelEditor` (ficheros nuevos, sin enganchar) |
 | 0.10.4 | Fase 4 **cableada**: el editor ya es alcanzable con un PDF real · verde ✅ |
+| 0.10.5 | Fase 3 **cerrada**: `VisionLabelPass` engancha el etiquetado por visión ⚠️ sin verde |
 
 ### Qué está enganchado y qué no
 
@@ -86,23 +88,24 @@ SAF → `PdfFieldInspector.inspect()`/`pageCount()` → `TemplateFingerprint` �
 `schemas_v1` si ese PDF ya pasó, o `FormSchemaBuilder.build()` → `LabelEditor` → persistir. Con
 su propio `LabelEditorViewModel` y su propia ruta `etiquetas` en el NavHost.
 
+Desde la 0.10.5 ese mismo editor tiene un botón **«Etiquetar con IA»** que pasa `FieldLabeler`
+sobre el esquema entero (`VisionLabelPass`), así que la fase 3 ya está enganchada.
+
 **NO enganchado**: `FillStep` sigue recorriendo las 6 secciones fijas de `CANON`. Subir un PDF de
-Aire detecta sus campos pero el paso de Relleno muestra los del contrato de Orange. `FieldLabeler`
-(la visión de la fase 3) tampoco se llama todavía desde ningún sitio. `WizardViewModel`,
-`WizardState` y los cinco pasos siguen **sin tocar** desde la 0.9.8.
+Aire detecta sus campos y ya se pueden etiquetar, pero el paso de Relleno sigue mostrando los del
+contrato de Orange. `WizardViewModel`, `WizardState` y los cinco pasos siguen **sin tocar** desde
+la 0.9.8.
 
 ---
 
 ## 4. Lo que toca
 
-Por orden. Las dos primeras son pequeñas y no tocan el asistente.
+Por orden. La primera no es código.
 
-- **Enganchar `FieldLabeler` al cableado de la 0.10.4.** Hoy cada campo llega al editor con el
-  nombre real del AcroForm como etiqueta provisional; con `Campo de texto 116` no hay nada que
-  corregir *informadamente*. Falta: `PdfPageRenderer` para la imagen de la página, recortar por
-  `FieldRect` (añadido en la 0.10.4 justo para esto), llamar a `FieldLabeler` por columna y
-  aplicar con `SchemaLabeling.apply()` antes de mostrar el editor. Se pregunta **por columna, no
-  por celda** (7 preguntas en vez de 175 en una tabla de 25×7).
+- **Probar el etiquetado en el móvil con un PDF real de Aire.** La 0.10.5 está verificada por
+  compilación y por prueba de comportamiento, pero nadie ha visto todavía qué etiquetas devuelve
+  la visión sobre el contrato de 481 campos. Si salen mal, el sitio a ajustar es el prompt de
+  `FieldLabeler.buildPrompt()` y el ancho de render de `VisionLabelPass` (1400 px).
 - **Unificar las tres aperturas del PDF** en `LabelEditorViewModel.pickPdf()`: hoy abre el
   documento tres veces (campos, nº de páginas, nombres). Pide una API del inspector que devuelva
   las tres cosas de una pasada.
@@ -128,9 +131,10 @@ Por orden. Las dos primeras son pequeñas y no tocan el asistente.
   Decidir si se apaña por software o se corrige el PDF en Aire.
 - **Paridad con la web**: dos cambios de prompt sin replicar en `rellenador-pro.html`
   (`tipo_documento` de la 0.7.9 y la genericización del operador de la 0.9.5).
-- **Deuda**: `FieldLabeler` usa `task = "locate_signature"` porque es la única tarea de visión
-  que expone el proxy. Funciona, pero el nombre engaña; convendría una `label_fields` en
-  `ai-proxy.php`.
+- **Deuda (sigue abierta en la 0.10.5)**: `FieldLabeler` usa `task = "locate_signature"` porque es
+  la única tarea de visión que expone el proxy. Funciona, pero el nombre engaña a quien lea el
+  código o el log del servidor. Arreglarlo es tocar `ai-proxy.php`, que se despliega por
+  FTP/cPanel y no vive en este repo.
 - **Basura en la raíz**: `hotfix-contractstep-scope.zip` y `v0.7.7-estructura-detectada.zip`,
   1,1 MB commiteados desde la 0.7.7. Restos de mover ficheros a mano, no un método. Borrarlos y
   añadir `*.zip` al `.gitignore` es una tanda de dos minutos.

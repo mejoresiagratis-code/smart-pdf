@@ -36,6 +36,23 @@ class PdfPageRenderer(private val file: File) : Closeable {
         }
     }
 
+    /**
+     * Tamaño de la página **en puntos** (1/72"), que es la unidad de `PdfRenderer.Page`.
+     *
+     * Hace falta para convertir un `FieldRect` (que viene de PDFBox, también en puntos) a
+     * porcentaje de página, que es lo que `FieldLabeler` le manda al motor de visión.
+     *
+     * ⚠️ Con páginas que declaran `/Rotate`, `PdfRenderer` devuelve el tamaño **ya rotado** y el
+     * `mediaBox` de PDFBox **no**, así que los porcentajes saldrían girados. Ninguno de los PDFs
+     * de Aire ni el Modelo 145 tienen rotación (verificado), pero si algún día aparece uno, esto
+     * es lo primero que hay que mirar.
+     */
+    fun pageSize(index: Int): Pair<Int, Int> {
+        renderer.openPage(index).use { p ->
+            return p.width to p.height
+        }
+    }
+
     /** Renderiza la página [index] a un ancho objetivo en px (alto proporcional). */
     fun render(index: Int, targetWidthPx: Int): Bitmap {
         cache[index]?.let { if (!it.isRecycled) return it }

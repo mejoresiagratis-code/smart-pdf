@@ -4,7 +4,7 @@ Estado real del proyecto y próximas tandas planificadas. Este documento sustitu
 "roadmap" informal que vivía en las notas de continuidad de las sesiones. Se actualiza
 al final de cada tanda con lo que quede pendiente.
 
-Última actualización: **2026-08-31** (versión `0.10.4-editor-cableado`, versionCode 74).
+Última actualización: **2026-08-31** (versión `0.10.5-etiquetado-enganchado`, versionCode 75).
 
 > **Cambio de contexto (2026-08-31):** Pablo ya no trabaja con Orange/MASORANGE. La
 > prioridad pasa a ser multi-contrato de verdad, con los PDFs de la empresa nueva
@@ -107,6 +107,7 @@ paso. Build verde y verificación en el móvil antes de seguir.
 | **0.10.0** | **Fase 2 cerrada del todo — `FormSchemaBuilder`**: detecta tablas por geometría (nunca por nombre), verificado contra los 4 PDFs de Aire (contrato: 5 tablas; portabilidad: 1 tabla 25×7; conectividad: 1 tabla de 10 filas, con el defecto de origen de filas 07/08 superpuestas reflejado, no tapado; SEPA: 0 tablas, correcto). Fichero nuevo, sin enganchar. |
 | **0.10.1** | **Fase 3 — `FieldLabeler`**: etiquetado por visión, se pregunta por columna y no por celda (7 preguntas en vez de 175 en una tabla 25×7). `SchemaLabeling.apply()` nunca pisa `LabelSource.USUARIO`. Deuda: usa `task=locate_signature` del proxy por no haber una tarea propia. Fichero nuevo, sin enganchar. |
 | **0.10.2** | Hueco detectado planificando la fase 4: `FormSchemaBuilder` nunca emitía `FieldKind.RADIO` (todo botón salía CHECKBOX/TEXT), así que no existía ningún grupo de opción en ningún esquema. Ahora `PdfFieldInspector` lee `isRadio`/`onState` por widget (verificado contra el fuente real de `pdfbox-android 2.0.27.0`, tag `v2.0.27.0` — no se repite el error de la 0.9.8.1 de asumir un método inexistente) y `FormSchemaBuilder` los propaga. `name` sigue siendo la clave de agrupación; no hace falta campo nuevo. |
+| **0.10.5** | **Cierra la fase 3**: `VisionLabelPass` orquesta el etiquetado por visión sobre un `FormSchema` entero (una llamada por página CON huecos, tandas de 24 objetivos, sin preguntar celdas ni lo corregido a mano) y el editor gana un botón «Etiquetar con IA». Arregla un desajuste que sólo aparecía al enganchar: `FieldLabeler` manda ids opacos a propósito pero `SchemaLabeling` indexa por nombre de campo, así que **no se habría aplicado ninguna etiqueta y sin error alguno**; se traducen los ids en el orquestador, sin tocar ninguna de las dos piezas. Verificado con `kotlinc` en local, no sólo con `grep`. |
 | **0.10.4** | **Fase 4 cableada — el editor deja de estar huérfano**: `LabelEditorViewModel` (orquestador propio, no `WizardViewModel`) + `LabelEditorScreen` + acceso en Ajustes › Herramientas (beta) + ruta `etiquetas`. Camino completo: SAF → `PdfFieldInspector.inspect()`/`pageCount()` → huella → esquema guardado si existe, o `FormSchemaBuilder.build()` → `LabelEditor` → `schemas_v1`. Añade `FieldRect` (`FormField.rect` y `TableColumn.rect`/`page`), que da la geometría que el esquema perdía y que la fase 3 necesita para recortar; opcional, así que `SCHEMA_VERSION` no se toca. El asistente sigue sin tocarse. |
 | **0.10.3** | **Fase 4 (la de verdad)**: `SchemaEditing` (ediciones puras — campo/grupo de opción por `name`, columna entera, título de sección — siempre marca `LabelSource.USUARIO`) + `LabelEditor` (UI). Ficheros nuevos, aún nada los invoca con un PDF real del usuario — falta el cableado (ver Próximas tandas). No confundir con `MappingEditor.kt`, del flujo legado Orange/CANON. |
 | **0.9.8.2** | **Nombres consistentes**: commit, run de Actions, zip del artefacto y APK pasan a llamarse igual (`rellenador-<versionName>`). El APK deja de ser `app-debug.apk` y se quita `run-name`, que metía el mensaje entero del commit en el título del run. |
@@ -139,13 +140,16 @@ paso. Build verde y verificación en el móvil antes de seguir.
   `FormSchemaBuilder.build()` → `LabelEditor` → persistido. `FieldLabeler` quedó fuera a
   propósito (ver la entrada siguiente); el asistente sigue sin tocarse.
 
-- **Enganchar `FieldLabeler` al cableado (etiquetado por visión)**. Hoy, al analizar un PDF, cada
-  campo llega con el nombre real del AcroForm como etiqueta provisional — corregible a mano, pero
-  con `Campo de texto 116` no hay nada que corregir *informadamente*. Falta: `PdfPageRenderer`
-  para la imagen de cada página, recortar por `FieldRect` (ya disponible desde la 0.10.4, era su
-  motivo de ser), llamar a `FieldLabeler` por columna/campo y aplicar con `SchemaLabeling.apply()`
-  antes de mostrar el editor. Deuda heredada de la 0.10.1: usa `task=locate_signature` del proxy
-  por no haber una tarea propia; conviene añadirla al `ai-proxy.php` en la misma tanda.
+- ~~**Enganchar `FieldLabeler` al cableado (etiquetado por visión)**~~ ✅ *Completado en v0.10.5* —
+  `VisionLabelPass` + botón «Etiquetar con IA» en el editor. Resultó que no hacían falta recortes:
+  `FieldLabeler` quiere la página entera con los rectángulos en porcentaje, y para eso sirve
+  `FieldRect`. Queda pendiente **probarlo contra un PDF real de Aire en el móvil**: la lógica está
+  verificada en local, pero la calidad de las etiquetas que devuelve la visión sólo se ve usándolo.
+
+- **Tarea `label_fields` en el proxy.** Deuda heredada de la 0.10.1 y no resuelta en la 0.10.5:
+  `FieldLabeler` usa `task = "locate_signature"` porque es la única tarea de visión que expone
+  `ai-proxy.php`. Funciona, pero el nombre engaña a quien lea el código o el log del servidor.
+  No depende de esta app: hay que tocar el proxy, que se despliega por FTP/cPanel.
 
 - **Unificar las tres aperturas del PDF en `LabelEditorViewModel.pickPdf()`**. Hoy abre el
   documento tres veces (campos, nº de páginas, nombres). Pide una API del inspector que devuelva

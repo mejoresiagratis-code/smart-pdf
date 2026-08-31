@@ -73,6 +73,59 @@ fun LabelEditorScreen(
                 }
 
                 else -> Column(Modifier.fillMaxSize()) {
+                    // ── Etiquetado por visión (v0.10.5) ──
+                    // A petición y no automático: es una llamada de red por página con huecos, y
+                    // si el PDF ya trae nombres legibles no aporta nada. El texto dice qué se
+                    // envía, porque «mandar el formulario a una IA» merece ser explícito — aunque
+                    // aquí sea la plantilla en blanco y no documentación del cliente.
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceContainer,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Column(
+                            Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            val progress = state.labelProgress
+                            Text(
+                                if (state.labelling) {
+                                    "Leyendo los rótulos impresos" +
+                                        (progress?.let { " · página ${it.done} de ${it.total}" } ?: "…")
+                                } else {
+                                    "¿Los nombres de abajo no dicen nada (\"Campo de texto 116\")? " +
+                                        "La IA puede leer el rótulo impreso al lado de cada hueco. " +
+                                        "Se envía la plantilla en blanco, no datos de cliente."
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                            if (state.labelling) {
+                                if (progress != null && progress.total > 0) {
+                                    LinearProgressIndicator(
+                                        progress = { progress.done.toFloat() / progress.total },
+                                        modifier = Modifier.fillMaxWidth(),
+                                    )
+                                } else {
+                                    LinearProgressIndicator(Modifier.fillMaxWidth())
+                                }
+                            } else {
+                                OutlinedButton(
+                                    onClick = vm::labelWithVision,
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) { Text("Etiquetar con IA") }
+                            }
+                            state.labelNotice?.let {
+                                Text(it, style = MaterialTheme.typography.bodySmall)
+                            }
+                            state.error?.let {
+                                Text(
+                                    it,
+                                    color = MaterialTheme.colorScheme.error,
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
+                        }
+                    }
+
                     if (state.reused) {
                         Surface(color = MaterialTheme.colorScheme.secondaryContainer) {
                             Text(

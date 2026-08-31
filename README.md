@@ -7,7 +7,7 @@ extracción multi-IA de los documentos del distribuidor (DNI/NIE, tarjeta CIF,
 certificado censal, Modelo 036, certificado bancario, contrato de alquiler,
 escrituras, alta en RETA…).
 
-**Versión actual:** `0.10.4-editor-cableado` (versionCode 74) — ver `CHANGELOG.md`.
+**Versión actual:** `0.10.5-etiquetado-enganchado` (versionCode 75) — ver `CHANGELOG.md`.
 
 ## Flujo (4 pasos)
 1. **Contrato** — el de assets (`contrato-base.pdf`) o un PDF del usuario

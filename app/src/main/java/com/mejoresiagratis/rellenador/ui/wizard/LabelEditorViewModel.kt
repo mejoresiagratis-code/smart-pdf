@@ -5,11 +5,14 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.mejoresiagratis.rellenador.data.model.AiProvider
 import com.mejoresiagratis.rellenador.data.model.FormSchema
 import com.mejoresiagratis.rellenador.data.model.TemplateFingerprint
 import com.mejoresiagratis.rellenador.data.pdf.AcroFormFiller
 import com.mejoresiagratis.rellenador.data.pdf.FormSchemaBuilder
 import com.mejoresiagratis.rellenador.data.pdf.PdfFieldInspector
+import com.mejoresiagratis.rellenador.data.remote.ProxyApi
+import com.mejoresiagratis.rellenador.data.remote.VisionLabelPass
 import com.mejoresiagratis.rellenador.data.repository.PrefsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -17,8 +20,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 import javax.inject.Inject
 
 /**
@@ -39,6 +44,8 @@ class LabelEditorViewModel @Inject constructor(
     private val schemaBuilder: FormSchemaBuilder,
     private val filler: AcroFormFiller,
     private val prefs: PrefsRepository,
+    private val api: ProxyApi,
+    private val visionPass: VisionLabelPass,
 ) : ViewModel() {
 
     data class UiState(
@@ -48,13 +55,26 @@ class LabelEditorViewModel @Inject constructor(
         val reused: Boolean = false,   // true si el esquema venía ya guardado/migrado
         val saved: Boolean = false,
         val error: String? = null,
+
+        /** Etiquetado por visión en curso, con su progreso por páginas. */
+        val labelling: Boolean = false,
+        val labelProgress: VisionLabelPass.Progress? = null,
+        /** Resultado del último etiquetado, para contarlo en pantalla. */
+        val labelNotice: String? = null,
     )
 
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = _state.asStateFlow()
 
+    /**
+     * El PDF elegido. Se guarda porque el etiquetado por visión ocurre **después**, cuando el
+     * usuario lo pide, y necesita volver a leer el documento para renderizar sus páginas.
+     */
+    private var pickedUri: Uri? = null
+
     /** El usuario ha elegido un PDF (picker SAF): inspecciona, calcula huella y busca o construye. */
     fun pickPdf(uri: Uri) {
+        pickedUri = uri
         _state.value = UiState(loading = true)
         viewModelScope.launch {
             val result = runCatching {
@@ -124,6 +144,101 @@ class LabelEditorViewModel @Inject constructor(
             }
     }.getOrNull()?.takeIf { it.isNotBlank() }
 
+    /**
+     * Etiquetado por visión, **a petición del usuario** y no automático al abrir el PDF.
+     *
+     * Es una llamada de red por página con huecos y cuesta dinero y segundos, así que se dispara
+     * con un botón: si el PDF ya trae nombres legibles (`Nombre o razón social`), no hace falta.
+     *
+     * Lo que se manda es la **plantilla en blanco**, no documentación del cliente. Es una
+     * diferencia que importa para el aviso de privacidad de la v0.9.1: aquí no viajan datos
+     * personales, sólo el formulario impreso. Aun así se respeta «solo motores europeos».
+     */
+    fun labelWithVision() {
+        val schema = _state.value.schema ?: return
+        val uri = pickedUri ?: return
+        if (_state.value.labelling) return
+
+        _state.value = _state.value.copy(labelling = true, labelNotice = null, error = null)
+        viewModelScope.launch {
+            val outcome = runCatching {
+                val available = visionProviders()
+                if (available.isEmpty()) error(
+                    "No hay ningún motor con visión disponible. Revisa los motores en Ajustes."
+                )
+
+                // `PdfRenderer` no acepta un Uri de SAF: necesita un descriptor sobre un fichero
+                // real. Se copia a la caché y se borra al terminar, pase lo que pase.
+                val tmp = withContext(Dispatchers.IO) { copyToCache(uri) }
+                try {
+                    visionPass.run(
+                        schema = schema,
+                        file = tmp,
+                        available = available,
+                        onProgress = { p -> _state.value = _state.value.copy(labelProgress = p) },
+                    )
+                } finally {
+                    withContext(Dispatchers.IO) { runCatching { tmp.delete() } }
+                }
+            }
+
+            _state.value = outcome.fold(
+                onSuccess = { r ->
+                    _state.value.copy(
+                        schema = r.schema,
+                        labelling = false,
+                        labelProgress = null,
+                        saved = false,
+                        labelNotice = if (r.labelled == 0) {
+                            "Ningún motor devolvió etiquetas utilizables. Las de abajo siguen " +
+                                "siendo los nombres del PDF; puedes corregirlas a mano."
+                        } else {
+                            "${r.labelled} etiqueta(s) propuestas a partir de ${r.pages} " +
+                                "página(s). Revísalas: lo que corrijas manda sobre la IA."
+                        },
+                    )
+                },
+                onFailure = {
+                    _state.value.copy(
+                        labelling = false,
+                        labelProgress = null,
+                        error = it.message ?: "No se pudo etiquetar.",
+                    )
+                },
+            )
+        }
+    }
+
+    /**
+     * Motores con visión que se pueden usar ahora: los que el servidor declara con clave,
+     * cruzados con la selección del usuario en Ajustes y con «solo motores europeos».
+     *
+     * Se pregunta al proxy en vez de fiarse de lo guardado porque una clave puede haber caducado
+     * en el servidor desde la última vez. Si el proxy no contesta, se cae a lo guardado antes de
+     * rendirse — mejor intentarlo con la última lista conocida que no ofrecer la función.
+     */
+    private suspend fun visionProviders(): List<AiProvider> {
+        val fromServer = runCatching { api.providers() }.getOrNull()
+            ?.providers.orEmpty()
+            .filterValues { it }.keys
+            .mapNotNull { AiProvider.fromId(it) }
+        val enabled = runCatching { prefs.enabledProviders.first() }.getOrNull().orEmpty()
+        val euOnly = runCatching { prefs.euOnly.first() }.getOrNull() ?: false
+
+        val base = fromServer.ifEmpty { enabled }
+        return base
+            .filter { enabled.isEmpty() || it in enabled }
+            .filter { !euOnly || it.eu }
+    }
+
+    private fun copyToCache(uri: Uri): File {
+        val dst = File(context.cacheDir, "etiquetado-${System.currentTimeMillis()}.pdf")
+        context.contentResolver.openInputStream(uri)!!.use { input ->
+            dst.outputStream().use { input.copyTo(it) }
+        }
+        return dst
+    }
+
     /** El usuario ha corregido algo en el editor; se guarda solo en memoria hasta [save]. */
     fun onSchemaChange(schema: FormSchema) {
         _state.value = _state.value.copy(schema = schema, saved = false)
@@ -139,6 +254,7 @@ class LabelEditorViewModel @Inject constructor(
     }
 
     fun reset() {
+        pickedUri = null
         _state.value = UiState()
     }
 }

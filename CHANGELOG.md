@@ -8,6 +8,99 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.10.5-etiquetado-enganchado] — 2026-08-31
+
+**Cierra la fase 3, que existía desde la 0.10.1 sin que nada la llamara.** `FieldLabeler` sabía
+preguntar por UNA página; el cableado de la 0.10.4 sabía construir el esquema y mostrarlo. Faltaba
+la pieza de en medio: recorrer el PDF, preguntar por las páginas que tienen huecos y aplicar el
+resultado. Ahora el editor tiene un botón «Etiquetar con IA».
+
+Sigue sin tocar el asistente. `WizardViewModel`, `WizardState` y los cinco pasos llevan sin
+cambios desde la 0.9.8.
+
+### Arreglado — las dos mitades de la fase 3 no encajaban (fallo silencioso)
+
+Lo más importante de esta tanda es un desajuste que sólo aparece al enganchar las piezas.
+`FieldLabeler` documenta —con razón— que los identificadores que manda al motor **no** son los
+nombres del AcroForm: mandarle `Campo de texto 116` no le aporta nada y le sugiere que el nombre
+significa algo. Pero `SchemaLabeling.apply()` busca las etiquetas por `labels.campos[field.name]`.
+
+Es decir: al mandar tokens opacos, **ninguna etiqueta se habría aplicado, y sin error alguno**.
+Cero campos reetiquetados, ningún fallo, ningún log. El peor tipo de fallo, y de los que no se
+detectan hasta que alguien conecta los cables — que es justo lo que ha pasado hoy.
+
+Se cierra sin tocar ninguna de las dos piezas: `VisionLabelPass` manda un token opaco por
+objetivo y **traduce la respuesta de vuelta** a nombres de campo e ids de columna antes de
+dársela a `SchemaLabeling`. Cada pieza sigue cumpliendo lo que dice su documentación.
+
+### Añadido — `data/remote/VisionLabelPass.kt`
+
+Orquesta el pase completo sobre un `FormSchema`:
+
+- **Una llamada por página con objetivos, no por página.** El contrato de Orange son 54 páginas
+  con campos en 6: preguntar por todas serían 48 llamadas tiradas a la basura.
+- **Tandas de 24 objetivos por llamada.** `FieldLabeler` limita la respuesta a 1500 tokens. Una
+  página del contrato de Aire con 80 huecos no cabe: el JSON se truncaría, el parseo devolvería
+  null y se perdería **la página entera** en vez de una tanda.
+- **No pregunta por las celdas de tabla**: su etiqueta es la de su columna y `SchemaLabeling` ya
+  la propaga. Son 7 preguntas en vez de 175 en una tabla de 25×7.
+- **No pregunta por lo corregido a mano** (`LabelSource.USUARIO`): `SchemaLabeling` no lo pisaría,
+  así que preguntarlo sería pagar una llamada para tirar la respuesta.
+- **No pregunta por lo que no tiene geometría** (`rect == null`): sin rectángulo no hay nada que
+  situar. Pasa con los esquemas `BUILTIN` y con los guardados antes de la 0.10.4.
+- Una página fuera de rango no aborta el resto: puede ocurrir si el esquema guardado viene de un
+  PDF con distinto número de páginas.
+
+Aquí es donde `FieldRect` (0.10.4) cobra sentido: `FieldLabeler` no quiere recortes, quiere la
+página entera más los rectángulos **en porcentaje**. `FieldRect` ya venía con origen
+arriba-izquierda, igual que el sistema de coordenadas del prompt, así que no hay que invertir nada.
+
+### Añadido — `PdfPageRenderer.pageSize()`
+
+El tamaño de página en puntos, que es lo que hace falta para pasar de `FieldRect` a porcentaje.
+
+⚠️ **Limitación conocida**: con páginas que declaran `/Rotate`, `PdfRenderer` devuelve el tamaño
+ya rotado y el `mediaBox` de PDFBox no, así que los porcentajes saldrían girados. Ninguno de los
+PDFs de Aire ni el Modelo 145 tienen rotación (verificado); si aparece uno, es lo primero que hay
+que mirar.
+
+### Añadido — `LabelEditorViewModel.labelWithVision()` y el bloque de la pantalla
+
+A petición y **no automático** al abrir el PDF: es una llamada de red por página con huecos, y si
+el formulario ya trae nombres legibles (`Nombre o razón social`) no aporta nada. Progreso por
+páginas, y un aviso al terminar que dice cuántas etiquetas se han propuesto — o que ningún motor
+respondió algo utilizable, en cuyo caso los nombres del PDF siguen ahí y se corrigen a mano.
+
+Los motores se resuelven preguntando al proxy y cruzando con la selección de Ajustes y con «solo
+motores europeos»; si el proxy no contesta, se cae a lo guardado antes de rendirse. El PDF se copia
+a la caché porque `PdfRenderer` necesita un descriptor sobre un fichero real y no acepta un `Uri`
+de SAF, y se borra en un `finally`.
+
+**Sobre privacidad**: lo que se envía es la **plantilla en blanco**, no documentación del cliente.
+Es una diferencia real respecto al aviso de la v0.9.1 y la pantalla lo dice explícitamente, porque
+«mandar el formulario a una IA» merece enunciarse. Se respeta «solo motores europeos» igualmente.
+
+### Verificación
+
+Se ha compilado con `kotlinc` 2.1 en local (no sólo `grep`): `data/model` completo, `FieldLabeler`
+y `VisionLabelPass` typecheckean sin errores ni avisos, con stubs de una línea para Android,
+coroutines y serialización. Y una prueba de comportamiento ejecutada contra el `SchemaLabeling`
+**real** confirma lo que sostiene toda la traducción: indexa por nombre de campo e id de columna,
+respeta `LabelSource.USUARIO`, propaga la etiqueta de columna a sus celdas sin preguntarlas, ignora
+etiquetas en blanco y conserva la geometría para un segundo pase.
+
+Lo que no se ha podido verificar en local es todo lo que depende de Android o de pdfbox de verdad
+(el render, la llamada al proxy). El procedimiento está en `CONTINUIDAD.md`, sección 6.
+
+### Sabido y no arreglado
+
+- `FieldLabeler` sigue usando `task = "locate_signature"` del proxy, que es la única tarea de
+  visión que expone. Funciona, pero el nombre engaña; una `label_fields` en `ai-proxy.php` sería
+  lo correcto y no depende de esta app.
+- `pickPdf()` sigue abriendo el PDF tres veces (campos, páginas, nombres).
+
+---
+
 ## [0.10.4-editor-cableado] — 2026-08-31
 
 **Cierra el pendiente de la 0.10.3**: `LabelEditor` y `SchemaEditing` existían pero *nada* en la
