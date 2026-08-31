@@ -49,8 +49,10 @@ usándolo.
 1. `ROADMAP.md` — plan multi-formulario, decisión de arquitectura de expediente, fases.
 2. `docs/ANALISIS_FORMULARIOS_AIRE.md` — análisis de los PDFs de Aire, verificado contra los
    ficheros reales. Es el brief técnico de las fases que quedan.
-3. `CHANGELOG.md`, entradas **0.9.4 a 0.10.4**.
-4. `docs/ESTADO_Y_GUIA_DE_CONTINUIDAD.md` — arquitectura e historia. **Ojo**: su bloque
+3. `docs/PLAN_FASE_5.md` — plan de la fase 5 partido en seis tandas, escrito leyendo el código.
+   **De lectura obligada antes de tocar el asistente.**
+4. `CHANGELOG.md`, entradas **0.9.4 a 0.10.5**.
+5. `docs/ESTADO_Y_GUIA_DE_CONTINUIDAD.md` — arquitectura e historia. **Ojo**: su bloque
    «ESTADO ACTUAL» se quedó en `v0.7.10` / versionCode 48 (agosto de 2026), 26 versiones por
    detrás. La parte de arquitectura y la de «archivo histórico» siguen siendo útiles; el estado
    por versión está en el `CHANGELOG.md`, que es la fuente de verdad.
@@ -109,10 +111,11 @@ Por orden. La primera no es código.
 - **Unificar las tres aperturas del PDF** en `LabelEditorViewModel.pickPdf()`: hoy abre el
   documento tres veces (campos, nº de páginas, nombres). Pide una API del inspector que devuelva
   las tres cosas de una pasada.
-- **Fase 5 — relleno dinámico**: conectar `FillStep` al `FormSchema` en vez de a `CANON`. Tablas
-  con filas dinámicas, selector de catálogo, `cuota total = cantidad × cuota unitaria`. Es la que
-  hace que un PDF de Aire se rellene de punta a punta, **y la que toca `WizardViewModel` (1126
-  líneas)**. Con diferencia la más arriesgada de las que quedan: tanda propia, nada más dentro.
+- **Fase 5 — relleno dinámico**: es la que hace que un PDF de Aire se rellene de punta a punta, y
+  la que toca `WizardViewModel` (1126 líneas). **No la ataques de una vez: está partida en seis
+  tandas en `docs/PLAN_FASE_5.md`.** Empezar por la 5·0 (quitar la inyección incondicional del
+  responsable de Orange, que hoy ya mete un campo falso en `missingFields`) y la 5·1 (sacar las
+  secciones escritas a mano de `FillStep` sin cambiar comportamiento).
 - **Fase 6 — firma**: manejar los campos `/Sig` del AcroForm (4 en el contrato, 2 en
   portabilidad), no sólo estampar imagen en coordenadas.
 

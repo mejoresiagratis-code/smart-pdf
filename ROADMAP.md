@@ -156,8 +156,12 @@ paso. Build verde y verificación en el móvil antes de seguir.
   las tres cosas de una pasada. Tanda pequeña, sin riesgo.
 
 - **Fase 5 — relleno dinámico**: conectar `FillStep`/`WizardViewModel` al `FormSchema` en vez de
-  a las 6 secciones fijas de `CANON`. Esta es la que sí toca el asistente (1126 líneas), y no
-  tiene sentido antes de que la tanda de arriba permita generar y corregir un esquema completo.
+  a las 6 secciones fijas de `CANON`. **Planificada en detalle en `docs/PLAN_FASE_5.md`**
+  (2026-08-31, leyendo el código): se parte en **seis tandas** por riesgo, y el orden no es por
+  tamaño — la migración de datos (tanda 5·3) va **antes** de cambiar lo que se dibuja (5·4), para
+  que se migre con una referencia visible contra la que comparar. Leer ese documento antes de
+  tocar nada; incluye tres hallazgos que no estaban aquí, entre ellos que la validación se apagaría
+  en silencio con los nombres de campo de Aire.
 
 
 - ~~**Persistencia de documentos (Fase 2 de robustez)**~~ ✅ *Completado en v0.8.7* — `DocumentStore`
