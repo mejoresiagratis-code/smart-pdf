@@ -1,0 +1,460 @@
+From 9d1841170573b67e4604a012f8f368733964a5cf Mon Sep 17 00:00:00 2001
+From: mejoresiagratis-code <mejoresiagratis@gmail.com>
+Date: Mon, 31 Aug 2026 10:43:18 +0000
+Subject: [PATCH] rellenador-0.10.8-fase5-heuristicas-canonicas
+
+Tanda 5.2b: cierra los cinco acoplamientos a nombres de campo de Orange que quedaban
+repartidos por el codigo y que la 5.3 habria cambiado por debajo.
+
+ - FieldNormalizer.normVal decide por canonica (mismo patron que la 5.2 en FieldValidator)
+ - DateAutofill resuelve sus tres claves con BuiltinSchemas.realKeyFor
+ - copyFiscalToComercio usa el nuevo fiscalToComercioKeyPairs() en vez de concatenar "_2"
+ - FillStep.keyboardFor decide por canonica
+ - MultiAiExtractor: coverageKeys usa DATE_KEYS en vez de repetir el literal
+
+Va ANTES de la 5.3 a proposito: manipulan claves de campo, y si la migracion de clave se
+las cambia por debajo estando aun en literales, se rompen a la vez que la migracion y no
+se sabe cual de las dos fue.
+
+Cuatro de las cinco son cero-cambio en Orange (verificado: realKeyFor devuelve los mismos
+literales). normVal si cambia en tres campos, por el mismo bug de espacios que destapo la
+5.2: los nombres de dos palabras normalizan con espacio y se comparaban sin el. Ahora el
+IBAN se compacta, el NIF del representante se limpia y "Apellidos, Nombre" se invierte. El
+IBAN compactado se ve en el PDF final; es paridad con la web, no una regresion.
+
+Registra tambien en docs/PLAN_FASE_5.md las tres decisiones que bloqueaban la 5.3.
+---
+ CONTINUIDAD.md                                | 51 +++++++++--------
+ ROADMAP.md                                    |  3 +-
+ app/build.gradle.kts                          |  4 +-
+ .../rellenador/data/model/DateAutofill.kt     | 17 ++++--
+ .../rellenador/data/model/FormSchema.kt       | 25 +++++++++
+ .../data/remote/MultiAiExtractor.kt           |  4 +-
+ .../data/validation/FieldNormalizer.kt        | 28 ++++++++--
+ .../rellenador/ui/wizard/FillStep.kt          | 21 +++++--
+ .../rellenador/ui/wizard/WizardViewModel.kt   | 11 ++--
+ docs/PLAN_FASE_5.md                           | 56 +++++++++++++------
+ 10 files changed, 159 insertions(+), 61 deletions(-)
+
+diff --git a/CONTINUIDAD.md b/CONTINUIDAD.md
+index cef8556..ae30791 100644
+--- a/CONTINUIDAD.md
++++ b/CONTINUIDAD.md
+@@ -4,8 +4,8 @@
+ > o su contenido; con eso y el repo tiene el contexto completo. **No hace falta reenviar los
+ > PDFs de Aire**: su análisis está en `docs/ANALISIS_FORMULARIOS_AIRE.md`.
+ >
+-> **Actualizado**: 2026-08-31, tras `0.10.7-fase5-validacion-canonica` (⚠️ pendiente de verde,
+-> igual que la 0.10.6 antes de esta). Este documento **caduca**: la primera regla de abajo
++> **Actualizado**: 2026-08-31, tras `0.10.8-fase5-heuristicas-canonicas` (⚠️ pendiente de verde).
++> La 0.10.7 SÍ salió verde. Este documento **caduca**: la primera regla de abajo
+ > existe precisamente porque lo que aquí se afirma puede estar viejo.
+ 
+ Habla en **español de España**.
+@@ -22,30 +22,26 @@ git clone https://github.com/mejoresiagratis-code/smart-pdf
+ cd smart-pdf && git log --oneline -8
+ ```
+ 
+-El último commit **de código** debería ser `0.10.7-fase5-validacion-canonica` · versionCode 77.
++El último commit **de código** debería ser `0.10.8-fase5-heuristicas-canonicas` · versionCode 78.
+ Por encima puede haber commits solo de documentación, que no suben versión. Si el último código
+ no es ése, este documento está desfasado: manda `git log` y la cabecera del `CHANGELOG.md`.
+ 
+-### ⚠️ Build pendiente de verde (arrastrado desde la 0.10.6)
++### ⚠️ Build pendiente de verde
+ 
+-Ni la 0.10.6 ni la 0.10.7 se han visto verdes en Actions todavía. Antes de escribir código nuevo,
+-comprueba el estado real del workflow, no te fíes de este documento.
++La **0.10.6 y la 0.10.7 salieron verdes**. La 0.10.8 está sin verificar en Actions: míralo antes
++de escribir código nuevo.
+ 
+-Lo que sí se comprobó en local con `kotlinc` (ver la técnica en la sección 6) para la 0.10.6:
+-`data/model` completo, `FieldLabeler` y `VisionLabelPass` typecheckean sin errores ni avisos, y una
+-prueba de comportamiento contra el `SchemaLabeling` real confirma la traducción de identificadores.
+-Lo que **no** se pudo verificar es todo lo que depende de Android o de pdfbox de verdad: el render
+-de páginas, `pageSize()` y la llamada al proxy. Si el build falla, mira ahí primero — y en
+-`LabelEditorScreen`, que es lo único con Compose de esa tanda.
++Lo que sí se comprobó para la 0.10.8 (tanda 5·2b) fue el comportamiento, no la compilación:
++simulación en Python del dispatch de `normVal` antes/después sobre los 21 campos de `CANON`, y
++comprobación de que `realKeyFor` devuelve los mismos literales que las constantes que sustituye
++(`DateAutofill`, `fiscalToComercioKeyPairs`, `keyboardFor`). No se ha pasado `kotlinc` en local.
++Los ficheros tocados no traen dependencias nuevas salvo dos imports de `BuiltinSchemas`/
++`CanonicalKeys` en `FieldNormalizer` — ojo con un ciclo de paquetes si el build falla ahí:
++`data.validation` pasa a depender de `data.model`, y `data.model` NO debe depender de
++`data.validation` (hoy no lo hace).
+ 
+-Para la 0.10.7 (tanda 5·2) se comprobó por simulación en Python el dispatch de `FieldValidator`
+-sobre los 21 campos de `CANON`, antes/después — ver sección 5. No se ha compilado con `kotlinc`
+-en local; los tres ficheros tocados (`FormSchema.kt`, `FieldValidator.kt`, `FillStep.kt`) no
+-tienen dependencias nuevas, así que el riesgo de tipo es bajo, pero no está verificado.
+-
+-Si sale verde, lo siguiente no es código: es **probarlo en el móvil con un PDF real de Aire**.
+-La lógica está verificada, pero la calidad de las etiquetas que devuelve la visión sólo se ve
+-usándolo.
++Si sale verde, lo siguiente **no es código**: es probar el etiquetado en el móvil con un PDF real
++de Aire, que sigue pendiente desde la 0.10.5.
+ 
+ ---
+ 
+@@ -88,7 +84,8 @@ con cuatro formularios rellenables propios: contrato de empresas (481 campos), p
+ | 0.10.4 | Fase 4 **cableada**: el editor ya es alcanzable con un PDF real · verde ✅ |
+ | 0.10.5 | Fase 3 **cerrada**: `VisionLabelPass` engancha el etiquetado por visión · verde ✅ |
+ | 0.10.6 | Fase 5, tandas **5·0 y 5·1**: campo fantasma arreglado + costura de secciones ⚠️ sin verde |
+-| 0.10.7 | Fase 5, tanda **5·2**: validación, hermano del CP y `FECHA_KEYS` cuelgan de `canonical` ⚠️ sin verde |
++| 0.10.7 | Fase 5, tanda **5·2**: validación, hermano del CP y `FECHA_KEYS` cuelgan de `canonical` · verde ✅ |
++| 0.10.8 | Fase 5, tanda **5·2b**: `normVal`, `DateAutofill`, copia fiscal, teclado y cobertura, por canónica ⚠️ sin verde |
+ 
+ ### Qué está enganchado y qué no
+ 
+@@ -120,7 +117,10 @@ Por orden. La primera no es código.
+   las tres cosas de una pasada.
+ - **Fase 5 — relleno dinámico**: es la que hace que un PDF de Aire se rellene de punta a punta, y
+   la que toca `WizardViewModel` (1126 líneas). **No la ataques de una vez: está partida en seis
+-  tandas en `docs/PLAN_FASE_5.md`.** Las 5·0, 5·1 y 5·2 están hechas (0.10.6 y 0.10.7). **La
++  tandas en `docs/PLAN_FASE_5.md`.** Hechas: 5·0 y 5·1 (0.10.6), 5·2 (0.10.7) y 5·2b (0.10.8,
++  tanda añadida al ejecutar). **Las tres decisiones que bloqueaban la 5·3 ya están tomadas y
++  registradas en `docs/PLAN_FASE_5.md` §4** — la verdad del dato va en el valor por nombre real,
++  los perfiles se migran al leerlos, y `MappingEditor` no se toca hasta la 5·4. **La
+   siguiente es la 5·3: la migración de datos** (`fieldValues`/`fieldStates`/`fieldOrigins`/
+   `fieldCandidates`/`UndoEntry` pasan a indexarse por nombre real; `PersistedWizardState` v1→v2;
+   `ContractProfile.campos` del historial y los perfiles exportados). Es la de **riesgo alto** del
+@@ -145,6 +145,13 @@ Por orden. La primera no es código.
+   que queda expuesto** — misma clase de caso que el de las casillas, justo abajo. Verificar en
+   dispositivo metiendo un NIF de representante o un IBAN inválidos en el contrato de Orange:
+   ahora deben salir en rojo.
++- **El IBAN se escribe compactado desde la 0.10.8 (tanda 5·2b), y antes no.** Mismo bug de
++  espacios que el punto anterior, pero en `FieldNormalizer.normVal`: `"Datos bancarios del
++  DISTRIBUIDOR"` nunca casaba con `"datosbancarios"`, así que el valor que devolvía la IA iba al
++  PDF tal cual, con sus espacios. Ahora se compacta, que es lo que hace la app web (paridad).
++  Por lo mismo, el NIF del representante se pasa a mayúsculas y se le quitan puntos/guiones, y un
++  «Apellidos, Nombre» se invierte a «Nombre Apellidos». **Verificar en el PDF final** que el IBAN
++  sale sin espacios y que el nombre del representante no se ha dado la vuelta cuando no debía.
+ - **Casillas del contrato de Orange.** La 0.9.7 cambió el estado de activación de `/On` al real
+   del PDF. Si `/On` tampoco encajaba antes, las CIF/NIF/NIE llevarían sin marcarse desde siempre
+   sin que nadie lo supiera (el fallo era silencioso). Si ahora se marcan, **no es una regresión**.
+diff --git a/ROADMAP.md b/ROADMAP.md
+index 1af643b..a8a6819 100644
+--- a/ROADMAP.md
++++ b/ROADMAP.md
+@@ -4,7 +4,7 @@ Estado real del proyecto y próximas tandas planificadas. Este documento sustitu
+ "roadmap" informal que vivía en las notas de continuidad de las sesiones. Se actualiza
+ al final de cada tanda con lo que quede pendiente.
+ 
+-Última actualización: **2026-08-31** (versión `0.10.7-fase5-validacion-canonica`, versionCode 77).
++Última actualización: **2026-08-31** (versión `0.10.8-fase5-heuristicas-canonicas`, versionCode 78).
+ 
+ > **Cambio de contexto (2026-08-31):** Pablo ya no trabaja con Orange/MASORANGE. La
+ > prioridad pasa a ser multi-contrato de verdad, con los PDFs de la empresa nueva
+@@ -109,6 +109,7 @@ paso. Build verde y verificación en el móvil antes de seguir.
+ | **0.10.2** | Hueco detectado planificando la fase 4: `FormSchemaBuilder` nunca emitía `FieldKind.RADIO` (todo botón salía CHECKBOX/TEXT), así que no existía ningún grupo de opción en ningún esquema. Ahora `PdfFieldInspector` lee `isRadio`/`onState` por widget (verificado contra el fuente real de `pdfbox-android 2.0.27.0`, tag `v2.0.27.0` — no se repite el error de la 0.9.8.1 de asumir un método inexistente) y `FormSchemaBuilder` los propaga. `name` sigue siendo la clave de agrupación; no hace falta campo nuevo. |
+ | **0.10.6** | **Fase 5, tandas 5·0 y 5·1**: `AcroFormFiller` deja de inyectar el responsable de Orange sin condición (con cualquier otro PDF ese campo no existe y acababa SIEMPRE en `missingFields`: un «falta un campo» falso en cada prueba con Aire), y `FillStep` deja de tener las secciones escritas dentro — pasan a `FillSections.kt` y se reciben como parámetro. Es la costura por la que entrará el `FormSchema` en la 5·4. Cero cambios visibles en Orange, verificado con una prueba que compara contra la lista original transcrita literal. |
+ | **0.10.7** | **Fase 5, tanda 5·2**: `FieldValidator.validate()` decide primero por `BuiltinSchemas.canonicalFor(fieldName)` en vez de por heurística sobre el nombre del campo (`docs/PLAN_FASE_5.md`, hallazgo 2.5) — evita que la validación se apague en silencio en cuanto la 5·4 traiga campos de Aire. El hermano de Provincia para el CP y `FECHA_KEYS` en `FillStep` dejan de asumir la convención de nombre `_2`/literal de Orange y se resuelven por canónica (`BuiltinSchemas.realKeyFor`/`provinciaKeyFor`), hallazgo 2.6. Fuente todavía `CANON` (5·3/5·4 la sustituyen). ⚠️ Efecto colateral, no una regresión: dos campos de `CANON` tenían la validación rota desde antes de esta tanda por un desajuste de espacios en la comparación por nombre (`"NIF representante"` normalizaba a `"nif representante"`, con espacio, y se comparaba contra `"nifrepresentante"`; iban nunca casaba con `"datosbancarios"` por el mismo motivo) — con la canónica sí validan. Ver sección 5 de `CONTINUIDAD.md`. |
++| **0.10.8** | **Fase 5, tanda 5·2b**: cierra los cuatro (cinco) acoplamientos a nombres de campo de Orange que quedaban repartidos y que la 5·3 habría cambiado por debajo. `FieldNormalizer.normVal` decide por canónica (mismo patrón que la 5·2 en `FieldValidator`), `DateAutofill` resuelve sus tres claves con `BuiltinSchemas.realKeyFor`, `copyFiscalToComercio` usa `fiscalToComercioKeyPairs()` en vez de concatenar `_2`, `keyboardFor` decide por canónica, y el `coverageKeys` de `MultiAiExtractor` usa `DATE_KEYS` en vez de repetir el literal. Cuatro de las cinco son cero-cambio en Orange (verificado: `realKeyFor` devuelve los mismos literales). ⚠️ `normVal` sí cambia en tres campos, por el **mismo bug de espacios** que destapó la 5·2 (los nombres de dos palabras normalizan con espacio y se comparaban sin él): ahora el IBAN se compacta, el NIF del representante se limpia y «Apellidos, Nombre» se invierte. El IBAN compactado **se ve en el PDF final** — es paridad con la web, no una regresión. Se hace ANTES de la 5·3 a propósito: con las heurísticas ya colgadas de la canónica, la migración de clave llega a terreno despejado. |
+ | **0.10.5** | **Cierra la fase 3**: `VisionLabelPass` orquesta el etiquetado por visión sobre un `FormSchema` entero (una llamada por página CON huecos, tandas de 24 objetivos, sin preguntar celdas ni lo corregido a mano) y el editor gana un botón «Etiquetar con IA». Arregla un desajuste que sólo aparecía al enganchar: `FieldLabeler` manda ids opacos a propósito pero `SchemaLabeling` indexa por nombre de campo, así que **no se habría aplicado ninguna etiqueta y sin error alguno**; se traducen los ids en el orquestador, sin tocar ninguna de las dos piezas. Verificado con `kotlinc` en local, no sólo con `grep`. |
+ | **0.10.4** | **Fase 4 cableada — el editor deja de estar huérfano**: `LabelEditorViewModel` (orquestador propio, no `WizardViewModel`) + `LabelEditorScreen` + acceso en Ajustes › Herramientas (beta) + ruta `etiquetas`. Camino completo: SAF → `PdfFieldInspector.inspect()`/`pageCount()` → huella → esquema guardado si existe, o `FormSchemaBuilder.build()` → `LabelEditor` → `schemas_v1`. Añade `FieldRect` (`FormField.rect` y `TableColumn.rect`/`page`), que da la geometría que el esquema perdía y que la fase 3 necesita para recortar; opcional, así que `SCHEMA_VERSION` no se toca. El asistente sigue sin tocarse. |
+ | **0.10.3** | **Fase 4 (la de verdad)**: `SchemaEditing` (ediciones puras — campo/grupo de opción por `name`, columna entera, título de sección — siempre marca `LabelSource.USUARIO`) + `LabelEditor` (UI). Ficheros nuevos, aún nada los invoca con un PDF real del usuario — falta el cableado (ver Próximas tandas). No confundir con `MappingEditor.kt`, del flujo legado Orange/CANON. |
+diff --git a/app/build.gradle.kts b/app/build.gradle.kts
+index 4cfd848..2f45a61 100644
+--- a/app/build.gradle.kts
++++ b/app/build.gradle.kts
+@@ -15,8 +15,8 @@ android {
+         applicationId = "com.mejoresiagratis.rellenador"
+         minSdk = 26
+         targetSdk = 35
+-        versionCode = 77
+-        versionName = "0.10.7-fase5-validacion-canonica"
++        versionCode = 78
++        versionName = "0.10.8-fase5-heuristicas-canonicas"
+         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+ 
+         // Base URL of your PHP proxy. Override per build type.
+diff --git a/app/src/main/java/com/mejoresiagratis/rellenador/data/model/DateAutofill.kt b/app/src/main/java/com/mejoresiagratis/rellenador/data/model/DateAutofill.kt
+index de18031..e3696fc 100644
+--- a/app/src/main/java/com/mejoresiagratis/rellenador/data/model/DateAutofill.kt
++++ b/app/src/main/java/com/mejoresiagratis/rellenador/data/model/DateAutofill.kt
+@@ -6,6 +6,11 @@ import java.util.Calendar
+  * Autorrelleno de fecha actual, fiel a autoFillDates() de la web:
+  * Fecha = día, de = mes en letras (español), año = ÚLTIMO dígito del año.
+  * Solo rellena los campos de fecha que estén vacíos.
++ *
++ * Tanda 5·2b — antes las tres claves eran los literales `"Fecha"`, `"de"` y `"año"`, nombres
++ * reales del AcroForm de Orange. Ahora salen de las canónicas de fecha vía
++ * `BuiltinSchemas.realKeyFor`, con el literal como red de seguridad si esa vuelta no resuelve
++ * (docs/PLAN_FASE_5.md, hallazgo 2.6).
+  */
+ object DateAutofill {
+     private val MESES = listOf(
+@@ -13,6 +18,10 @@ object DateAutofill {
+         "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"
+     )
+ 
++    private val KEY_DIA = BuiltinSchemas.realKeyFor(CanonicalKeys.FECHA_DIA) ?: "Fecha"
++    private val KEY_MES = BuiltinSchemas.realKeyFor(CanonicalKeys.FECHA_MES) ?: "de"
++    private val KEY_ANIO = BuiltinSchemas.realKeyFor(CanonicalKeys.FECHA_ANIO) ?: "año"
++
+     /** Devuelve los valores de fecha a fusionar (solo para claves de fecha vacías). */
+     fun values(current: Map<String, String>): Map<String, String> {
+         val cal = Calendar.getInstance()
+@@ -21,10 +30,10 @@ object DateAutofill {
+         val anio = cal.get(Calendar.YEAR).toString().takeLast(1)
+ 
+         val out = LinkedHashMap<String, String>()
+-        // Los tres campos de fecha canónicos.
+-        if (current["Fecha"].isNullOrBlank()) out["Fecha"] = dia
+-        if (current["de"].isNullOrBlank()) out["de"] = mes
+-        if (current["año"].isNullOrBlank()) out["año"] = anio
++        // Los tres campos de fecha, resueltos por canónica.
++        if (current[KEY_DIA].isNullOrBlank()) out[KEY_DIA] = dia
++        if (current[KEY_MES].isNullOrBlank()) out[KEY_MES] = mes
++        if (current[KEY_ANIO].isNullOrBlank()) out[KEY_ANIO] = anio
+         return out
+     }
+ }
+diff --git a/app/src/main/java/com/mejoresiagratis/rellenador/data/model/FormSchema.kt b/app/src/main/java/com/mejoresiagratis/rellenador/data/model/FormSchema.kt
+index b06b703..42e5190 100644
+--- a/app/src/main/java/com/mejoresiagratis/rellenador/data/model/FormSchema.kt
++++ b/app/src/main/java/com/mejoresiagratis/rellenador/data/model/FormSchema.kt
+@@ -450,6 +450,31 @@ object BuiltinSchemas {
+         return realKeyFor(provinciaCanonical)
+     }
+ 
++    /**
++     * Pares canónicos del bloque fiscal y su equivalente en el bloque de comercio/PdV.
++     * Tanda 5·2b — lo usa `copyFiscalToComercio`, que antes llevaba dentro los literales
++     * `"Dirección"`/`"CP"`/`"Población"`/`"Provincia"` y construía el destino concatenando
++     * `"_2"`: una convención de nombre de Orange que no significa nada en otro AcroForm.
++     */
++    private val FISCAL_A_COMERCIO_CANONICAL: Map<String, String> = mapOf(
++        CanonicalKeys.DIRECCION to CanonicalKeys.DIRECCION_2,
++        CanonicalKeys.CP to CanonicalKeys.CP_2,
++        CanonicalKeys.POBLACION to CanonicalKeys.POBLACION_2,
++        CanonicalKeys.PROVINCIA to CanonicalKeys.PROVINCIA_2,
++    )
++
++    /**
++     * Pares `(nombre real fiscal, nombre real comercio)` de dirección, resueltos por canónica.
++     * Sólo incluye los pares que existan de verdad a los dos lados; si a un formulario le falta
++     * el bloque de comercio, ese par simplemente no sale y la copia no lo intenta.
++     */
++    fun fiscalToComercioKeyPairs(): List<Pair<String, String>> =
++        FISCAL_A_COMERCIO_CANONICAL.mapNotNull { (fiscal, comercio) ->
++            val from = realKeyFor(fiscal) ?: return@mapNotNull null
++            val to = realKeyFor(comercio) ?: return@mapNotNull null
++            from to to
++        }
++
+     /**
+      * Construye el esquema del contrato de Orange a partir de `CANON`.
+      *
+diff --git a/app/src/main/java/com/mejoresiagratis/rellenador/data/remote/MultiAiExtractor.kt b/app/src/main/java/com/mejoresiagratis/rellenador/data/remote/MultiAiExtractor.kt
+index f74cf0b..40bb986 100644
+--- a/app/src/main/java/com/mejoresiagratis/rellenador/data/remote/MultiAiExtractor.kt
++++ b/app/src/main/java/com/mejoresiagratis/rellenador/data/remote/MultiAiExtractor.kt
+@@ -134,9 +134,11 @@ class MultiAiExtractor @Inject constructor(
+         }
+ 
+         // Campos de texto canónicos que cuentan para "cobertura" (excluye fechas y responsable).
++        // Tanda 5·2b — antes el excluido era el literal `setOf("Fecha", "de", "año")`; ahora es
++        // `DATE_KEYS`, que es la misma lista con un solo dueño (docs/PLAN_FASE_5.md, 2.6).
+         val coverageKeys = com.mejoresiagratis.rellenador.data.model.ContractFields.CANON
+             .map { it.key }
+-            .filterNot { it in setOf("Fecha", "de", "año") }
++            .filterNot { it in com.mejoresiagratis.rellenador.data.model.ContractFields.DATE_KEYS }
+ 
+         fun allCovered(): Boolean = coverageKeys.all { agg[it]?.isNotEmpty() == true }
+ 
+diff --git a/app/src/main/java/com/mejoresiagratis/rellenador/data/validation/FieldNormalizer.kt b/app/src/main/java/com/mejoresiagratis/rellenador/data/validation/FieldNormalizer.kt
+index ff56595..c59114c 100644
+--- a/app/src/main/java/com/mejoresiagratis/rellenador/data/validation/FieldNormalizer.kt
++++ b/app/src/main/java/com/mejoresiagratis/rellenador/data/validation/FieldNormalizer.kt
+@@ -1,9 +1,18 @@
+ package com.mejoresiagratis.rellenador.data.validation
+ 
++import com.mejoresiagratis.rellenador.data.model.BuiltinSchemas
++import com.mejoresiagratis.rellenador.data.model.CanonicalKeys
+ import java.text.Normalizer
+ 
+ /**
+  * Normalización de valores por campo (normVal de la web) + coherencia CP/provincia.
++ *
++ * Tanda 5·2b — `normVal` decidía por el NOMBRE del campo normalizado, igual que hacía
++ * `FieldValidator` antes de la 5·2, con el mismo resultado: con los nombres de Aire no casa
++ * ninguna rama, el valor se devuelve tal cual y **el IBAN deja de compactarse y el CP deja de
++ * rellenarse con ceros sin decir nada** (docs/PLAN_FASE_5.md, hallazgo 2.5, aplicado aquí).
++ * Ahora decide primero por la clave canónica, y la heurística de nombre queda de respaldo para
++ * los campos sin canónica.
+  */
+ object FieldNormalizer {
+ 
+@@ -27,17 +36,26 @@ object FieldNormalizer {
+     fun normVal(fieldName: String, raw: String?): String {
+         var v = (raw ?: "").trim()
+         if (v.isEmpty()) return v
+-        val b = norm(baseOf(fieldName))
++
++        // Canónica primero; heurística de nombre sólo si el campo no tiene (ver cabecera).
++        val canonical = BuiltinSchemas.canonicalFor(fieldName)
++        val b by lazy { norm(baseOf(fieldName)) }
++
+         return when {
+-            b.contains("datosbancarios") || b.contains("iban") ->
++            canonical == CanonicalKeys.IBAN ||
++                (canonical == null && (b.contains("datosbancarios") || b.contains("iban"))) ->
+                 v.uppercase().replace(Regex("[\\s.\\-–—]"), "")
+-            b == "nie" || b == "nifrepresentante" ->
++            canonical == CanonicalKeys.IDENTIFICACION ||
++                canonical == CanonicalKeys.REPRESENTANTE_NIF ||
++                (canonical == null && (b == "nie" || b == "nifrepresentante")) ->
+                 v.uppercase().replace(Regex("[\\s.\\-]"), "")
+-            b == "cp" -> {
++            canonical == CanonicalKeys.CP || canonical == CanonicalKeys.CP_2 ||
++                (canonical == null && b == "cp") -> {
+                 val d = v.replace(Regex("\\D"), "")
+                 if (d.isNotEmpty() && d.length < 5) d.padStart(5, '0') else v
+             }
+-            b == "nombrerepresentante" && v.contains(",") -> {
++            (canonical == CanonicalKeys.REPRESENTANTE_NOMBRE ||
++                (canonical == null && b == "nombrerepresentante")) && v.contains(",") -> {
+                 val parts = v.split(",").map { it.trim() }
+                 if (parts.size == 2 && parts[0].isNotEmpty() && parts[1].isNotEmpty())
+                     "${parts[1]} ${parts[0]}" else v
+diff --git a/app/src/main/java/com/mejoresiagratis/rellenador/ui/wizard/FillStep.kt b/app/src/main/java/com/mejoresiagratis/rellenador/ui/wizard/FillStep.kt
+index 6264d40..2170d36 100644
+--- a/app/src/main/java/com/mejoresiagratis/rellenador/ui/wizard/FillStep.kt
++++ b/app/src/main/java/com/mejoresiagratis/rellenador/ui/wizard/FillStep.kt
+@@ -677,13 +677,24 @@ private fun CompactDateField(label: String, key: String, state: WizardUiState, v
+     )
+ }
+ 
+-/** Teclado adecuado por tipo de campo. */
++/** Teclado adecuado por tipo de campo.
++ *
++ * Tanda 5·2b — decidía por `norm(key.substringBefore("_"))`, heurística sobre el nombre; ahora
++ * por canónica, con el nombre como respaldo (docs/PLAN_FASE_5.md, hallazgo 2.6). Un teclado
++ * equivocado no corrompe datos, pero con Aire salían todos como texto: teclear un CP o un
++ * teléfono en el teclado alfabético es peor de lo que parece en un formulario de 481 campos.
++ */
+ private fun keyboardFor(key: String): KeyboardOptions {
+-    val b = FieldNormalizer.norm(key.substringBefore("_"))
++    val canonical = BuiltinSchemas.canonicalFor(key)
++    val b by lazy { FieldNormalizer.norm(key.substringBefore("_")) }
+     val type = when {
+-        b == "telefono" -> KeyboardType.Phone
+-        b.startsWith("email") -> KeyboardType.Email
+-        b == "cp" -> KeyboardType.Number
++        canonical == CanonicalKeys.TELEFONO || (canonical == null && b == "telefono") ->
++            KeyboardType.Phone
++        canonical == CanonicalKeys.EMAIL_COMERCIAL ||
++            canonical == CanonicalKeys.EMAIL_FACTURACION ||
++            (canonical == null && b.startsWith("email")) -> KeyboardType.Email
++        canonical == CanonicalKeys.CP || canonical == CanonicalKeys.CP_2 ||
++            (canonical == null && b == "cp") -> KeyboardType.Number
+         else -> KeyboardType.Text
+     }
+     return KeyboardOptions(keyboardType = type, imeAction = ImeAction.Next)
+diff --git a/app/src/main/java/com/mejoresiagratis/rellenador/ui/wizard/WizardViewModel.kt b/app/src/main/java/com/mejoresiagratis/rellenador/ui/wizard/WizardViewModel.kt
+index f8764c2..5f8225f 100644
+--- a/app/src/main/java/com/mejoresiagratis/rellenador/ui/wizard/WizardViewModel.kt
++++ b/app/src/main/java/com/mejoresiagratis/rellenador/ui/wizard/WizardViewModel.kt
+@@ -648,10 +648,13 @@ class WizardViewModel @Inject constructor(
+      */
+     fun copyFiscalToComercio() {
+         val s = _state.value
+-        val keys = listOf("Dirección", "CP", "Población", "Provincia")
+-        val delta = keys.mapNotNull { k ->
+-            s.fieldValues[k]?.takeIf { it.isNotBlank() }?.let { "${k}_2" to it }
+-        }.toMap()
++        // Tanda 5·2b — los pares fiscal→comercio se resuelven por canónica en vez de
++        // concatenar "_2" al nombre (docs/PLAN_FASE_5.md, hallazgo 2.6).
++        val delta = com.mejoresiagratis.rellenador.data.model.BuiltinSchemas
++            .fiscalToComercioKeyPairs()
++            .mapNotNull { (from, to) ->
++                s.fieldValues[from]?.takeIf { it.isNotBlank() }?.let { to to it }
++            }.toMap()
+         if (delta.isNotEmpty()) {
+             _state.value = s.copy(fieldValues = s.fieldValues + delta)
+         }
+diff --git a/docs/PLAN_FASE_5.md b/docs/PLAN_FASE_5.md
+index 7d579ac..cb97d40 100644
+--- a/docs/PLAN_FASE_5.md
++++ b/docs/PLAN_FASE_5.md
+@@ -3,7 +3,8 @@
+ > Escrito el 2026-08-31 sobre `0.10.5-etiquetado-enganchado` (versionCode 75), **leyendo el
+ > código**, no el ROADMAP.
+ >
+-> **Estado: 5·0 y 5·1 hechas en `0.10.6-fase5-costura` (versionCode 76). La siguiente es la 5·2.**
++> **Estado: 5·0 y 5·1 en `0.10.6` (verde), 5·2 en `0.10.7` (verde), 5·2b en `0.10.8`. La
++> siguiente es la 5·3, y las tres decisiones que la bloqueaban están tomadas — ver §4.**
+ > Las referencias `fichero:línea` de la sección 2 son de antes del refactor: `FillStep.kt:47` ya no
+ > tiene las secciones, están en `FillSections.kt`. El resto sigue en pie.
+ >
+@@ -107,6 +108,7 @@ contra la que comparar. Si primero se cambia lo que se dibuja y luego la clave,
+ | ~~**5·0**~~ ✅ | Quitar el `putIfAbsent` incondicional del responsable (2.4). *Hecho en `0.10.6`: se inyecta sólo si la plantilla tiene el campo. Colgarlo de `ValueOrigin.AJUSTES` se deja para la 5·4, cuando haya esquema de verdad en el relleno.* | Bajo | `missingFields` deja de mentir con un PDF que no sea de Orange. |
+ | ~~**5·1**~~ ✅ | `FillStep` recibe las secciones como parámetro. *Hecho en `0.10.6`: `FillSections.kt` con `FillSection` + `canonFillSections()`; `WizardScreen` se las pasa. El denominador del progreso se deriva de las secciones y da el mismo 21.* | Bajo | **La app se comporta idéntica.** Verificado con una prueba contra la lista original transcrita literal. |
+ | **5·2** | Validación, hermano del CP, fecha y tipo de identificación pasan a colgar de `canonical` (2.5, 2.6). Fuente todavía `CANON`, que ya tiene su mapeo canónico. | Medio | Orange sigue validando exactamente igual: mismos mensajes, mismos campos en rojo. |
++| ~~**5·2b**~~ ✅ | Tanda que no estaba en el plan original, abierta al ejecutar la 5·2: los mismos acoplamientos por nombre quedaban en otros cinco sitios (`normVal`, `DateAutofill`, `copyFiscalToComercio`, `keyboardFor`, `coverageKeys`). *Hecho en `0.10.8`.* Va antes de la 5·3 porque manipulan claves de campo: si la 5·3 les cambia la clave por debajo estando aún en literales, se rompen a la vez que la migración y no se sabe cuál fue. | Bajo | Cuatro de cinco son cero-cambio en Orange. `normVal` cambia en 3 campos (bug de espacios, ver `CONTINUIDAD.md` §5). |
+ | **5·3** | **La clave.** `fieldValues`/`fieldStates`/`fieldOrigins`/`fieldCandidates`/`UndoEntry` pasan a indexarse por nombre real; `fieldMapping` desaparece de la salida (2.3). Migración de `PersistedWizardState` v1→v2 y de `ContractProfile.campos` del historial y los perfiles exportados. | **Alto** | Sesión guardada con la versión anterior que se restaura sin perder nada; perfil del historial que se aplica bien. **Tanda sola, nada más dentro.** |
+ | **5·4** | El `FormSchema` del PDF subido alimenta las secciones de verdad, con caída a `CANON` si no hay esquema. | Medio | Un PDF de Aire muestra SUS campos. Aquí ya no hay migración: la clave es la correcta desde 5·3. |
+ | **5·5** | Tablas con filas dinámicas, catálogo **local** (lleva comisiones: no sale del dispositivo), `cuota total = cantidad × cuota unitaria`. | Alto | Funcionalidad nueva, no refactor. Se planifica al llegar. |
+@@ -127,22 +129,42 @@ cambia comportamiento en Orange, así que son baratas de verificar.
+ 
+ ---
+ 
+-## 4. Lo que hay que decidir antes de la 5·3
+-
+-No son cosas que se puedan resolver leyendo el código; hacen falta decisiones.
+-
+-1. **Qué pasa con los perfiles del historial ya guardados.** Están indexados por clave canónica de
+-   Orange. Migrarlos exige saber a qué PDF pertenecían, y `ContractProfile` guarda `fingerprint`,
+-   así que **se puede**, pero sólo para los que casen con un esquema conocido. Para el resto:
+-   ¿se dejan como legado de sólo lectura, o se descartan?
+-2. **Si `fieldMapping` desaparece de la salida, qué pasa con `MappingEditor`**, el editor de mapeo
+-   del flujo legado Orange/CANON. Con esquemas ya no hace falta, pero borrarlo rompe el camino
+-   «subo un PDF propio parecido al de Orange» que hoy funciona.
+-3. **Los datos compartidos del expediente.** `Expediente` y `CanonicalKeys` (0.9.9) existen para
+-   que un dato extraído una vez sirva a los cuatro PDFs de Aire. Si en 5·3 la clave de los valores
+-   pasa a ser el nombre real, hay dos niveles: valor canónico del expediente y valor por campo de
+-   cada formulario. Conviene decidir en cuál vive la verdad **antes** de escribir la migración, no
+-   después.
++## 4. Decisiones para la 5·3 — TOMADAS (2026-08-31, por Pablo)
++
++Eran tres. Ya no bloquean.
++
++1. **Perfiles del historial ya guardados → migración PEREZOSA**, al leerlos, como se hizo con
++   `schemas_v1`. `history_*` no se reescribe en bloque.
++
++   *Y resulta más fácil de lo que este plan asumía*: no hay que «saber a qué PDF pertenecían»,
++   porque `ContractProfile` **ya guarda su propio `fieldMapping`** además de `campos` y
++   `fingerprint` (`ContractProfile.kt:17`). Cada perfil lleva dentro su tabla de traducción:
++   - perfil de Orange (`fieldMapping` vacío) → la clave canónica **ya es** el nombre real:
++     migración identidad;
++   - perfil de un PDF propio → `campos[canónica]` se reindexa con `fieldMapping[canónica] ?: canónica`.
++
++   No queda ningún perfil huérfano. Hará falta una marca de versión en `ContractProfile` para no
++   re-migrar lo ya migrado.
++
++2. **`MappingEditor` no se toca en la 5·3.** Sólo se usa con `needsMapping = true`, y el mapeo
++   sigue haciendo falta para saber dónde va cada dato extraído. Se retira en la 5·4, cuando el
++   esquema alimente `FillStep` de verdad.
++
++3. **La verdad del dato vive en el VALOR POR NOMBRE REAL de campo.** `Expediente.compartidos`
++   (canónicas) se queda como está —existe, sin usar— y pasa a ser la capa de **propagación** entre
++   formularios en la fase de expediente, no la de verdad. Razones:
++   - el almacén por nombre real es **obligatorio** (los 400+ campos de Aire sin canónica: tarifas,
++     TEKI, casillas, firmas); el canónico es opcional. La verdad va en lo obligatorio;
++   - hoy `Expediente.documents` siempre tiene un elemento y no está enganchado al asistente, así
++     que el problema de propagación no existe todavía: decidir ahora su regla de conflicto sería
++     especular sobre un caso que no se puede probar;
++   - **es reversible en un sentido y no en el otro**: de valores por nombre real se puede derivar
++     `compartidos` vía `FormField.canonical` y luego invertir el flujo; empezando por la canónica
++     ya tendrías dos almacenes y desmontarlo costaría otra migración.
++
++   Señal que lo confirma: en Orange, `Dirección` y `Dirección_2` tienen canónicas **distintas**
++   (`direccion`/`direccion_2`) porque son dos datos, no uno compartido. Las canónicas ya se están
++   usando como identificador de campo lógico más que de dato único.
+ 
+ ---
+ 
+-- 
+2.43.0
+
