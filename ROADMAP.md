@@ -4,7 +4,7 @@ Estado real del proyecto y próximas tandas planificadas. Este documento sustitu
 "roadmap" informal que vivía en las notas de continuidad de las sesiones. Se actualiza
 al final de cada tanda con lo que quede pendiente.
 
-Última actualización: **2026-08-31** (versión `0.9.5-paleta-aire-y-desacoplo-orange`, versionCode 62).
+Última actualización: **2026-08-31** (versión `0.9.6-orden-de-lectura-y-contrato-oculto`, versionCode 63).
 
 > **Cambio de contexto (2026-08-31):** Pablo ya no trabaja con Orange/MASORANGE. La
 > prioridad pasa a ser multi-contrato de verdad, con los PDFs de la empresa nueva
@@ -13,6 +13,50 @@ al final de cada tanda con lo que quede pendiente.
 > de la app. El orden de fases no cambia, pero la prioridad de llegar hasta la fase 5
 > (Relleno dinámico) sí sube: sin ella, subir un PDF de Aire sigue sin poder rellenarse
 > de principio a fin.
+
+### Decisión de arquitectura (2026-08-31): modelo de expediente desde la fase 2
+
+Un alta en Aire **no es un formulario, es un conjunto**. La propia documentación de Aire
+(«Documentación para clientes nuevos») lo fija: CIF + SEPA firmado + CONTRATO firmado + DNI
+del representante + móvil/email + cuenta bancaria, más los anexos que apliquen (portabilidad,
+conectividad). Los mismos datos de cliente se repiten en los cuatro PDFs con nombres de campo
+distintos (`Nombre o razón social` / `NOMBRE DEL DEUDOR` / `Titular`).
+
+**Decidido: la unidad persistida se modela como expediente desde la fase 2, pero la interfaz
+sigue trabajando sobre un formulario cada vez.** Es decir, la fase 2 define ya un contenedor
+con (a) una lista de formularios —que arranca con exactamente un elemento— y (b) encima, los
+datos de cliente compartidos a los que cada esquema mapea sus campos vía `canonical`.
+
+Motivo: las dos alternativas obvias salen peor.
+- *Un formulario ahora y convertir a expediente después* → se pagan **dos migraciones** de
+  datos persistidos (`Map<canónica,real>` → `FormSchema` → `Expediente`), cada una sobre
+  datos de trabajo real.
+- *Ir directo a expediente completo* → se toca a la vez el modelo **y** todo el asistente
+  (`WizardState` asume hoy un contrato: un `contractSource`, un juego de firmas, un juego de
+  valores). Es el riesgo de la fase 5 multiplicado, sobre lo que se usa a diario.
+
+Con esta decisión no hay cambio visible ni migración futura: cuando llegue la fase de
+expediente, sólo hay que permitir añadir elementos a una lista que ya existe y ya se guarda.
+
+**Consecuencias para el modelo de la fase 2** (detectadas analizando los 4 PDFs de Aire):
+- `canonical` deja de ser «enlace al CANON del contrato Orange» y pasa a ser **el canónico
+  transversal del expediente** (razón social, CIF/NIF/NIE, domicilio, CP, localidad,
+  provincia, representante, IBAN…). Es lo que hace que extraer una vez sirva para los cuatro.
+- Hace falta un **origen `PLATAFORMA`** para campos que no salen de ninguna documentación
+  (`FECHA DE ALTA EN TEKI`, `CÓDIGO DE CLIENTE EN TEKI`): ni se autorrellenan ni deben
+  bloquear el avance como si fueran un conflicto por decidir.
+- El **bloque DISTRIBUIDOR es constante** (nombre, teléfono, email y código de distribuidor,
+  más nombre y DNI del comercial al pie de los cuatro formularios). Sucesor directo del
+  autorrelleno de `RESPONSABLE_KEY`: se configura una vez en Ajustes y aplica a todo.
+- Los **valores de exportación de checkbox son arbitrarios** (`/Sí` en Portabilidad,
+  `/Opción1` en el SEPA). Hay que leerlos de `/AP /N`, no asumir `/On`–`/Off` como hace hoy
+  `checkboxStateFor()`. Esto se rompe con los PDFs de Aire si no se corrige en la fase 2.
+- Las **tablas se detectan por geometría** (x constante = columna, y constante = fila), nunca
+  por el nombre: en una misma fila conviven `TF cantidad 01` y `Campo de texto 116`. Los
+  checkboxes de fila se asocian igual: en Portabilidad el prefijo (`Check Box4..7`) da la
+  columna y la posición da la fila, pese a llamarse `Check Box4.4.5.10.5`.
+- Un **valor lógico puede estar troceado en varias casillas** (el BIC del SEPA son 11 campos
+  de un carácter).
 
 ---
 
@@ -44,6 +88,7 @@ al final de cada tanda con lo que quede pendiente.
 | **0.7.9** | **Tipo por IA (visión)** para fotos/escaneos sin capa de texto: campo `tipo_documento` en el prompt (vocabulario cerrado), callback `onDocTypeDetected`; la detección local tiene prioridad. ⚠️ Pendiente replicar `tipo_documento` en el prompt de la app web (paridad). |
 | **0.9.3** | El prompt lleva los **campos reales del PDF cargado** en vez de la lista fija `CANON` (causa de que se «olvidaran» campos), y una **guía de campos** cuando el contrato usa nombres propios — copiada literal de `tplHint` de la web, así que la paridad se mantiene. |
 | **0.9.4** | **Fase 1 del roadmap multi-formulario** (`roadmap-multiformulario.html`): `PdfFieldInspector`, lee los widgets del AcroForm en orden de lectura real (página → fila con tolerancia 6pt → columna), coordenadas origen arriba-izquierda. Verificado contra el Modelo 145 (60 campos). Utilidad pura, sin UI ni cambios de comportamiento — base para la fase 2 (esquema dinámico). |
+| **0.9.6** | **Saneamiento previo a la fase 2**: corregido el orden de lectura del `PdfFieldInspector` (agrupaba filas troceando el eje Y en tramos fijos y partía filas; detectado en la fila del BIC del SEPA de Aire, arreglado agrupando por hueco respecto al ancla de fila). Verificado contra los 4 formularios de Aire: 0 posiciones cambian en el contrato de 488 campos. Además, la tarjeta del contrato Orange se oculta (bandera `SHOW_LEGACY_DEFAULT_CONTRACT`) sin borrar el camino `DEFAULT`, que sigue funcionando si el PDF se sube. |
 | **0.9.5** | **Desacoplo de Orange + paleta Aire**: paleta de marca muestreada del PDF real de Aire (`#9F0BFF`/`#00095A`/`#ECD0FF`); el contrato Orange pasa de "por defecto" a "heredado" (sigue funcionando igual, ya no es la opción sugerida); copy de UI y prompt genericizados. Cero cambios en extracción/relleno/firma. Analizado `Contrato_empresas.pdf` de Aire: 481 campos AcroForm reales, incluye 4 campos `/Sig` (tipo nuevo, sin manejar hoy — relevante para fase 6) y bloques de nombres autogenerados sin etiqueta (confirma que la fase 3 de etiquetado por visión es imprescindible). |
 | **0.9.2** | **Regresión de la 0.8.7 corregida**: `getType()` devuelve null para `file://`, y desde que `DocumentStore` copia los documentos a `filesDir` todos los URIs lo son → todo caía en `octet-stream` y el análisis fallaba con «No se pudieron leer los documentos». El MIME se deduce ahora por extensión cuando el resolver no sabe. |
 | **0.9.1** | **Aviso previo (RGPD) antes de mandar documentos a la IA**: `ConsentSheet` con los motores separados por región, casilla obligatoria y «no volver a preguntar» persistido. **Modo solo motores europeos**: apaga y bloquea los de fuera de la UE. Ambas preferencias sobreviven a «Empezar otro contrato». |

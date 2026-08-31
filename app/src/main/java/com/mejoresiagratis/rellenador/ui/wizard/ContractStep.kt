@@ -27,6 +27,17 @@ import androidx.compose.ui.unit.dp
 // Importamos nuestros componentes globales
 import com.mejoresiagratis.rellenador.ui.components.ExpressiveButton
 
+/**
+ * Visibilidad de la tarjeta del contrato heredado de Orange/MASORANGE (v0.9.6).
+ *
+ * Está en `false` porque ya no se trabaja con ese operador y no tiene sentido ofrecerlo como
+ * opción. **No es un borrado**: el camino `ContractSource.DEFAULT` sigue completo y funcional
+ * (asset, CANON, autorrelleno del responsable, páginas de firma calibradas), así que ese
+ * contrato se sigue rellenando igual de bien si se sube como PDF propio. Sólo desaparece el
+ * atajo de la interfaz.
+ */
+private const val SHOW_LEGACY_DEFAULT_CONTRACT = false
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ContractStep(state: WizardUiState, vm: WizardViewModel) {
@@ -109,13 +120,24 @@ private fun ContractSelectionContent(
                     icon = { Icon(Icons.Outlined.UploadFile, contentDescription = null) }
                 )
 
-                ContractOptionCard(
-                    selected = isDefault,
-                    onClick = vm::chooseDefaultContract,
-                    headline = "Contrato Orange/MASORANGE (heredado)",
-                    supporting = "Contrato de distribución PdV (54 páginas)",
-                    icon = { Icon(Icons.Outlined.Description, contentDescription = null) }
-                )
+                // Contrato heredado de Orange/MASORANGE: OCULTO en la interfaz desde la v0.9.6
+                // (ya no se trabaja con ese operador), pero NO eliminado. Todo el camino
+                // `ContractSource.DEFAULT` sigue intacto —`chooseDefaultContract()`, el asset
+                // `contrato-base.pdf`, `CANON`, `RESPONSABLE_KEY`, la calibración de firma—
+                // para que ese contrato se siga reconociendo y rellenando exactamente igual
+                // si alguien lo SUBE como PDF propio, y para que una sesión persistida que ya
+                // estuviera en DEFAULT se restaure sin romperse.
+                //
+                // Poner a `true` para volver a mostrar la tarjeta.
+                if (SHOW_LEGACY_DEFAULT_CONTRACT) {
+                    ContractOptionCard(
+                        selected = isDefault,
+                        onClick = vm::chooseDefaultContract,
+                        headline = "Contrato Orange/MASORANGE (heredado)",
+                        supporting = "Contrato de distribución PdV (54 páginas)",
+                        icon = { Icon(Icons.Outlined.Description, contentDescription = null) }
+                    )
+                }
             }
 
             // Resumen "Estructura detectada" — mismo feedback inmediato que ya daba la

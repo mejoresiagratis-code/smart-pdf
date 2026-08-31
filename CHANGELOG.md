@@ -8,6 +8,64 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.9.6-orden-de-lectura-y-contrato-oculto] — 2026-08-31
+
+Tanda de saneamiento **antes** de construir la fase 2 encima. Los esquemas de la fase 2 se
+persisten por huella: un orden de campos erróneo no se quedaría en pantalla, se guardaría en
+DataStore y arreglarlo después ya no sería un fix sino una migración de datos.
+
+### Corregido — el orden de lectura del `PdfFieldInspector` partía filas (bug de la v0.9.4)
+`PdfFieldInspector` agrupaba las filas con `(y / 6).toInt()`, es decir **troceando el eje Y en
+tramos fijos**. Dos campos separados por décimas de punto caen en tramos distintos si el corte
+del tramo pasa justo entre ellos, y la fila se parte — precisamente lo que la tolerancia de
+6 pt debía evitar.
+
+**Detectado contra un PDF real** (`SEPA.pdf` de Aire), en la fila de 11 casillas del SWIFT/BIC:
+todo el grupo a y≈539,x salvo dos campos a y=540,0. Como `539/6 = 89` pero `540/6 = 90`, esas
+dos casillas se iban al final de la fila siguiente:
+
+```
+antes  → Text18, Text19, Text22, Text23 … Text28 … luego Text20, Text29
+después→ Text18, Text19, Text20, Text22, Text23 … Text28, Text29
+```
+
+…con un span vertical real de **1,1 pt** entre todas ellas. La verificación original contra el
+Modelo 145 no lo detectó por casualidad, no porque el algoritmo fuera correcto.
+
+- Nuevo `orderByReadingRows()`: agrupa por el **hueco** respecto al ancla de la fila (el campo
+  más alto), que es el criterio que se pretendía desde el principio. Se compara contra el
+  ancla y no contra el campo anterior para que una escalera de saltos pequeños no funda media
+  página en una sola fila.
+
+**Verificado contra los cuatro formularios reales de Aire:**
+
+| PDF | Widgets | Posiciones que cambian |
+|---|---|---|
+| SEPA | 20 | 8 (la fila del BIC, ahora correcta) |
+| Conectividad | 141 | 3 (una fila de dirección de instalación) |
+| Portabilidad Fija | 202 | 8 |
+| Contrato empresas | 488 | **0** |
+
+Que el contrato de 488 campos no cambie ni una posición es la señal de que el arreglo corrige
+el caso patológico sin alterar el comportamiento general.
+
+### Cambiado — la tarjeta del contrato Orange/MASORANGE deja de mostrarse
+Ya no se trabaja con ese operador, así que no tiene sentido ofrecerlo como opción de partida.
+
+- Nueva bandera `SHOW_LEGACY_DEFAULT_CONTRACT = false` en `ContractStep.kt`. Ponerla a `true`
+  devuelve la tarjeta.
+- **No se ha borrado nada.** El camino `ContractSource.DEFAULT` sigue completo:
+  `chooseDefaultContract()`, el asset `contrato-base.pdf`, `ContractFields.CANON`,
+  `RESPONSABLE_KEY`, `checkboxStateFor()` y la calibración de firma de las páginas
+  24/30/33/45/54. Consecuencias buscadas:
+  - Ese contrato **se sigue reconociendo y rellenando exactamente igual si se sube como PDF
+    propio**, que era el requisito.
+  - Una sesión persistida que estuviera en `DEFAULT` se restaura sin romperse (el bloque
+    «Estructura detectada» sigue leyendo `isDefault`).
+- Sin auto-selección que quitar: `contractSource` ya arrancaba en `null`.
+
+---
+
 ## [0.9.5-paleta-aire-y-desacoplo-orange] — 2026-08-31
 
 Pablo ya no trabaja con Orange/MASORANGE; la empresa nueva es **Aire Networks**
