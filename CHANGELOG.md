@@ -8,6 +8,55 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.9.9-persistencia-y-expediente] — 2026-08-31
+
+Fase 2, tanda 3 de 3 — la que cierra la fase. Es la que toca **datos de trabajo reales**, así
+que se ha hecho de la forma más conservadora posible: sólo se **añaden** claves y métodos, no
+se modifica ni se borra nada de lo que ya había.
+
+### Añadido — persistencia de esquemas por huella
+Clave nueva `schemas_v1` (`huella -> FormSchema`), con `saveSchema()`, `findSchema()` y
+`findOrMigrateSchema()`. Al reencontrar un PDF ya conocido se recupera su esquema etiquetado en
+vez de volver a preguntar.
+
+### Añadido — `Expediente`, la unidad de trabajo
+Un alta en Aire no es un formulario sino un conjunto (CIF + SEPA + contrato + anexos), y los
+cuatro PDFs piden el mismo núcleo de datos con nombres distintos. `Expediente` guarda esos datos
+**una vez** en `compartidos` (indexados por `CanonicalKeys`) y una lista de
+`ExpedienteDocument`.
+
+**La interfaz no cambia**: `documents` arranca con exactamente un elemento y nada de esto está
+enganchado todavía al asistente. Se modela así ahora para no pagar dos migraciones seguidas
+sobre datos reales — primero a `FormSchema` y luego a expediente.
+
+### La migración es perezosa y no destructiva
+`SchemaMigration.fromLegacyMapping()` convierte el `Map<canónica, real>` de `templates_v1` en un
+`FormSchema` de tipo `LEARNED`. Pero **`templates_v1` no se toca ni se borra**: la conversión
+ocurre cuando se pide el esquema de una huella que aún no lo tiene, y el resultado se guarda en
+la clave nueva.
+
+Elegido así a propósito, frente a una migración de golpe:
+
+- No hay un instante único en el que todo se reescriba y pueda romperse a la vez.
+- Volver atrás es dejar de leer la clave nueva; el dato original sigue intacto.
+- Una plantilla que no se vuelva a abrir no se migra, y no pasa nada.
+
+Es deliberadamente lo contrario de lo que se hizo en la 0.8.0 con el índice de paso, que sí fue
+un cambio masivo y dio problemas. Si el dato antiguo está corrupto, `findOrMigrateSchema()`
+devuelve null y la plantilla se trata como nueva: el peor caso es volver a mapearla, no perder
+nada.
+
+De `CANON` sólo se hereda lo que sigue siendo válido —etiqueta legible y clave canónica—; el
+nombre del campo es el real del PDF del usuario. El mapeo antiguo lo confirmó una persona en el
+editor, así que sus etiquetas se marcan como `LabelSource.USUARIO` y mandan sobre cualquier
+reetiquetado automático posterior.
+
+### Sin tocar
+`WizardViewModel` (1126 líneas) no se ha modificado, que era la condición para que esta tanda
+siguiera siendo acotada. Enganchar el asistente al esquema es la fase 5.
+
+---
+
 ## [0.9.8.2-nombres-consistentes] — 2026-08-31
 
 Cosmética de entrega. El commit, el run de Actions, el zip del artefacto y el APK de dentro

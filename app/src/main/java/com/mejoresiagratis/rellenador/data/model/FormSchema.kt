@@ -371,6 +371,12 @@ object BuiltinSchemas {
     )
 
     /**
+     * Clave canónica transversal para una clave de `CANON`, o null si ese campo no se comparte
+     * con otros formularios. Lo usa `SchemaMigration` al derivar esquemas de mapeos antiguos.
+     */
+    fun canonicalFor(canonKey: String): String? = CANON_TO_CANONICAL[canonKey]
+
+    /**
      * Construye el esquema del contrato de Orange a partir de `CANON`.
      *
      * @param fingerprint huella real del PDF; se calcula al cargarlo, no se puede fijar aquí.

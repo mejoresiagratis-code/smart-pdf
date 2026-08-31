@@ -8,6 +8,9 @@ import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.mejoresiagratis.rellenador.data.model.AiProvider
 import com.mejoresiagratis.rellenador.data.model.ContractProfile
+import com.mejoresiagratis.rellenador.data.model.Expediente
+import com.mejoresiagratis.rellenador.data.model.FormSchema
+import com.mejoresiagratis.rellenador.data.model.SchemaMigration
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -102,6 +105,66 @@ class PrefsRepository @Inject constructor(
 
     /** Serializa el perfil actual a JSON (para exportar a fichero). */
     fun exportProfileJson(profile: ContractProfile): String = json.encodeToString(profile)
+
+
+    // ── Esquemas de formulario y expediente (v0.9.9) ─────────────────────────
+    // Claves NUEVAS. `templates_v1` no se toca ni se borra: la migración es perezosa y
+    // aditiva (ver `SchemaMigration`). Volver atrás es dejar de leer estas claves; el dato
+    // original sigue donde estaba. Es deliberadamente lo contrario de la migración de golpe
+    // de la 0.8.0.
+    private val schemasKey = stringPreferencesKey("schemas_v1")     // huella -> FormSchema
+    private val expedienteKey = stringPreferencesKey("expediente_v1")
+
+    private fun decodeSchemas(raw: String?): Map<String, FormSchema> =
+        raw?.let { runCatching { json.decodeFromString<Map<String, FormSchema>>(it) }.getOrNull() }
+            .orEmpty()
+
+    /** Guarda el esquema de una plantilla, indexado por su huella. */
+    suspend fun saveSchema(schema: FormSchema) {
+        context.dataStore.edit { p ->
+            val all = decodeSchemas(p[schemasKey]).toMutableMap()
+            all[schema.fingerprint] = schema
+            p[schemasKey] = json.encodeToString<Map<String, FormSchema>>(all)
+        }
+    }
+
+    /** Esquema guardado para esta huella, o null. No migra nada. */
+    suspend fun findSchema(fingerprint: String): FormSchema? {
+        val raw = context.dataStore.data.map { it[schemasKey] }.first()
+        return decodeSchemas(raw)[fingerprint]
+    }
+
+    /**
+     * Esquema para esta huella, migrando desde `templates_v1` si hiciera falta.
+     *
+     * Orden: esquema ya guardado → mapeo antiguo convertido (y guardado para la próxima) →
+     * null si la plantilla es nueva del todo. Nunca lanza: si el dato viejo está corrupto,
+     * devuelve null y se trata como plantilla nueva, que es el peor caso aceptable.
+     */
+    suspend fun findOrMigrateSchema(fingerprint: String, pageCount: Int = 0): FormSchema? {
+        findSchema(fingerprint)?.let { return it }
+
+        val legacy = findTemplate(fingerprint)?.takeIf { it.isNotEmpty() } ?: return null
+        val migrated = SchemaMigration.fromLegacyMapping(fingerprint, legacy, pageCount)
+        runCatching { saveSchema(migrated) }   // si falla, se reintentará la próxima vez
+        return migrated
+    }
+
+    /** Guarda el expediente en curso. Hoy siempre lleva un único documento. */
+    suspend fun saveExpediente(expediente: Expediente) {
+        val raw = runCatching { json.encodeToString(expediente) }.getOrNull() ?: return
+        context.dataStore.edit { it[expedienteKey] = raw }
+    }
+
+    suspend fun loadExpediente(): Expediente? {
+        val raw = context.dataStore.data.map { it[expedienteKey] }.first() ?: return null
+        return runCatching { json.decodeFromString<Expediente>(raw) }.getOrNull()
+    }
+
+    suspend fun clearExpediente() {
+        context.dataStore.edit { it.remove(expedienteKey) }
+    }
+
 
     /** Parsea un JSON de perfil importado; valida que sea de esta app. */
     fun importProfileJson(raw: String): ContractProfile? {
