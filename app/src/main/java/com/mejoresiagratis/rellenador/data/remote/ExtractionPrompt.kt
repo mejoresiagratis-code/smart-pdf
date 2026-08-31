@@ -53,7 +53,7 @@ CAMPOS DEL PDF (claves EXACTAS): $fieldsJson
 $tplHint
 INSTRUCCIONES IMPORTANTES:
 1) REGLA DE ORO — NO INVENTES NI DEDUZCAS. Transcribe SOLO valores que aparezcan LITERALMENTE en ESTE documento. Si un campo no está en el documento, OMÍTELO (no lo incluyas en el JSON). Prohibido: deducir, completar, suponer, traducir, calcular o COPIAR un valor de un campo a otro o de un bloque a otro. Ante la duda, omite. Es mejor un JSON corto y correcto que uno largo con suposiciones.
-2) SOLO DATOS DEL DISTRIBUIDOR / PUNTO DE VENTA. El documento puede contener datos de terceros (el operador Orange/MASORANGE, el banco como entidad, notaría, gestoría, testigos…). IGNÓRALOS. Extrae únicamente la identidad, dirección, cuenta e identificación del representante del DISTRIBUIDOR (el cliente/PdV). Si no estás seguro de a quién pertenece un dato, omítelo.
+2) SOLO DATOS DEL DISTRIBUIDOR / PUNTO DE VENTA. El documento puede contener datos de terceros (el operador de telecomunicaciones, el banco como entidad, notaría, gestoría, testigos…). IGNÓRALOS. Extrae únicamente la identidad, dirección, cuenta e identificación del representante del DISTRIBUIDOR (el cliente/PdV). Si no estás seguro de a quién pertenece un dato, omítelo.
 3) PROPÓN TODO LO QUE ENCUENTRES DEL DISTRIBUIDOR: razón social, NIF/CIF/NIE, IBAN, dirección, CP, población, provincia, teléfono, email, nombre y NIF del administrador/representante. Lee el documento COMPLETO (todas las páginas; en fotos, también márgenes y sellos).
 4) FORMATEA bien:
    - NIF/CIF/NIE en mayúsculas, sin espacios ni guiones (ej. "B24838195", "78134718S").

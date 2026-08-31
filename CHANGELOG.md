@@ -8,6 +8,80 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.9.5-paleta-aire-y-desacoplo-orange] — 2026-08-31
+
+Pablo ya no trabaja con Orange/MASORANGE; la empresa nueva es **Aire Networks**
+(airetech.es), con varios PDFs rellenables propios (el primero, `Contrato_empresas.pdf`,
+compartido y analizado: 481 campos AcroForm reales — 403 texto, 74 checkbox/radio y
+**4 campos `/Sig` de firma digital**, ver nota técnica más abajo). Esta tanda es
+puramente de desacoplo y branding — **cero cambios de comportamiento** en el contrato
+Orange, que debe seguir reconociéndose exactamente igual si se sube.
+
+### Cambiado — paleta de marca: de Orange a Aire
+- `Theme.kt`: los 22 roles de color (antes derivados del naranja `#FF7900` de Orange)
+  pasan a derivarse de la identidad de Aire. Los tonos **no son inventados**: están
+  muestreados por píxel del propio `Contrato_empresas.pdf` —
+  `#9F0BFF` (violeta del logo y cabeceras de tabla) como `primary`,
+  `#00095A` (azul marino de la banda superior) como `secondary`,
+  `#ECD0FF` (fondo lila de las filas de tabla) como `primaryContainer`.
+  Terciario añadido (índigo `#5B4FE0`) como contrapunto de color, sin tocar la
+  estructura de roles ni sumar dependencias. Superficies: tinte frío neutro en vez del
+  cálido anterior (coherente con dejar de ser "naranja").
+- Símbolos renombrados (`BrandOrange`→`BrandVioleta`, etc.); ninguno se usaba fuera de
+  `Theme.kt`, así que no hay más ficheros que tocar por esto.
+
+### Cambiado — el contrato Orange deja de presentarse como "por defecto"
+- `ContractStep.kt`: **"Aportar mi PDF" pasa a ser la primera opción** (antes iba
+  segunda); el contrato de distribución pasa a llamarse explícitamente
+  **"Contrato Orange/MASORANGE (heredado)"** en vez de "Contrato por defecto". Sigue
+  siendo una opción completamente funcional — mismo `chooseDefaultContract()`, mismo
+  PDF de assets, mismo `RESPONSABLE_KEY`/`CANON` — solo cambia cómo se presenta: ya no
+  se sugiere como la opción natural.
+- **No había auto-selección que quitar**: `contractSource` ya arrancaba en `null`
+  (verificado en `WizardUiState`); el usuario siempre ha tenido que elegir a propósito.
+  Lo que sí sesgaba hacia Orange era el orden y el rótulo "por defecto" — ya corregido.
+
+### Cambiado — copy genérico donde antes asumía Orange/MASORANGE
+- `WizardScreen.kt` / `AjustesScreen.kt`: el texto de "Perfil comercial" ya no da por
+  hecho que el campo se llama "Responsable Comercial MASORANGE" — ahora describe el
+  autorrelleno en genérico y menciona MASORANGE solo como ejemplo entre paréntesis.
+- `ExtractionPrompt.kt`: "el operador Orange/MASORANGE" → "el operador de
+  telecomunicaciones", en la instrucción de ignorar datos de terceros. ⚠️ Pendiente de
+  replicar en `rellenador-pro.html` para mantener la paridad del prompt (mismo tipo de
+  pendiente que `tipo_documento` en v0.7.9).
+
+### Invariantes confirmadas SIN TOCAR (el contrato Orange debe seguir funcionando)
+- `ContractFields.CANON` (22 campos, dobles espacios, sufijo `_2`) — intacto.
+- `RESPONSABLE_KEY = "Responsable Comercial MASORANGE"` — es el nombre LITERAL del
+  campo en el AcroForm de ese PDF, no branding de la app. Tocarlo rompería el
+  autorrelleno del contrato real.
+- `AcroFormFiller`, calibración de firma (págs. 24/30/33/45/54) — sin cambios.
+
+### Nota técnica — hallazgos de `Contrato_empresas.pdf` (Aire) para las próximas fases
+Confirma exactamente el síntoma que motivó el roadmap multi-formulario, a mayor escala
+que el Modelo 145:
+- **481 campos AcroForm** (403 texto + 74 checkbox/radio + **4 `/Sig`**). Los `/Sig` son
+  un tipo de widget que la app **no maneja hoy** — `AcroFormFiller`/`SignaturePageDetector`
+  solo conocen huecos de firma por estampado de imagen en coordenadas, no campos de
+  firma real del AcroForm. Aparecen en portabilidad (2), captura de fibra (1) y cierre
+  del contrato (1) — a tener en cuenta en la fase 6 (firma por esquema).
+- Muchos campos usan nombres autogenerados sin significado
+  (`Campo de texto 116`, `Casilla de verificación 27`…), en bloques repetidos (12 filas
+  de servicio × varias tablas). Nombre técnico inútil para etiquetar → confirma que el
+  etiquetado por VISIÓN (fase 3) es imprescindible, no solo para el 145.
+- Al mismo tiempo, un bloque de campos SÍ tiene nombres legibles y ya en español
+  (`Nombre o razón social`, `Domicilio`, `NIF/CIF/NIE`, `Móvil representante`…): la
+  huella + etiquetado deberían aprovechar el nombre real cuando exista antes de gastar
+  una llamada de visión, en vez de tratar los 481 por igual.
+
+### Verificado
+Compilación limpia (sin referencias colgantes a los símbolos de color antiguos,
+verificado por grep). Sin cambios en `data/model`, `data/pdf` ni `data/validation`:
+el comportamiento de extracción/relleno/firma del contrato Orange es idéntico al de
+la v0.9.4.
+
+---
+
 ## [0.9.4-inspector-de-campos] — 2026-08-31
 
 Fase 1 del roadmap multi-formulario (`roadmap-multiformulario.html`). Base invisible:

@@ -4,7 +4,15 @@ Estado real del proyecto y próximas tandas planificadas. Este documento sustitu
 "roadmap" informal que vivía en las notas de continuidad de las sesiones. Se actualiza
 al final de cada tanda con lo que quede pendiente.
 
-Última actualización: **2026-08-31** (versión `0.9.4-inspector-de-campos`, versionCode 61).
+Última actualización: **2026-08-31** (versión `0.9.5-paleta-aire-y-desacoplo-orange`, versionCode 62).
+
+> **Cambio de contexto (2026-08-31):** Pablo ya no trabaja con Orange/MASORANGE. La
+> prioridad pasa a ser multi-contrato de verdad, con los PDFs de la empresa nueva
+> (Aire Networks) como caso real — no solo el Modelo 145 de prueba. El contrato Orange
+> se mantiene como esquema `BUILTIN` reconocible (fase 2), pero deja de ser el centro
+> de la app. El orden de fases no cambia, pero la prioridad de llegar hasta la fase 5
+> (Relleno dinámico) sí sube: sin ella, subir un PDF de Aire sigue sin poder rellenarse
+> de principio a fin.
 
 ---
 
@@ -36,6 +44,7 @@ al final de cada tanda con lo que quede pendiente.
 | **0.7.9** | **Tipo por IA (visión)** para fotos/escaneos sin capa de texto: campo `tipo_documento` en el prompt (vocabulario cerrado), callback `onDocTypeDetected`; la detección local tiene prioridad. ⚠️ Pendiente replicar `tipo_documento` en el prompt de la app web (paridad). |
 | **0.9.3** | El prompt lleva los **campos reales del PDF cargado** en vez de la lista fija `CANON` (causa de que se «olvidaran» campos), y una **guía de campos** cuando el contrato usa nombres propios — copiada literal de `tplHint` de la web, así que la paridad se mantiene. |
 | **0.9.4** | **Fase 1 del roadmap multi-formulario** (`roadmap-multiformulario.html`): `PdfFieldInspector`, lee los widgets del AcroForm en orden de lectura real (página → fila con tolerancia 6pt → columna), coordenadas origen arriba-izquierda. Verificado contra el Modelo 145 (60 campos). Utilidad pura, sin UI ni cambios de comportamiento — base para la fase 2 (esquema dinámico). |
+| **0.9.5** | **Desacoplo de Orange + paleta Aire**: paleta de marca muestreada del PDF real de Aire (`#9F0BFF`/`#00095A`/`#ECD0FF`); el contrato Orange pasa de "por defecto" a "heredado" (sigue funcionando igual, ya no es la opción sugerida); copy de UI y prompt genericizados. Cero cambios en extracción/relleno/firma. Analizado `Contrato_empresas.pdf` de Aire: 481 campos AcroForm reales, incluye 4 campos `/Sig` (tipo nuevo, sin manejar hoy — relevante para fase 6) y bloques de nombres autogenerados sin etiqueta (confirma que la fase 3 de etiquetado por visión es imprescindible). |
 | **0.9.2** | **Regresión de la 0.8.7 corregida**: `getType()` devuelve null para `file://`, y desde que `DocumentStore` copia los documentos a `filesDir` todos los URIs lo son → todo caía en `octet-stream` y el análisis fallaba con «No se pudieron leer los documentos». El MIME se deduce ahora por extensión cuando el resolver no sabe. |
 | **0.9.1** | **Aviso previo (RGPD) antes de mandar documentos a la IA**: `ConsentSheet` con los motores separados por región, casilla obligatoria y «no volver a preguntar» persistido. **Modo solo motores europeos**: apaga y bloquea los de fuera de la UE. Ambas preferencias sobreviven a «Empezar otro contrato». |
 | **0.9.0** | **Regresión corregida**: los fallos de motor eran invisibles desde la v0.8.0 (se borró con `ReviewStep` el único panel que los mostraba). Nuevo `EngineFailure` que traduce el error crudo a causa legible + consejo, y aviso plegable en el hero de Relleno. |

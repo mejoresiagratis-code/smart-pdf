@@ -193,7 +193,9 @@ private fun QuickSettingsSheet(
         ) {
             Text("Perfil comercial", style = MaterialTheme.typography.titleMedium)
             Text(
-                "Nombre que se autorrellena como Responsable Comercial MASORANGE.",
+                "Nombre que se autorrellena en el campo de responsable/representante " +
+                    "cuando el contrato lo tiene (p. ej. Responsable Comercial MASORANGE " +
+                    "en el contrato de distribución Orange).",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

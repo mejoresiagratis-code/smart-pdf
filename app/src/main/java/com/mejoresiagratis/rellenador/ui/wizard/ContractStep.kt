@@ -102,19 +102,19 @@ private fun ContractSelectionContent(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 ContractOptionCard(
-                    selected = isDefault,
-                    onClick = vm::chooseDefaultContract,
-                    headline = "Contrato por defecto",
-                    supporting = "Contrato de distribución PdV (54 páginas)",
-                    icon = { Icon(Icons.Outlined.Description, contentDescription = null) }
-                )
-
-                ContractOptionCard(
                     selected = isUser,
                     onClick = { picker.launch(arrayOf("application/pdf")) },
                     headline = "Aportar mi PDF",
                     supporting = fileName,
                     icon = { Icon(Icons.Outlined.UploadFile, contentDescription = null) }
+                )
+
+                ContractOptionCard(
+                    selected = isDefault,
+                    onClick = vm::chooseDefaultContract,
+                    headline = "Contrato Orange/MASORANGE (heredado)",
+                    supporting = "Contrato de distribución PdV (54 páginas)",
+                    icon = { Icon(Icons.Outlined.Description, contentDescription = null) }
                 )
             }
 

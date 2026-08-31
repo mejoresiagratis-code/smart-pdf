@@ -19,43 +19,42 @@ import androidx.compose.ui.unit.sp
 
 /**
  * Tanda 0 — fundación M3 Expressive.
- *
- * Antes, el tema solo sobreescribía `primary`; el resto de roles (containers,
- * superficies, secundario/terciario…) quedaban en el morado por defecto de M3, de ahí
- * la sensación de "app sin terminar". Esta paleta deriva TODOS los roles a mano a
- * partir del naranja de marca (0xFFFF7900), con un terciario azul-verdoso frío que da
- * la variedad de color que pide el principio Expressive de "paleta más rica para
- * marcar jerarquía visual" — sin añadir ninguna librería de generación de esquemas
- * (material-color-utilities), para no sumar otra dependencia alpha además de material3.
+ * v0.9.5 — repaletado de marca: Orange/MASORANGE ya no es el operador con el que se
+ * trabaja; la paleta pasa a la identidad de **Aire** (airetech.es). Los tonos no son
+ * inventados: están MUESTREADOS por píxel del propio `Contrato_empresas.pdf` de Aire
+ * (cabecera y acento #9F0BFF, banda de marca #00095A, fondo de tabla #ECD0FF), igual
+ * que antes el naranja partía del `#FF7900` de Orange. Estructura sin cambios: todos
+ * los roles derivados a mano, terciario como contrapunto de color (principio
+ * Expressive de "paleta más rica"), sin sumar material-color-utilities como dependencia.
  */
 
-// ---- Naranja de marca (idéntico al de antes, ahora con toda su familia tonal) ----
-private val BrandOrange = Color(0xFFFF7900)
-private val OnBrandOrange = Color(0xFFFFFFFF)
-private val OrangeContainerLight = Color(0xFFFFDBC2)
-private val OnOrangeContainerLight = Color(0xFF2E1500)
-private val OrangeContainerDark = Color(0xFF5C3600)
-private val OnOrangeContainerDark = Color(0xFFFFDBC2)
+// ---- Violeta de marca Aire (acento de logo/cabeceras de tabla del PDF real) ----
+private val BrandVioleta = Color(0xFF9F0BFF)
+private val OnBrandVioleta = Color(0xFFFFFFFF)
+private val VioletaContainerLight = Color(0xFFECD0FF)
+private val OnVioletaContainerLight = Color(0xFF350063)
+private val VioletaContainerDark = Color(0xFF5A0099)
+private val OnVioletaContainerDark = Color(0xFFECD0FF)
 
-// ---- Secundario: marrón cálido neutro (chips, acciones menos prioritarias) ----
-private val SecondaryLight = Color(0xFF7C5635)
+// ---- Secundario: azul marino Aire (banda de cabecera del PDF, #00095A) ----
+private val SecondaryLight = Color(0xFF00095A)
 private val OnSecondaryLight = Color(0xFFFFFFFF)
-private val SecondaryContainerLight = Color(0xFFFFDCC0)
-private val OnSecondaryContainerLight = Color(0xFF2E1600)
-private val SecondaryDark = Color(0xFFEDBF95)
-private val OnSecondaryDark = Color(0xFF452B0D)
-private val SecondaryContainerDark = Color(0xFF5F4021)
-private val OnSecondaryContainerDark = Color(0xFFFFDCC0)
+private val SecondaryContainerLight = Color(0xFFDCDCFF)
+private val OnSecondaryContainerLight = Color(0xFF00095A)
+private val SecondaryDark = Color(0xFFC2C4FF)
+private val OnSecondaryDark = Color(0xFF1A1F6B)
+private val SecondaryContainerDark = Color(0xFF23285C)
+private val OnSecondaryContainerDark = Color(0xFFDCDCFF)
 
-// ---- Terciario: azul-verdoso frío — contrapunto de color, variedad Expressive ----
-private val TertiaryLight = Color(0xFF3D6472)
+// ---- Terciario: índigo intermedio — contrapunto de color, variedad Expressive ----
+private val TertiaryLight = Color(0xFF5B4FE0)
 private val OnTertiaryLight = Color(0xFFFFFFFF)
-private val TertiaryContainerLight = Color(0xFFC0E9F9)
-private val OnTertiaryContainerLight = Color(0xFF001F27)
-private val TertiaryDark = Color(0xFFA4CDDD)
-private val OnTertiaryDark = Color(0xFF063542)
-private val TertiaryContainerDark = Color(0xFF244C59)
-private val OnTertiaryContainerDark = Color(0xFFC0E9F9)
+private val TertiaryContainerLight = Color(0xFFE3DFFF)
+private val OnTertiaryContainerLight = Color(0xFF1A0F66)
+private val TertiaryDark = Color(0xFFC9C1FF)
+private val OnTertiaryDark = Color(0xFF2E2270)
+private val TertiaryContainerDark = Color(0xFF433794)
+private val OnTertiaryContainerDark = Color(0xFFE3DFFF)
 
 // ---- Error: valores estándar M3 (no reinventar el color de accesibilidad crítica) ----
 private val ErrorLight = Color(0xFFBA1A1A)
@@ -67,39 +66,39 @@ private val OnErrorDark = Color(0xFF690005)
 private val ErrorContainerDark = Color(0xFF93000A)
 private val OnErrorContainerDark = Color(0xFFFFDAD6)
 
-// ---- Superficies: tinte cálido sutil (no gris puro), coherente con el naranja ----
-private val SurfaceLight = Color(0xFFFFF8F5)
-private val OnSurfaceLight = Color(0xFF221A14)
-private val SurfaceVariantLight = Color(0xFFF3DFD3)
-private val OnSurfaceVariantLight = Color(0xFF51443A)
-private val OutlineLight = Color(0xFF837469)
-private val OutlineVariantLight = Color(0xFFD6C3B6)
-private val SurfaceDark = Color(0xFF19120D)
-private val OnSurfaceDark = Color(0xFFEDE0D9)
-private val SurfaceVariantDark = Color(0xFF51443A)
-private val OnSurfaceVariantDark = Color(0xFFD6C3B6)
-private val OutlineDark = Color(0xFF9E8D80)
-private val OutlineVariantDark = Color(0xFF51443A)
+// ---- Superficies: tinte frío neutro (antes cálido, a tono con el naranja) ----
+private val SurfaceLight = Color(0xFFFAF8FF)
+private val OnSurfaceLight = Color(0xFF1B1B23)
+private val SurfaceVariantLight = Color(0xFFE3E0EC)
+private val OnSurfaceVariantLight = Color(0xFF46464F)
+private val OutlineLight = Color(0xFF767680)
+private val OutlineVariantLight = Color(0xFFC7C5D0)
+private val SurfaceDark = Color(0xFF131318)
+private val OnSurfaceDark = Color(0xFFE5E1EA)
+private val SurfaceVariantDark = Color(0xFF46464F)
+private val OnSurfaceVariantDark = Color(0xFFC7C5D0)
+private val OutlineDark = Color(0xFF908F9A)
+private val OutlineVariantDark = Color(0xFF46464F)
 
 // ---- Roles surfaceContainer* (v0.8.2) ----
-// Sin declararlos, Material 3 los deriva en GRIS NEUTRO y rompen la calidez del resto
-// del tema: las tarjetas se veían frías sobre un fondo cálido. Estos valores continúan
-// la rampa tonal del naranja de marca, que es lo que ya hacía `surface`.
+// Sin declararlos, Material 3 los deriva en GRIS NEUTRO y rompen la coherencia del
+// resto del tema. Estos valores continúan la rampa tonal fría, la que ahora usa
+// `surface` con la marca Aire.
 private val SurfaceContainerLowestLight = Color(0xFFFFFFFF)
-private val SurfaceContainerLowLight = Color(0xFFFFF1EA)
-private val SurfaceContainerLight = Color(0xFFFCEBE2)
-private val SurfaceContainerHighLight = Color(0xFFF6E4DA)
-private val SurfaceContainerHighestLight = Color(0xFFF0DED4)
+private val SurfaceContainerLowLight = Color(0xFFF4F2FA)
+private val SurfaceContainerLight = Color(0xFFEEEBF5)
+private val SurfaceContainerHighLight = Color(0xFFE8E5F0)
+private val SurfaceContainerHighestLight = Color(0xFFE2DFEB)
 
-private val SurfaceContainerLowestDark = Color(0xFF120C08)
-private val SurfaceContainerLowDark = Color(0xFF21180F)
-private val SurfaceContainerDark = Color(0xFF251B13)
-private val SurfaceContainerHighDark = Color(0xFF30251C)
-private val SurfaceContainerHighestDark = Color(0xFF3C2F26)
+private val SurfaceContainerLowestDark = Color(0xFF0D0D11)
+private val SurfaceContainerLowDark = Color(0xFF1B1B21)
+private val SurfaceContainerDark = Color(0xFF1F1F26)
+private val SurfaceContainerHighDark = Color(0xFF2A2A32)
+private val SurfaceContainerHighestDark = Color(0xFF35343D)
 
 private val LightColors: ColorScheme = lightColorScheme(
-    primary = BrandOrange, onPrimary = OnBrandOrange,
-    primaryContainer = OrangeContainerLight, onPrimaryContainer = OnOrangeContainerLight,
+    primary = BrandVioleta, onPrimary = OnBrandVioleta,
+    primaryContainer = VioletaContainerLight, onPrimaryContainer = OnVioletaContainerLight,
     secondary = SecondaryLight, onSecondary = OnSecondaryLight,
     secondaryContainer = SecondaryContainerLight, onSecondaryContainer = OnSecondaryContainerLight,
     tertiary = TertiaryLight, onTertiary = OnTertiaryLight,
@@ -117,8 +116,8 @@ private val LightColors: ColorScheme = lightColorScheme(
 )
 
 private val DarkColors: ColorScheme = darkColorScheme(
-    primary = BrandOrange, onPrimary = Color(0xFF4A2800),
-    primaryContainer = OrangeContainerDark, onPrimaryContainer = OnOrangeContainerDark,
+    primary = Color(0xFFD8AFFF), onPrimary = Color(0xFF3A0069),
+    primaryContainer = VioletaContainerDark, onPrimaryContainer = OnVioletaContainerDark,
     secondary = SecondaryDark, onSecondary = OnSecondaryDark,
     secondaryContainer = SecondaryContainerDark, onSecondaryContainer = OnSecondaryContainerDark,
     tertiary = TertiaryDark, onTertiary = OnTertiaryDark,

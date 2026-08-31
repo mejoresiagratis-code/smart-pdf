@@ -47,7 +47,8 @@ fun AjustesScreen(
             // --- Perfil comercial ---
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Perfil comercial", style = MaterialTheme.typography.titleMedium)
-                Text("Nombre que se autorrellena como Responsable Comercial MASORANGE en cada contrato.",
+                Text("Nombre que se autorrellena en el campo de responsable/representante " +
+                    "del contrato, cuando lo tiene.",
                     style = MaterialTheme.typography.bodySmall)
                 OutlinedTextField(
                     value = name,
