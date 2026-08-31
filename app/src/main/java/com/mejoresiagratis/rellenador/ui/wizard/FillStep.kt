@@ -30,7 +30,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
+import com.mejoresiagratis.rellenador.data.model.BuiltinSchemas
 import com.mejoresiagratis.rellenador.data.model.CanonField
+import com.mejoresiagratis.rellenador.data.model.CanonicalKeys
 import com.mejoresiagratis.rellenador.data.model.ContractFields
 import com.mejoresiagratis.rellenador.data.validation.FieldNormalizer
 import com.mejoresiagratis.rellenador.data.validation.FieldValidator
@@ -40,7 +42,25 @@ import com.mejoresiagratis.rellenador.ui.components.ExpressiveButton
 // ContractFields.CANON (ver Extraction.kt). "Fecha" se trata aparte porque sus 3
 // claves (Fecha/de/año) se muestran como una sola fila compacta día/mes/año, no
 // como 3 campos apilados sueltos.
-private val FECHA_KEYS = setOf("Fecha", "de", "año")
+//
+// Tanda 5·2 — antes era el literal `setOf("Fecha", "de", "año")`, acoplado al nombre real de
+// Orange (docs/PLAN_FASE_5.md, hallazgo 2.6). Ahora sale de las 3 canónicas de fecha vía
+// `BuiltinSchemas.realKeyFor`, y sólo cae en el literal si esa vuelta no resuelve (no debería
+// pasar con `CANON`, que sí las tiene mapeadas; es red de seguridad, no el camino esperado).
+private val FECHA_KEYS: Set<String> =
+    listOf(CanonicalKeys.FECHA_DIA, CanonicalKeys.FECHA_MES, CanonicalKeys.FECHA_ANIO)
+        .mapNotNull { BuiltinSchemas.realKeyFor(it) }
+        .toSet()
+        .ifEmpty { setOf("Fecha", "de", "año") }
+
+/**
+ * Tanda 5·2 — nombre real del campo Provincia que corresponde a un CP dado, resuelto por
+ * canónica (`BuiltinSchemas.provinciaKeyFor`) en vez de por la convención de nombre `_2` de
+ * Orange (docs/PLAN_FASE_5.md, hallazgo 2.6). Cae en la convención de nombre sólo si la
+ * canónica no resuelve (no debería pasar con `CANON`; red de seguridad).
+ */
+private fun provinciaKeyFor(key: String): String =
+    BuiltinSchemas.provinciaKeyFor(key) ?: if (key.endsWith("_2")) "Provincia_2" else "Provincia"
 
 // Las secciones ya no viven aquí: se reciben como parámetro. Ver `FillSections.kt` y la tanda
 // 5·1 de `docs/PLAN_FASE_5.md`.
@@ -89,7 +109,7 @@ fun FillStep(
     fun isFieldOk(key: String): Boolean {
         val v = state.fieldValues[key]
         if (v.isNullOrBlank()) return false
-        val provKey = if (key.endsWith("_2")) "Provincia_2" else "Provincia"
+        val provKey = provinciaKeyFor(key)
         val result = FieldValidator.validate(key, v, state.tipoIdentificacion, state.fieldValues[provKey])
         return result?.ok != false
     }
@@ -416,7 +436,7 @@ private fun FieldRow(
     onConfirm: (String) -> Unit = {},
 ) {
     val value = state.fieldValues[key] ?: ""
-    val provKey = if (key.endsWith("_2")) "Provincia_2" else "Provincia"
+    val provKey = provinciaKeyFor(key)
     val result = FieldValidator.validate(key, value, state.tipoIdentificacion, state.fieldValues[provKey])
     val isError = result?.ok == false
 
