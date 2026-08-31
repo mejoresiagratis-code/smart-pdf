@@ -100,7 +100,9 @@ fun WizardScreen(vm: WizardViewModel = hiltViewModel(), onOpenSettings: () -> Un
                 when (state.step) {
                     Step.CONTRATO -> ContractStep(state, vm)
                     Step.DOCUMENTOS -> DocumentsStep(state, vm)
-                    Step.RELLENO -> FillStep(state, vm)
+                    // Las secciones se pasan desde aquí a propósito (tanda 5·1): es la costura
+                    // por la que entrará el esquema del PDF subido en la 5·4.
+                    Step.RELLENO -> FillStep(state, vm, sections = canonFillSections())
                     Step.FIRMA -> SignatureStep(state, vm)
                 }
                 if (state.busy && state.step != Step.DOCUMENTOS) {

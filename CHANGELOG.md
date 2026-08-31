@@ -8,6 +8,70 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.10.6-fase5-costura] — 2026-08-31
+
+**Tandas 5·0 y 5·1 de `docs/PLAN_FASE_5.md`**, juntas porque las dos son de riesgo bajo y ninguna
+cambia comportamiento en Orange: un ciclo de build entero para dos cambios pequeños es
+desperdicio. La fase 5 sigue partida en seis tandas; esto cierra las dos primeras.
+
+Nada de lo de aquí se nota usando la app con el contrato de Orange. Eso **es** el criterio de
+verificación, no una carencia.
+
+### Arreglado — 5·0: el campo fantasma en `missingFields`
+
+`AcroFormFiller` inyectaba el responsable comercial de Orange con un `putIfAbsent` **sin condición
+ninguna**. Con cualquier PDF que no sea ese contrato, el campo no existe en el AcroForm, así que
+`getField()` devolvía null y la clave acababa **siempre** en `missing`: la app informaba de un
+campo que falta y que nunca debió pedir. Y encima `WizardViewModel` ya lo pre-rellena por su
+cuenta, así que estaba inyectado dos veces.
+
+Ahora se inyecta sólo si la plantilla tiene de verdad ese campo. En Orange se comporta
+exactamente igual; en el resto desaparece. Sigue siendo `putIfAbsent` y no `put` a propósito: el
+nombre configurado en Ajustes manda sobre la constante, y esto sólo es la red por si se genera el
+PDF por un camino que no pasó por la extracción.
+
+Se arregla **antes** del resto de la fase 5 porque es ruido justo en lo que hay que observar
+mientras se conecta el relleno dinámico: un «falta un campo» falso en cada prueba con Aire.
+
+### Cambiado — 5·1: `FillStep` deja de tener las secciones escritas dentro
+
+Eran un `private data class Section` y un `private val SECTIONS` **dentro de `FillStep`**, con los
+nombres del AcroForm de Orange literales —dobles espacios incluidos— y sin ningún punto de
+extensión. Ahora viven en `ui/wizard/FillSections.kt` como `FillSection` + `canonFillSections()`,
+y `FillStep` las **recibe como parámetro**; `WizardScreen` le pasa las de `CANON`.
+
+Es la costura por la que entrará el `FormSchema` del PDF subido en la tanda 5·4. Se hace sola,
+con «la app se comporta idéntica» como única cosa que comprobar, en vez de mezclada con el cambio
+que sí se nota — que es la lección de la 0.8.0.
+
+`FillSection` y no `Section`: al hacerlo público, el nombre corto chocaría con `FormSection` del
+modelo. Una colisión de nombres entre paquetes ya tumbó un build en la v0.9.8.1, así que se elige
+distinto de entrada.
+
+**Un detalle que sí ha cambiado por dentro**: el denominador de la barra de progreso era
+`ContractFields.CANON.size` fijo. Con las secciones parametrizadas eso mediría contra una lista
+que no es la que hay en pantalla, así que ahora se deriva de las secciones más las claves de
+fecha. Da el **mismo número** —18 + 3 = 21 = `CANON.size`—, comprobado con una aserción, así que
+no cambia lo que se ve.
+
+Lo que **no** hace esta tanda: la fila compacta de fecha (`FECHA_KEYS`), el hermano del CP
+(`endsWith("_2")`) y `tipoIdentificacion` siguen siendo casos especiales atados a los nombres de
+Orange. Generalizarlos contra `FormField.canonical` es la 5·2, y es la que evita que la validación
+se apague en silencio con los nombres de Aire.
+
+### Verificación
+
+`FillSections.kt` typecheckea con `-Werror` junto al modelo completo. Y una prueba ejecutada
+compara `canonFillSections()` contra la lista que estaba escrita a mano antes del refactor,
+transcrita literal: mismas secciones, mismo orden, mismas claves, el atajo «copiar de fiscal»
+sólo en comercio/PdV, los dobles espacios intactos, ninguna clave huérfana fuera de `CANON`, sin
+duplicados y el mismo denominador de progreso.
+
+Sin verificar en local: el Compose de `FillStep` y el cambio de `AcroFormFiller`, que necesita
+pdfbox de verdad.
+
+---
+
 ## [0.10.5-etiquetado-enganchado] — 2026-08-31
 
 **Cierra la fase 3, que existía desde la 0.10.1 sin que nada la llamara.** `FieldLabeler` sabía

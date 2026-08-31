@@ -42,20 +42,8 @@ import com.mejoresiagratis.rellenador.ui.components.ExpressiveButton
 // como 3 campos apilados sueltos.
 private val FECHA_KEYS = setOf("Fecha", "de", "año")
 
-private data class Section(val title: String, val keys: List<String>, val showCopyFiscal: Boolean = false)
-
-private val SECTIONS = listOf(
-    Section("Empresa / Identificación", listOf(
-        "Nombre  Razón Social", "Nombre Comercial", "NIE", "Nombre representante", "NIF representante",
-        // Añadido tras auditoría contra el AcroForm real y la web (existía en el PDF y
-        // en el prompt de IA, pero no estaba conectado en Android).
-        "Actividad principal del negocio"
-    )),
-    Section("Dirección fiscal", listOf("Dirección", "CP", "Población", "Provincia")),
-    Section("Dirección comercio / PdV", listOf("Dirección_2", "CP_2", "Población_2", "Provincia_2"), showCopyFiscal = true),
-    Section("Contacto", listOf("Teléfono", "Email Comercial", "Email  Facturación")),
-    Section("Datos bancarios", listOf("Datos bancarios del DISTRIBUIDOR")),
-)
+// Las secciones ya no viven aquí: se reciben como parámetro. Ver `FillSections.kt` y la tanda
+// 5·1 de `docs/PLAN_FASE_5.md`.
 
 /**
  * Paso 4 — Relleno editable con validación en vivo (dígitos de control).
@@ -67,7 +55,15 @@ private val SECTIONS = listOf(
 // progreso del hero: cada función que lo use necesita su propio @OptIn.
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun FillStep(state: WizardUiState, vm: WizardViewModel) {
+fun FillStep(
+    state: WizardUiState,
+    vm: WizardViewModel,
+    /**
+     * Secciones a pintar. Quien llama decide cuáles: hoy siempre las de `CANON`
+     * ([canonFillSections]); en la tanda 5·4 vendrán del `FormSchema` del PDF subido.
+     */
+    sections: List<FillSection>,
+) {
     var showHistory by remember { mutableStateOf(false) }
     if (showHistory) HistoryPanel(vm, onDismiss = { showHistory = false })
 
@@ -98,8 +94,12 @@ fun FillStep(state: WizardUiState, vm: WizardViewModel) {
         return result?.ok != false
     }
 
-    val totalFields = ContractFields.CANON.size
-    val filledFields = ContractFields.CANON.count { isFieldOk(it.key) }
+    // Se cuenta lo que hay en pantalla, no `CANON.size`: con las secciones parametrizadas, medir
+    // contra una constante ajena daría un progreso que no corresponde a lo que se ve. Con `CANON`
+    // el número es el mismo (21), así que aquí no cambia nada visible.
+    val counted = remember(sections) { countedKeys(sections) }
+    val totalFields = counted.size
+    val filledFields = counted.count { isFieldOk(it) }
 
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -289,7 +289,7 @@ fun FillStep(state: WizardUiState, vm: WizardViewModel) {
             verticalArrangement = Arrangement.spacedBy(14.dp),
             contentPadding = PaddingValues(vertical = 14.dp)) {
 
-            items(SECTIONS, key = { it.title }) { section ->
+            items(sections, key = { it.title }) { section ->
                 val sectionComplete = section.keys.all { isFieldOk(it) }
                 Surface(
                     shape = MaterialTheme.shapes.medium,

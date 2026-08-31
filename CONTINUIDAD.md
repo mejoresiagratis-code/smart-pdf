@@ -4,7 +4,7 @@
 > o su contenido; con eso y el repo tiene el contexto completo. **No hace falta reenviar los
 > PDFs de Aire**: su análisis está en `docs/ANALISIS_FORMULARIOS_AIRE.md`.
 >
-> **Actualizado**: 2026-08-31, tras `0.10.5-etiquetado-enganchado` (⚠️ pendiente de verde). Este
+> **Actualizado**: 2026-08-31, tras `0.10.6-fase5-costura` (⚠️ pendiente de verde). Este
 > documento **caduca**: la primera regla de abajo existe precisamente porque lo que aquí se
 > afirma puede estar viejo.
 
@@ -22,14 +22,14 @@ git clone https://github.com/mejoresiagratis-code/smart-pdf
 cd smart-pdf && git log --oneline -8
 ```
 
-El último commit **de código** debería ser `0.10.5-etiquetado-enganchado` · versionCode 75. Por
+El último commit **de código** debería ser `0.10.6-fase5-costura` · versionCode 76. Por
 encima puede haber commits solo de documentación, que no suben versión. Si el último código no es
 ése, este documento está desfasado: manda `git log` y la cabecera del `CHANGELOG.md`.
 
-### ⚠️ Lo segundo: comprobar el build de la 0.10.5
+### ⚠️ Lo segundo: comprobar el build de la 0.10.6
 
-**La 0.10.5 está pendiente de verde en Actions.** Míralo antes de escribir código nuevo. La
-0.10.4 anterior sí está verificada.
+**La 0.10.6 está pendiente de verde en Actions.** Míralo antes de escribir código nuevo. Hasta la
+0.10.5 todo está verificado verde.
 
 Lo que sí se comprobó en local con `kotlinc` (ver la técnica en la sección 6): `data/model`
 completo, `FieldLabeler` y `VisionLabelPass` typecheckean sin errores ni avisos, y una prueba de
@@ -81,7 +81,8 @@ con cuatro formularios rellenables propios: contrato de empresas (481 campos), p
 | 0.10.2 | `FormSchemaBuilder` nunca emitía `FieldKind.RADIO`; ahora sí |
 | 0.10.3 | Fase 4: `SchemaEditing` + `LabelEditor` (ficheros nuevos, sin enganchar) |
 | 0.10.4 | Fase 4 **cableada**: el editor ya es alcanzable con un PDF real · verde ✅ |
-| 0.10.5 | Fase 3 **cerrada**: `VisionLabelPass` engancha el etiquetado por visión ⚠️ sin verde |
+| 0.10.5 | Fase 3 **cerrada**: `VisionLabelPass` engancha el etiquetado por visión · verde ✅ |
+| 0.10.6 | Fase 5, tandas **5·0 y 5·1**: campo fantasma arreglado + costura de secciones ⚠️ sin verde |
 
 ### Qué está enganchado y qué no
 
@@ -113,9 +114,10 @@ Por orden. La primera no es código.
   las tres cosas de una pasada.
 - **Fase 5 — relleno dinámico**: es la que hace que un PDF de Aire se rellene de punta a punta, y
   la que toca `WizardViewModel` (1126 líneas). **No la ataques de una vez: está partida en seis
-  tandas en `docs/PLAN_FASE_5.md`.** Empezar por la 5·0 (quitar la inyección incondicional del
-  responsable de Orange, que hoy ya mete un campo falso en `missingFields`) y la 5·1 (sacar las
-  secciones escritas a mano de `FillStep` sin cambiar comportamiento).
+  tandas en `docs/PLAN_FASE_5.md`.** Las 5·0 y 5·1 están hechas en la 0.10.6. **La siguiente es la
+  5·2**: colgar validación, hermano del CP, fecha y tipo de identificación de `FormField.canonical`
+  en vez de de heurísticas sobre el nombre del campo. Es la que evita que la validación se apague
+  en silencio en cuanto la 5·4 traiga los primeros campos de Aire.
 - **Fase 6 — firma**: manejar los campos `/Sig` del AcroForm (4 en el contrato, 2 en
   portabilidad), no sólo estampar imagen en coordenadas.
 

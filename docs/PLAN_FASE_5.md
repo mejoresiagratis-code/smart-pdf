@@ -1,7 +1,11 @@
 # Plan de la fase 5 — relleno dinámico
 
 > Escrito el 2026-08-31 sobre `0.10.5-etiquetado-enganchado` (versionCode 75), **leyendo el
-> código**, no el ROADMAP. Tanda de planificación: no toca ni una línea de Kotlin.
+> código**, no el ROADMAP.
+>
+> **Estado: 5·0 y 5·1 hechas en `0.10.6-fase5-costura` (versionCode 76). La siguiente es la 5·2.**
+> Las referencias `fichero:línea` de la sección 2 son de antes del refactor: `FillStep.kt:47` ya no
+> tiene las secciones, están en `FillSections.kt`. El resto sigue en pie.
 >
 > Objetivo de la fase: que `FillStep` se dibuje a partir del `FormSchema` del PDF subido en vez
 > de las 6 secciones fijas de `CANON`, y que un formulario de Aire se rellene de punta a punta.
@@ -100,8 +104,8 @@ contra la que comparar. Si primero se cambia lo que se dibuja y luego la clave, 
 
 | Tanda | Alcance | Riesgo | Cómo se verifica |
 |---|---|---|---|
-| **5·0** | Quitar el `putIfAbsent` incondicional del responsable (2.4). Que se aplique sólo cuando el esquema lo pida (`ValueOrigin.AJUSTES`). | Bajo | `missingFields` deja de mentir con un PDF que no sea de Orange. |
-| **5·1** | `FillStep` recibe las secciones como parámetro en vez de tenerlas escritas. Se le siguen pasando las de `CANON`. | Bajo | **La app se comporta idéntica.** Eso es todo lo que hay que comprobar. |
+| ~~**5·0**~~ ✅ | Quitar el `putIfAbsent` incondicional del responsable (2.4). *Hecho en `0.10.6`: se inyecta sólo si la plantilla tiene el campo. Colgarlo de `ValueOrigin.AJUSTES` se deja para la 5·4, cuando haya esquema de verdad en el relleno.* | Bajo | `missingFields` deja de mentir con un PDF que no sea de Orange. |
+| ~~**5·1**~~ ✅ | `FillStep` recibe las secciones como parámetro. *Hecho en `0.10.6`: `FillSections.kt` con `FillSection` + `canonFillSections()`; `WizardScreen` se las pasa. El denominador del progreso se deriva de las secciones y da el mismo 21.* | Bajo | **La app se comporta idéntica.** Verificado con una prueba contra la lista original transcrita literal. |
 | **5·2** | Validación, hermano del CP, fecha y tipo de identificación pasan a colgar de `canonical` (2.5, 2.6). Fuente todavía `CANON`, que ya tiene su mapeo canónico. | Medio | Orange sigue validando exactamente igual: mismos mensajes, mismos campos en rojo. |
 | **5·3** | **La clave.** `fieldValues`/`fieldStates`/`fieldOrigins`/`fieldCandidates`/`UndoEntry` pasan a indexarse por nombre real; `fieldMapping` desaparece de la salida (2.3). Migración de `PersistedWizardState` v1→v2 y de `ContractProfile.campos` del historial y los perfiles exportados. | **Alto** | Sesión guardada con la versión anterior que se restaura sin perder nada; perfil del historial que se aplica bien. **Tanda sola, nada más dentro.** |
 | **5·4** | El `FormSchema` del PDF subido alimenta las secciones de verdad, con caída a `CANON` si no hay esquema. | Medio | Un PDF de Aire muestra SUS campos. Aquí ya no hay migración: la clave es la correcta desde 5·3. |

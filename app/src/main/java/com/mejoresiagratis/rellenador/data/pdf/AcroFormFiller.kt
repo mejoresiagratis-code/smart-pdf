@@ -65,9 +65,28 @@ class AcroFormFiller @Inject constructor() {
             if (form != null) {
                 form.needAppearances = true
                 val effective = values.toMutableMap()
-                effective.putIfAbsent(ContractFields.RESPONSABLE_KEY, ContractFields.RESPONSABLE_VALUE)
-
                 fun realName(canonical: String) = fieldMapping[canonical] ?: canonical
+
+                // Autorrelleno del responsable comercial (regla heredada de la app web).
+                //
+                // Antes esto era un `putIfAbsent` SIN CONDICIÓN, y eso mentía: con cualquier PDF
+                // que no sea el contrato de Orange el campo no existe en el AcroForm, así que
+                // `getField()` devolvía null y la clave acababa SIEMPRE en `missing`. La app
+                // informaba de un campo que falta y que nunca debió pedir — ruido justo en lo que
+                // hay que observar al conectar el relleno dinámico (fase 5).
+                //
+                // Ahora se inyecta sólo si la plantilla tiene de verdad ese campo, así que en
+                // Orange se comporta exactamente igual que antes y en el resto desaparece.
+                //
+                // Sigue siendo un `putIfAbsent` y no un `put`: `WizardViewModel` ya pre-rellena
+                // este campo con el nombre configurado en Ajustes, y ese valor manda sobre la
+                // constante de aquí. Esto es sólo la red por si se llega a generar el PDF por un
+                // camino que no pasó por la extracción.
+                if (form.getField(realName(ContractFields.RESPONSABLE_KEY)) != null) {
+                    effective.putIfAbsent(
+                        ContractFields.RESPONSABLE_KEY, ContractFields.RESPONSABLE_VALUE
+                    )
+                }
 
                 for ((name, value) in effective) {
                     val field = form.getField(realName(name))
