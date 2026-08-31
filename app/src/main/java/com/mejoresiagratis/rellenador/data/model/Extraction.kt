@@ -100,8 +100,20 @@ object ContractFields {
     // que podamos cambiar aquí: para marcar esa casilla en el PDF real hay que usar
     // exactamente ese valor, tal como CHECKBOX_CIF/CHECKBOX_NIF usan los suyos.
     const val CHECKBOX_NIE = "undefined"
-    const val CHECKBOX_ON = "/On"
-    const val CHECKBOX_OFF = "/Off"
+
+    /**
+     * Valores **lógicos**, no el nombre literal del estado en el PDF.
+     *
+     * Antes valían `/On` y `/Off`, dando por hecho que toda casilla se activa con `/On`. No es
+     * así: el nombre del estado de activación lo elige quien generó el PDF. En los formularios
+     * reales de Aire es `Sí` (Portabilidad, Contrato), `Opción1`/`Opción2` (SEPA) o `0`…`5` (los
+     * grupos de opción del contrato) — en ninguno existe `On`.
+     *
+     * Quien traduce esto al estado real del PDF es `AcroFormFiller.applyButtonValue()`, que lo
+     * lee del propio documento. Aquí sólo se expresa la intención: marcada o sin marcar.
+     */
+    const val CHECKBOX_ON = "On"
+    const val CHECKBOX_OFF = "Off"
 
     /**
      * Devuelve el estado de las 3 casillas de tipo de identificación (CIF/NIF/NIE)

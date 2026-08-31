@@ -6,7 +6,9 @@ import com.mejoresiagratis.rellenador.data.model.SignatureStamp
 import com.tom_roush.pdfbox.pdmodel.PDDocument
 import com.tom_roush.pdfbox.pdmodel.PDPageContentStream
 import com.tom_roush.pdfbox.pdmodel.graphics.image.PDImageXObject
+import com.tom_roush.pdfbox.pdmodel.interactive.form.PDCheckBox
 import com.tom_roush.pdfbox.pdmodel.interactive.form.PDField
+import com.tom_roush.pdfbox.pdmodel.interactive.form.PDRadioButton
 import java.io.InputStream
 import java.io.OutputStream
 import javax.inject.Inject
@@ -74,7 +76,8 @@ class AcroFormFiller @Inject constructor() {
                 }
                 for ((name, value) in checkboxes) {
                     val field = form.getField(realName(name)) ?: continue
-                    runCatching { field.setValue(value); filled++ }
+                    runCatching { applyButtonValue(field, value); filled++ }
+                        .onFailure { missing.add(name) }
                 }
                 if (form.getField(ContractFields.RESPONSABLE_KEY) != null &&
                     distributorSignaturePageIndex < doc.numberOfPages) {
@@ -132,4 +135,58 @@ class AcroFormFiller @Inject constructor() {
     }
 
     private fun collectNames(field: PDField): List<String> = listOf(field.fullyQualifiedName)
+
+    /**
+     * Marca o desmarca una casilla resolviendo **el estado de activación real del PDF**, en vez
+     * de asumir `/On`.
+     *
+     * ── Por qué ──
+     * El nombre del estado "encendido" de una casilla lo elige quien generó el PDF, y no hay
+     * ninguna convención. Verificado sobre los formularios reales de Aire:
+     *
+     * | PDF          | Estados de activación |
+     * |--------------|-----------------------|
+     * | Portabilidad | `Sí`                  |
+     * | Contrato     | `Sí`, y `0`…`5` en los grupos de opción |
+     * | SEPA         | `Opción1`, `Opción2`  |
+     *
+     * `ContractFields.CHECKBOX_ON` valía `/On`, que no existe en ninguno de ellos: en esos PDFs
+     * no se marcaría ni una casilla. Además `PDButton.setValue()` valida contra los estados
+     * declarados y lanza si no encaja, así que el fallo era **silencioso** (el `runCatching` de
+     * arriba no reportaba nada).
+     *
+     * ── Cómo ──
+     * - Casilla: `check()` / `unCheck()`, que es la propia PDFBox quien resuelve el estado bueno.
+     * - Grupo de opción: se busca el valor pedido entre `selectableValues`, tolerando que venga
+     *   con la barra inicial (`/Sí` ↔ `Sí`), que es como se han escrito históricamente las
+     *   constantes de esta clase.
+     * - Cualquier otro tipo: comportamiento anterior.
+     *
+     * Se considera "apagar" tanto `Off` como `/Off` y la cadena vacía.
+     */
+    private fun applyButtonValue(field: PDField, requested: String) {
+        val bare = requested.trim().removePrefix("/")
+        val wantsOff = bare.isEmpty() || bare.equals("Off", ignoreCase = true)
+
+        when (field) {
+            is PDCheckBox -> if (wantsOff) field.unCheck() else field.check()
+
+            is PDRadioButton -> {
+                if (wantsOff) {
+                    field.setValue(OFF_STATE)
+                } else {
+                    val options = runCatching { field.selectableValues }.getOrDefault(emptyList())
+                    val match = options.firstOrNull { it == bare } ?: bare
+                    field.setValue(match)
+                }
+            }
+
+            else -> field.setValue(requested)
+        }
+    }
+
+    private companion object {
+        /** Estado "sin marcar", el único que sí fija la especificación del PDF. */
+        const val OFF_STATE = "Off"
+    }
 }

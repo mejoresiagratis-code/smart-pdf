@@ -8,6 +8,50 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.9.7-estado-real-de-casillas] — 2026-08-31
+
+Primera de las tres tandas en que se ha partido la fase 2 (ver `ROADMAP.md`). Es la única que
+arregla algo **roto hoy**, y no depende del modelo de esquema, así que va primero y sola.
+
+### Corregido — las casillas se marcaban asumiendo `/On`, que casi nunca existe
+`ContractFields.CHECKBOX_ON` valía literalmente `"/On"`, dando por hecho que toda casilla de
+todo PDF se activa con ese estado. No hay tal convención: el nombre del estado de activación lo
+elige quien generó el documento. Verificado leyendo `/AP /N` de los formularios reales de Aire:
+
+| PDF | Estados de activación reales |
+|---|---|
+| Portabilidad Fija | `Sí` |
+| Contrato empresas | `Sí`, y `0`…`5` en los grupos de opción |
+| SEPA | `Opción1`, `Opción2` |
+
+En ninguno existe `On`. Con los PDFs de Aire **no se marcaría ni una sola casilla**.
+
+- Nuevo `AcroFormFiller.applyButtonValue()`: resuelve el estado contra el propio documento.
+  Casillas con `check()`/`unCheck()` (lo resuelve PDFBox); grupos de opción buscando el valor
+  pedido entre `selectableValues`, tolerando la barra inicial (`/Sí` ↔ `Sí`).
+- `CHECKBOX_ON`/`CHECKBOX_OFF` pasan a ser **valores lógicos** (`"On"`/`"Off"`): expresan la
+  intención, y quien traduce al estado real del PDF es el filler. `checkboxStateFor()` no
+  cambia de forma, así que sus dos llamadas en `WizardViewModel` siguen igual.
+
+### Corregido — el fallo al marcar una casilla era invisible
+El bucle de casillas hacía `runCatching { field.setValue(value) }` **sin `onFailure`**. Y
+`PDButton.setValue()` valida el valor contra los estados declarados y lanza si no encaja, así
+que cualquier casilla que no se marcara desaparecía sin dejar rastro: ni en `missingFields`, ni
+en pantalla. Es la misma lección de la v0.9.0 (los fallos tienen que verse), en otro sitio.
+
+- Los fallos de casilla se acumulan ahora en `FillResult.missingFields`, como ya hacían los
+  campos de texto.
+
+### ⚠️ Pendiente de verificar en el móvil
+Estos dos arreglos se cruzan de una forma que conviene mirar con un contrato real: si el
+antiguo `"/On"` tampoco encajaba en el AcroForm del **contrato de Orange**, las casillas
+CIF/NIF/NIE llevarían sin marcarse desde siempre y nadie se habría enterado, precisamente por
+el fallo silencioso. Esta tanda haría que empezaran a marcarse. **No es una regresión** — sería
+un fallo antiguo saliendo a la luz — pero hay que confirmar contra un contrato firmado de
+verdad antes de darlo por bueno.
+
+---
+
 ## [0.9.6-orden-de-lectura-y-contrato-oculto] — 2026-08-31
 
 Tanda de saneamiento **antes** de construir la fase 2 encima. Los esquemas de la fase 2 se
