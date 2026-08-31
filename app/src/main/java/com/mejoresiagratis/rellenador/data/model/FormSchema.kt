@@ -417,6 +417,40 @@ object BuiltinSchemas {
     fun canonicalFor(canonKey: String): String? = CANON_TO_CANONICAL[canonKey]
 
     /**
+     * Inverso de `canonicalFor`: qué nombre real de `CANON` tiene una clave canónica dada,
+     * o null si ninguno la usa. Tanda 5·2 — lo necesita `FillStep` para resolver "el campo
+     * Provincia/Fecha que corresponde a este" sin asumir la convención de nombre `_2` de
+     * Orange (docs/PLAN_FASE_5.md, hallazgo 2.6). Con más de un campo compartiendo canónica
+     * (no ocurre hoy en `CANON`) devolvería cualquiera de ellos; no es el caso de uso.
+     */
+    fun realKeyFor(canonical: String): String? =
+        CANON_TO_CANONICAL.entries.firstOrNull { it.value == canonical }?.key
+
+    /**
+     * Canónica de la Provincia que corresponde a la canónica de un CP dado (mismo bloque:
+     * fiscal↔fiscal, comercio↔comercio). Sólo tiene sentido para CP/Provincia, por eso vive
+     * aquí y no en un mapa genérico "canónica hermana".
+     */
+    private val CP_A_PROVINCIA_CANONICAL: Map<String, String> = mapOf(
+        CanonicalKeys.CP to CanonicalKeys.PROVINCIA,
+        CanonicalKeys.CP_2 to CanonicalKeys.PROVINCIA_2,
+    )
+
+    /**
+     * Nombre real del campo Provincia que acompaña a un CP dado, para la coherencia
+     * CP↔provincia de `FieldValidator`. Antes `FillStep` lo adivinaba con
+     * `if (key.endsWith("_2")) "Provincia_2" else "Provincia"` — una convención de nombre de
+     * Orange que no significa nada para otro AcroForm. Null si `cpFieldName` no tiene
+     * canónica de CP o si no hay campo con la canónica de Provincia correspondiente;
+     * el llamador decide el respaldo.
+     */
+    fun provinciaKeyFor(cpFieldName: String): String? {
+        val cpCanonical = canonicalFor(cpFieldName) ?: return null
+        val provinciaCanonical = CP_A_PROVINCIA_CANONICAL[cpCanonical] ?: return null
+        return realKeyFor(provinciaCanonical)
+    }
+
+    /**
      * Construye el esquema del contrato de Orange a partir de `CANON`.
      *
      * @param fingerprint huella real del PDF; se calcula al cargarlo, no se puede fijar aquí.
