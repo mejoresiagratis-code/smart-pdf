@@ -8,6 +8,43 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.9.8.1-arreglo-de-compilacion] — 2026-08-31
+
+**Las v0.9.7 y v0.9.8 no compilaban.** Ambas se subieron sin build verde, saltándose la regla de
+«una tanda, una versión, un build verde antes de la siguiente». Esta versión las arregla; no
+añade ni cambia funcionalidad.
+
+Lleva número `.1` en vez de `0.9.9` a propósito: la 0.9.9 sigue reservada para la tanda 3 de la
+fase 2 (persistencia y migración), que es la que tiene el riesgo de verdad.
+
+### Corregido — `PDRadioButton.getSelectableValues()` no existe (rompía la v0.9.7)
+`applyButtonValue()` llamaba a ese método para listar las opciones de un grupo. Verificado
+contra el fuente de `pdfbox-android v2.0.27.0`, que es la versión que usa el proyecto:
+`PDRadioButton` sólo expone `getSelectedIndex()` y `getSelectedExportValues()`.
+
+- Reescrito usando únicamente API comprobada en esa versión: `PDCheckBox.check()`/`unCheck()`
+  y `PDButton.getOnValues()`. Como `PDCheckBox` hereda de `PDButton`, la rama de casilla va
+  primero. El comportamiento previsto no cambia.
+
+### Corregido — `FieldOrigin` chocaba con un nombre ya existente (rompía la v0.9.8)
+El enum nuevo se declaró como `FieldOrigin` en `data.model`, pero **ese nombre ya estaba
+cogido**: `ui.wizard.FieldOrigin` es un `data class` con otro significado (de qué documento y
+qué motores salió el valor actual de un campo). `FieldResolver` y `AutoFillPolicy` viven en
+`data.model` y lo importan explícitamente, así que la referencia quedaba ambigua.
+
+- Renombrado a **`ValueOrigin`**, que además describe mejor lo que es: una propiedad de diseño
+  del formulario, no un hecho de la ejecución en curso. Documentado en el propio fichero para
+  que nadie vuelva a caer.
+
+### Por qué se coló
+Ninguno de los dos fallos era detectable leyendo el código: uno dependía de la API real de una
+dependencia y el otro de un nombre declarado en otro paquete. Aun así, ambos eran verificables
+**antes** de subir —el primero consultando el fuente de la librería, el segundo con un `grep` de
+colisiones— y no se hizo. Ambas comprobaciones se han incorporado ya al trabajo de esta
+corrección.
+
+---
+
 ## [0.9.8-modelo-de-esquema] — 2026-08-31
 
 Fase 2, tanda 2 de 3. **Sólo estructuras nuevas**: un fichero añadido, cero ficheros existentes

@@ -4,7 +4,7 @@ Estado real del proyecto y próximas tandas planificadas. Este documento sustitu
 "roadmap" informal que vivía en las notas de continuidad de las sesiones. Se actualiza
 al final de cada tanda con lo que quede pendiente.
 
-Última actualización: **2026-08-31** (versión `0.9.8-modelo-de-esquema`, versionCode 65).
+Última actualización: **2026-08-31** (versión `0.9.8.1-arreglo-de-compilacion`, versionCode 66).
 
 > **Cambio de contexto (2026-08-31):** Pablo ya no trabaja con Orange/MASORANGE. La
 > prioridad pasa a ser multi-contrato de verdad, con los PDFs de la empresa nueva
@@ -67,7 +67,7 @@ tanda con nada. Partida así:
 | Tanda | Versión | Alcance | Riesgo |
 |---|---|---|---|
 | 1 de 3 | `0.9.7` ✅ | Estado real de las casillas (`/AP /N`). Autónoma, no depende del modelo. Arregla algo **roto hoy** con los PDFs de Aire. | Bajo |
-| 2 de 3 | `0.9.8` ✅ | El modelo: `FormSchema` / `FormSection` / `FormField` / `FieldOrigin`, y el esquema `BUILTIN` derivado de `CANON`. Estructuras nuevas, nada que romper. | Bajo |
+| 2 de 3 | `0.9.8` ✅ | El modelo: `FormSchema` / `FormSection` / `FormField` / `ValueOrigin`, y el esquema `BUILTIN` derivado de `CANON`. Estructuras nuevas, nada que romper. | Bajo |
 | 3 de 3 | `0.9.9` | Persistencia y migración: convertir los `Map<canónica,real>` guardados al formato nuevo con `schemaVersion`, y el contenedor de expediente (lista de 1). | **Alto** |
 
 La tanda 3 toca datos de trabajo reales y es la que ya dolió en la 0.8.0 con el índice de
@@ -103,7 +103,8 @@ paso. Build verde y verificación en el móvil antes de seguir.
 | **0.7.9** | **Tipo por IA (visión)** para fotos/escaneos sin capa de texto: campo `tipo_documento` en el prompt (vocabulario cerrado), callback `onDocTypeDetected`; la detección local tiene prioridad. ⚠️ Pendiente replicar `tipo_documento` en el prompt de la app web (paridad). |
 | **0.9.3** | El prompt lleva los **campos reales del PDF cargado** en vez de la lista fija `CANON` (causa de que se «olvidaran» campos), y una **guía de campos** cuando el contrato usa nombres propios — copiada literal de `tplHint` de la web, así que la paridad se mantiene. |
 | **0.9.4** | **Fase 1 del roadmap multi-formulario** (`roadmap-multiformulario.html`): `PdfFieldInspector`, lee los widgets del AcroForm en orden de lectura real (página → fila con tolerancia 6pt → columna), coordenadas origen arriba-izquierda. Verificado contra el Modelo 145 (60 campos). Utilidad pura, sin UI ni cambios de comportamiento — base para la fase 2 (esquema dinámico). |
-| **0.9.8** | **Fase 2 · tanda 2 de 3**: `FormSchema.kt` — modelo de esquema dinámico. `CanonicalKeys` (vocabulario transversal del expediente), `FieldOrigin` (DOCUMENTO/AJUSTES/PLATAFORMA/CATALOGO/CALCULADO/FIRMA), `FormField` con `onState`, `optionLabel` y `combGroup`, `FormSection` con SIMPLE/TABLE/REPEATED_BLOCK, `TableColumn`/`TableRow` definidos por geometría, y `BuiltinSchemas.orangeDistribution()` derivado de `CANON`. Sólo estructuras nuevas: no se persiste ni se usa aún. |
+| **0.9.8.1** | **Arreglo de compilación**: las 0.9.7 y 0.9.8 se subieron sin build verde y no compilaban. `PDRadioButton.getSelectableValues()` no existe en `pdfbox-android 2.0.27.0` (reescrito con `PDCheckBox.check()`/`unCheck()` y `PDButton.getOnValues()`), y el enum `FieldOrigin` chocaba con el `data class` homónimo de `ui.wizard` que importan `FieldResolver` y `AutoFillPolicy` (renombrado a `ValueOrigin`). |
+| **0.9.8** | **Fase 2 · tanda 2 de 3**: `FormSchema.kt` — modelo de esquema dinámico. `CanonicalKeys` (vocabulario transversal del expediente), `ValueOrigin` (DOCUMENTO/AJUSTES/PLATAFORMA/CATALOGO/CALCULADO/FIRMA), `FormField` con `onState`, `optionLabel` y `combGroup`, `FormSection` con SIMPLE/TABLE/REPEATED_BLOCK, `TableColumn`/`TableRow` definidos por geometría, y `BuiltinSchemas.orangeDistribution()` derivado de `CANON`. Sólo estructuras nuevas: no se persiste ni se usa aún. |
 | **0.9.7** | **Fase 2 · tanda 1 de 3**: las casillas se marcaban asumiendo el estado `/On`, que no existe en ninguno de los PDFs de Aire (usan `Sí`, `Opción1/2`, `0`…`5`). Nuevo `applyButtonValue()` que resuelve el estado contra el propio documento. Además, el fallo al marcar una casilla era silencioso (`runCatching` sin `onFailure`) y ahora se reporta en `missingFields`. |
 | **0.9.6** | **Saneamiento previo a la fase 2**: corregido el orden de lectura del `PdfFieldInspector` (agrupaba filas troceando el eje Y en tramos fijos y partía filas; detectado en la fila del BIC del SEPA de Aire, arreglado agrupando por hueco respecto al ancla de fila). Verificado contra los 4 formularios de Aire: 0 posiciones cambian en el contrato de 488 campos. Además, la tarjeta del contrato Orange se oculta (bandera `SHOW_LEGACY_DEFAULT_CONTRACT`) sin borrar el camino `DEFAULT`, que sigue funcionando si el PDF se sube. |
 | **0.9.5** | **Desacoplo de Orange + paleta Aire**: paleta de marca muestreada del PDF real de Aire (`#9F0BFF`/`#00095A`/`#ECD0FF`); el contrato Orange pasa de "por defecto" a "heredado" (sigue funcionando igual, ya no es la opción sugerida); copy de UI y prompt genericizados. Cero cambios en extracción/relleno/firma. Analizado `Contrato_empresas.pdf` de Aire: 481 campos AcroForm reales, incluye 4 campos `/Sig` (tipo nuevo, sin manejar hoy — relevante para fase 6) y bloques de nombres autogenerados sin etiqueta (confirma que la fase 3 de etiquetado por visión es imprescindible). |

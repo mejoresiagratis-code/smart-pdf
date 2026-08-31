@@ -6,9 +6,9 @@ import com.mejoresiagratis.rellenador.data.model.SignatureStamp
 import com.tom_roush.pdfbox.pdmodel.PDDocument
 import com.tom_roush.pdfbox.pdmodel.PDPageContentStream
 import com.tom_roush.pdfbox.pdmodel.graphics.image.PDImageXObject
+import com.tom_roush.pdfbox.pdmodel.interactive.form.PDButton
 import com.tom_roush.pdfbox.pdmodel.interactive.form.PDCheckBox
 import com.tom_roush.pdfbox.pdmodel.interactive.form.PDField
-import com.tom_roush.pdfbox.pdmodel.interactive.form.PDRadioButton
 import java.io.InputStream
 import java.io.OutputStream
 import javax.inject.Inject
@@ -157,27 +157,32 @@ class AcroFormFiller @Inject constructor() {
      *
      * ── Cómo ──
      * - Casilla: `check()` / `unCheck()`, que es la propia PDFBox quien resuelve el estado bueno.
-     * - Grupo de opción: se busca el valor pedido entre `selectableValues`, tolerando que venga
-     *   con la barra inicial (`/Sí` ↔ `Sí`), que es como se han escrito históricamente las
-     *   constantes de esta clase.
-     * - Cualquier otro tipo: comportamiento anterior.
+     * - Cualquier otro botón (grupos de opción): se busca el valor pedido entre `onValues`,
+     *   tolerando que venga con la barra inicial (`/Sí` ↔ `Sí`), que es como se han escrito
+     *   históricamente las constantes de esta clase.
+     * - Cualquier otro tipo de campo: comportamiento anterior.
      *
      * Se considera "apagar" tanto `Off` como `/Off` y la cadena vacía.
+     *
+     * Sólo se usa API verificada contra el fuente de `pdfbox-android 2.0.27.0`: `PDCheckBox`
+     * expone `check()`/`unCheck()`/`getOnValue()` y `PDButton` expone `getOnValues()`. Un
+     * primer intento usó `PDRadioButton.getSelectableValues()`, que **no existe en esta
+     * versión** y tumbó el build.
      */
     private fun applyButtonValue(field: PDField, requested: String) {
         val bare = requested.trim().removePrefix("/")
-        val wantsOff = bare.isEmpty() || bare.equals("Off", ignoreCase = true)
+        val wantsOff = bare.isEmpty() || bare.equals(OFF_STATE, ignoreCase = true)
 
         when (field) {
+            // PDCheckBox hereda de PDButton, así que va primero.
             is PDCheckBox -> if (wantsOff) field.unCheck() else field.check()
 
-            is PDRadioButton -> {
+            is PDButton -> {
                 if (wantsOff) {
                     field.setValue(OFF_STATE)
                 } else {
-                    val options = runCatching { field.selectableValues }.getOrDefault(emptyList())
-                    val match = options.firstOrNull { it == bare } ?: bare
-                    field.setValue(match)
+                    val onValues = runCatching { field.onValues }.getOrDefault(emptySet())
+                    field.setValue(onValues.firstOrNull { it == bare } ?: bare)
                 }
             }
 

@@ -76,9 +76,17 @@ object CanonicalKeys {
 /**
  * De dónde sale el valor de un campo. Determina si la IA debe proponerlo, si se autorrellena
  * solo, o si hay que dejarlo en manos del usuario.
+ *
+ * Se llama `ValueOrigin` y no `FieldOrigin` porque **ese nombre ya está cogido**:
+ * `ui.wizard.FieldOrigin` es un `data class` con otro significado — de qué documento concreto y
+ * qué motores salió el valor que hay ahora mismo en un campo. `FieldResolver` y
+ * `AutoFillPolicy` viven en este paquete y lo importan, así que declarar aquí otro
+ * `FieldOrigin` volvía ambigua la referencia (fue lo que tumbó el build de la v0.9.8).
+ * Son dos conceptos distintos: aquél es un hecho de esta ejecución, éste es una propiedad de
+ * diseño del formulario.
  */
 @Serializable
-enum class FieldOrigin {
+enum class ValueOrigin {
     /** Se extrae de la documentación aportada por el cliente. Es el caso normal. */
     DOCUMENTO,
 
@@ -162,7 +170,7 @@ data class FormField(
     val label: String,
 
     val kind: FieldKind = FieldKind.TEXT,
-    val origin: FieldOrigin = FieldOrigin.DOCUMENTO,
+    val origin: ValueOrigin = ValueOrigin.DOCUMENTO,
 
     /** Clave de [CanonicalKeys] a la que engancha, si comparte dato con otros formularios. */
     val canonical: String? = null,
@@ -227,7 +235,7 @@ data class TableColumn(
     val label: String,
     val x: Float,
     val kind: FieldKind = FieldKind.TEXT,
-    val origin: FieldOrigin = FieldOrigin.CATALOGO,
+    val origin: ValueOrigin = ValueOrigin.CATALOGO,
     val labelSource: LabelSource = LabelSource.NOMBRE_REAL,
 )
 
@@ -374,8 +382,8 @@ object BuiltinSchemas {
                 label = canon.label,
                 kind = FieldKind.TEXT,
                 origin = when (canon.key) {
-                    in ContractFields.DATE_KEYS -> FieldOrigin.FIRMA
-                    else -> FieldOrigin.DOCUMENTO
+                    in ContractFields.DATE_KEYS -> ValueOrigin.FIRMA
+                    else -> ValueOrigin.DOCUMENTO
                 },
                 canonical = CANON_TO_CANONICAL[canon.key],
                 order = i,
@@ -383,12 +391,12 @@ object BuiltinSchemas {
         }
 
         // El responsable comercial es constante del distribuidor, no dato del cliente: es el
-        // caso que dio origen a FieldOrigin.AJUSTES.
+        // caso que dio origen a ValueOrigin.AJUSTES.
         val responsable = FormField(
             name = ContractFields.RESPONSABLE_KEY,
             label = "Responsable comercial",
             kind = FieldKind.TEXT,
-            origin = FieldOrigin.AJUSTES,
+            origin = ValueOrigin.AJUSTES,
             order = datos.size,
         )
 
@@ -405,7 +413,7 @@ object BuiltinSchemas {
                 name = name,
                 label = "Tipo de identificación · $label",
                 kind = FieldKind.CHECKBOX,
-                origin = FieldOrigin.DOCUMENTO,
+                origin = ValueOrigin.DOCUMENTO,
                 canonical = CanonicalKeys.TIPO_IDENTIFICACION,
                 order = datos.size + 1 + i,
             )
