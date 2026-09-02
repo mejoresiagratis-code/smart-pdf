@@ -1,6 +1,7 @@
 package com.mejoresiagratis.rellenador.ui.wizard
 
 import com.mejoresiagratis.rellenador.data.model.ContractFields
+import com.mejoresiagratis.rellenador.data.model.FieldKeys
 
 /**
  * Una sección del paso de Relleno: un título y las claves de campo que agrupa.
@@ -21,7 +22,13 @@ import com.mejoresiagratis.rellenador.data.model.ContractFields
  */
 data class FillSection(
     val title: String,
-    /** Claves de campo, en el orden en que se pintan. */
+    /**
+     * **Nombres reales** de los campos del PDF que se está rellenando, en el orden en que se
+     * pintan. Desde la tanda 5·3 son nombres reales y no claves de `CANON`: es la misma clave con
+     * la que se indexan `fieldValues` y compañía, así que la pantalla busca los valores donde de
+     * verdad están. Con el contrato de Orange coinciden, porque allí la clave de `CANON` YA es el
+     * nombre real del campo.
+     */
     val keys: List<String>,
     /** Muestra el atajo «copiar de la dirección fiscal». Sólo la sección de comercio/PdV. */
     val showCopyFiscal: Boolean = false,
@@ -35,7 +42,7 @@ data class FillSection(
  * `FillStep` las pinta aparte, como una fila compacta día/mes/año en vez de tres campos apilados.
  * Generalizar ese caso especial es la tanda 5·2.
  */
-fun canonFillSections(): List<FillSection> = listOf(
+fun canonFillSections(keys: FieldKeys = FieldKeys.IDENTITY): List<FillSection> = listOf(
     FillSection(
         "Empresa / Identificación",
         listOf(
@@ -44,16 +51,19 @@ fun canonFillSections(): List<FillSection> = listOf(
             // Añadido tras auditoría contra el AcroForm real y la web (existía en el PDF y
             // en el prompt de IA, pero no estaba conectado en Android).
             "Actividad principal del negocio",
-        ),
+        ).map(keys::real),
     ),
-    FillSection("Dirección fiscal", listOf("Dirección", "CP", "Población", "Provincia")),
+    FillSection("Dirección fiscal",
+        listOf("Dirección", "CP", "Población", "Provincia").map(keys::real)),
     FillSection(
         "Dirección comercio / PdV",
-        listOf("Dirección_2", "CP_2", "Población_2", "Provincia_2"),
+        listOf("Dirección_2", "CP_2", "Población_2", "Provincia_2").map(keys::real),
         showCopyFiscal = true,
     ),
-    FillSection("Contacto", listOf("Teléfono", "Email Comercial", "Email  Facturación")),
-    FillSection("Datos bancarios", listOf("Datos bancarios del DISTRIBUIDOR")),
+    FillSection("Contacto",
+        listOf("Teléfono", "Email Comercial", "Email  Facturación").map(keys::real)),
+    FillSection("Datos bancarios",
+        listOf("Datos bancarios del DISTRIBUIDOR").map(keys::real)),
 )
 
 /**
@@ -65,5 +75,8 @@ fun canonFillSections(): List<FillSection> = listOf(
  * secciones + 3 de fecha = 21 = `CANON.size` (verificado) —, así que esta tanda no cambia lo que
  * se ve, sólo deja de depender de una constante ajena a lo que se pinta.
  */
-fun countedKeys(sections: List<FillSection>): List<String> =
-    sections.flatMap { it.keys } + ContractFields.DATE_KEYS
+fun countedKeys(
+    sections: List<FillSection>,
+    keys: FieldKeys = FieldKeys.IDENTITY,
+): List<String> =
+    sections.flatMap { it.keys } + ContractFields.DATE_KEYS.map(keys::real)

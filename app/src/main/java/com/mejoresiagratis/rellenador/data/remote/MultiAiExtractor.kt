@@ -127,8 +127,13 @@ class MultiAiExtractor @Inject constructor(
         val tipoVotes = LinkedHashMap<String, Int>()   // votación de tipo (fiel a la web)
         val dead = mutableSetOf<AiProvider>()          // motores que ya fallaron esta sesión (short-circuit)
 
+        // Tanda 5·3 — `key` es el nombre REAL del campo (desde la 0.9.3 el prompt pide los
+        // nombres del PDF cargado), así que la canónica que gobierna la normalización hay que
+        // resolverla con el mapeo; `normVal` sola sólo reconocería los nombres de Orange.
+        val keys = com.mejoresiagratis.rellenador.data.model.FieldKeys(fieldMapping)
+
         fun track(key: String, value: String?, engine: String) {
-            val v = FieldNormalizer.normVal(key, value)
+            val v = FieldNormalizer.normVal(key, value, canonicalHint = keys.canonicalOf(key))
             if (v.isEmpty()) return
             agg.getOrPut(key) { LinkedHashMap() }.getOrPut(v) { mutableSetOf() }.add(engine)
         }

@@ -266,6 +266,16 @@ class WizardViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Traductor `clave de CANON -> nombre real` del PDF que se está rellenando (tanda 5·3).
+     *
+     * Se construye del `fieldMapping` actual, que es vacío para el contrato de Orange — y
+     * entonces `FieldKeys` es la identidad y nada cambia. En la tanda 5·4 la fuente pasará a ser
+     * el `FormSchema` del PDF y este método será el único sitio que haya que tocar.
+     */
+    fun fieldKeys(): com.mejoresiagratis.rellenador.data.model.FieldKeys =
+        com.mejoresiagratis.rellenador.data.model.FieldKeys(_state.value.fieldMapping)
+
     /** Persiste el mapeo actual bajo la huella de la plantilla, para reaplicarlo la próxima vez. */
     fun rememberTemplateMapping() {
         val s = _state.value
@@ -278,8 +288,12 @@ class WizardViewModel @Inject constructor(
         label = label,
         guardado = java.time.Instant.now().toString(),
         fingerprint = _state.value.templateFingerprint,
+        // Tanda 5·3 — `fieldValues` ya está por nombre real, así que el perfil nace en la
+        // versión nueva. `fieldMapping` se sigue guardando: es lo que permite migrar los perfiles
+        // ANTIGUOS al leerlos, y sirve de constancia de con qué PDF se hizo.
         campos = _state.value.fieldValues.filterValues { it.isNotBlank() },
-        fieldMapping = _state.value.fieldMapping
+        fieldMapping = _state.value.fieldMapping,
+        version = ContractProfile.VERSION,
     )
 
     fun exportProfileJson(label: String): String = prefs.exportProfileJson(buildProfile(label))
@@ -305,7 +319,8 @@ class WizardViewModel @Inject constructor(
 
     fun importProfileFromJson(raw: String): Boolean {
         val profile = prefs.importProfileJson(raw) ?: return false
-        applyProfile(profile)
+        // Un perfil importado de un fichero puede venir de una versión anterior de la app.
+        applyProfile(profile.migrated())
         return true
     }
 
@@ -491,14 +506,32 @@ class WizardViewModel @Inject constructor(
             val prefill = result.proposals.associate { fp ->
                 fp.fieldKey to (fp.candidates.firstOrNull()?.value ?: "")
             }.toMutableMap()
-            // Regla fija de la web.
-            prefill[ContractFields.RESPONSABLE_KEY] = _state.value.responsableComercial
+            // Tanda 5·3 — estos dos valores los pone la app, no salen de ningún documento, así
+            // que hay que escribirlos bajo el NOMBRE REAL del campo en el PDF actual. Antes se
+            // metían con la clave de Orange incluso con un PDF ajeno: con `fieldMapping` acertaban
+            // al rellenar (por la traducción de `AcroFormFiller`) pero contaminaban `fieldValues`
+            // con claves que no eran del PDF, y era la mitad del fallo que esta tanda arregla.
+            // `realIfPresent` además NO los escribe si el formulario no tiene ese campo — el
+            // mismo problema que la 5·0 arregló para el responsable, que seguía vivo en las fechas.
+            val keys = fieldKeys()
+            val known = _state.value.userFieldNames
+            keys.realIfPresent(ContractFields.RESPONSABLE_KEY, known)?.let { realKey ->
+                prefill[realKey] = _state.value.responsableComercial
+            }
             // La fecha del contrato es la de HOY (día de la firma), nunca la que aparezca
             // en los documentos aportados. La IA extraía la fecha del censal o del 036
             // (p. ej. "23 de julio de 2026") y, como el campo ya venía con valor, el
             // autorrelleno lo respetaba y el contrato salía fechado en el pasado.
-            ContractFields.DATE_KEYS.forEach { prefill.remove(it) }
-            prefill.putAll(DateAutofill.values(prefill))
+            val fechaKeys = ContractFields.DATE_KEYS.associateWith { keys.realIfPresent(it, known) }
+            fechaKeys.values.filterNotNull().forEach { prefill.remove(it) }
+            val fechaValues = DateAutofill.values(
+                ContractFields.DATE_KEYS.associateWith { canonKey ->
+                    fechaKeys[canonKey]?.let { prefill[it] } ?: ""
+                }
+            )
+            fechaValues.forEach { (canonKey, value) ->
+                fechaKeys[canonKey]?.let { prefill[it] = value }
+            }
 
             // v0.8.0: la extracción va DIRECTA a Relleno (ya no existe Revisión IA).
             // Aquí se decide qué se autorrellena y qué queda marcado para decisión.
@@ -506,6 +539,7 @@ class WizardViewModel @Inject constructor(
                 proposals = result.proposals,
                 packages = result.packages,
                 alreadyFilled = prefill,
+                keys = keys,
             )
             prefill.putAll(resolved.autoValues)
 
@@ -540,8 +574,9 @@ class WizardViewModel @Inject constructor(
 
     // ── Relleno unificado (v0.8.0) ───────────────────────────────────────────
 
-    private fun labelOf(key: String): String =
-        ContractFields.CANON.firstOrNull { it.key == key }?.label ?: key
+    /** Etiqueta legible del campo. Tanda 5·3 — `key` es el nombre real, así que la resuelve
+     *  `FieldKeys` (nombre real -> clave de `CANON` -> etiqueta) en vez de buscarla en `CANON`. */
+    private fun labelOf(key: String): String = fieldKeys().labelOf(key)
 
     /**
      * Aplica un cambio de campos registrando el estado ANTERIOR para poder deshacerlo.
@@ -650,9 +685,13 @@ class WizardViewModel @Inject constructor(
         val s = _state.value
         // Tanda 5·2b — los pares fiscal→comercio se resuelven por canónica en vez de
         // concatenar "_2" al nombre (docs/PLAN_FASE_5.md, hallazgo 2.6).
+        // Tanda 5·3 — los dos extremos del par se traducen al nombre real del PDF actual.
+        val keys = fieldKeys()
         val delta = com.mejoresiagratis.rellenador.data.model.BuiltinSchemas
             .fiscalToComercioKeyPairs()
-            .mapNotNull { (from, to) ->
+            .mapNotNull { (fromCanon, toCanon) ->
+                val from = keys.real(fromCanon)
+                val to = keys.realIfPresent(toCanon, s.userFieldNames) ?: return@mapNotNull null
                 s.fieldValues[from]?.takeIf { it.isNotBlank() }?.let { to to it }
             }.toMap()
         if (delta.isNotEmpty()) {
@@ -975,9 +1014,14 @@ class WizardViewModel @Inject constructor(
                         values = s.fieldValues,
                         signature = s.signature,
                         stamps = s.stamps,
-                        checkboxes = com.mejoresiagratis.rellenador.data.model.ContractFields
-                            .checkboxStateFor(s.tipoIdentificacion),
-                        fieldMapping = if (s.contractSource == ContractSource.USER) s.fieldMapping else emptyMap()
+                        // Tanda 5·3 — las casillas también van por nombre real, y `fieldMapping`
+                        // ya NO se pasa: `values` y `checkboxes` llegan con la clave definitiva,
+                        // así que `AcroFormFiller` no tiene nada que traducir. Es lo que el plan
+                        // llamaba «dejar de necesitar la capa de traducción».
+                        checkboxes = fieldKeys().reindex(
+                            com.mejoresiagratis.rellenador.data.model.ContractFields
+                                .checkboxStateFor(s.tipoIdentificacion)
+                        )
                     )
                 }
             }.getOrElse {
@@ -1016,9 +1060,11 @@ class WizardViewModel @Inject constructor(
                     values = s.fieldValues,
                     signature = s.signature,
                     stamps = s.stamps,
-                    checkboxes = com.mejoresiagratis.rellenador.data.model.ContractFields
-                        .checkboxStateFor(s.tipoIdentificacion),
-                    fieldMapping = if (s.contractSource == ContractSource.USER) s.fieldMapping else emptyMap()
+                    // Tanda 5·3 — ver la nota de `generatePdf`.
+                    checkboxes = fieldKeys().reindex(
+                        com.mejoresiagratis.rellenador.data.model.ContractFields
+                            .checkboxStateFor(s.tipoIdentificacion)
+                    )
                 )
                 previewRenderer?.close()
                 PdfPageRenderer(file)

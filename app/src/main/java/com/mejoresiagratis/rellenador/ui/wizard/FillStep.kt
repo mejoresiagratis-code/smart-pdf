@@ -31,9 +31,8 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import com.mejoresiagratis.rellenador.data.model.BuiltinSchemas
-import com.mejoresiagratis.rellenador.data.model.CanonField
 import com.mejoresiagratis.rellenador.data.model.CanonicalKeys
-import com.mejoresiagratis.rellenador.data.model.ContractFields
+import com.mejoresiagratis.rellenador.data.model.FieldKeys
 import com.mejoresiagratis.rellenador.data.validation.FieldNormalizer
 import com.mejoresiagratis.rellenador.data.validation.FieldValidator
 import com.mejoresiagratis.rellenador.ui.components.ExpressiveButton
@@ -43,24 +42,30 @@ import com.mejoresiagratis.rellenador.ui.components.ExpressiveButton
 // claves (Fecha/de/año) se muestran como una sola fila compacta día/mes/año, no
 // como 3 campos apilados sueltos.
 //
-// Tanda 5·2 — antes era el literal `setOf("Fecha", "de", "año")`, acoplado al nombre real de
-// Orange (docs/PLAN_FASE_5.md, hallazgo 2.6). Ahora sale de las 3 canónicas de fecha vía
-// `BuiltinSchemas.realKeyFor`, y sólo cae en el literal si esa vuelta no resuelve (no debería
-// pasar con `CANON`, que sí las tiene mapeadas; es red de seguridad, no el camino esperado).
-private val FECHA_KEYS: Set<String> =
+// Tanda 5·2 — las tres claves de fecha salían de las canónicas vía `BuiltinSchemas.realKeyFor`
+// en vez del literal `setOf("Fecha", "de", "año")`.
+// Tanda 5·3 — y ya no pueden ser una constante de fichero: dependen del PDF que se esté
+// rellenando, así que se resuelven con el `FieldKeys` que llega por parámetro.
+private fun fechaKeysOf(keys: FieldKeys): Set<String> =
     listOf(CanonicalKeys.FECHA_DIA, CanonicalKeys.FECHA_MES, CanonicalKeys.FECHA_ANIO)
         .mapNotNull { BuiltinSchemas.realKeyFor(it) }
+        .map(keys::real)
         .toSet()
-        .ifEmpty { setOf("Fecha", "de", "año") }
 
 /**
- * Tanda 5·2 — nombre real del campo Provincia que corresponde a un CP dado, resuelto por
- * canónica (`BuiltinSchemas.provinciaKeyFor`) en vez de por la convención de nombre `_2` de
- * Orange (docs/PLAN_FASE_5.md, hallazgo 2.6). Cae en la convención de nombre sólo si la
- * canónica no resuelve (no debería pasar con `CANON`; red de seguridad).
+ * Nombre real del campo Provincia que corresponde a un CP dado.
+ *
+ * Tanda 5·2 — se resolvía por canónica (`BuiltinSchemas.provinciaKeyFor`) en vez de por la
+ * convención de nombre `_2` de Orange (docs/PLAN_FASE_5.md, hallazgo 2.6).
+ * Tanda 5·3 — y además se traduce al nombre real del PDF actual, porque desde esta tanda `key`
+ * ya es un nombre real y el hermano que hay que leer también tiene que serlo.
  */
-private fun provinciaKeyFor(key: String): String =
-    BuiltinSchemas.provinciaKeyFor(key) ?: if (key.endsWith("_2")) "Provincia_2" else "Provincia"
+private fun provinciaKeyFor(key: String, keys: FieldKeys): String {
+    val canonKey = keys.canonKeyOf(key) ?: key
+    val provinciaCanon = BuiltinSchemas.provinciaKeyFor(canonKey)
+        ?: if (canonKey.endsWith("_2")) "Provincia_2" else "Provincia"
+    return keys.real(provinciaCanon)
+}
 
 // Las secciones ya no viven aquí: se reciben como parámetro. Ver `FillSections.kt` y la tanda
 // 5·1 de `docs/PLAN_FASE_5.md`.
@@ -83,6 +88,11 @@ fun FillStep(
      * ([canonFillSections]); en la tanda 5·4 vendrán del `FormSchema` del PDF subido.
      */
     sections: List<FillSection>,
+    /**
+     * Traductor entre claves de `CANON` y los nombres reales del PDF actual (tanda 5·3).
+     * `FieldKeys.IDENTITY` para el contrato de Orange, donde ambas coinciden.
+     */
+    keys: FieldKeys = FieldKeys.IDENTITY,
 ) {
     var showHistory by remember { mutableStateOf(false) }
     if (showHistory) HistoryPanel(vm, onDismiss = { showHistory = false })
@@ -104,20 +114,26 @@ fun FillStep(
         }
     }
 
-    val canonByKey = remember { ContractFields.CANON.associateBy { it.key } }
+    // Tanda 5·3 — la etiqueta ya no se busca en `CANON` por la clave (que ahora es un nombre real
+    // que puede no estar en `CANON`), sino que la resuelve `FieldKeys`: nombre real -> clave de
+    // `CANON` -> etiqueta. Si el campo no está mapeado, se muestra su propio nombre.
+    val fechaKeys = remember(keys) { fechaKeysOf(keys) }
 
     fun isFieldOk(key: String): Boolean {
         val v = state.fieldValues[key]
         if (v.isNullOrBlank()) return false
-        val provKey = provinciaKeyFor(key)
-        val result = FieldValidator.validate(key, v, state.tipoIdentificacion, state.fieldValues[provKey])
+        val result = FieldValidator.validate(
+            key, v, state.tipoIdentificacion,
+            state.fieldValues[provinciaKeyFor(key, keys)],
+            canonicalHint = keys.canonicalOf(key),
+        )
         return result?.ok != false
     }
 
     // Se cuenta lo que hay en pantalla, no `CANON.size`: con las secciones parametrizadas, medir
     // contra una constante ajena daría un progreso que no corresponde a lo que se ve. Con `CANON`
     // el número es el mismo (21), así que aquí no cambia nada visible.
-    val counted = remember(sections) { countedKeys(sections) }
+    val counted = remember(sections, keys) { countedKeys(sections, keys) }
     val totalFields = counted.size
     val filledFields = counted.count { isFieldOk(it) }
 
@@ -355,7 +371,7 @@ fun FillStep(
                             }
                         }
                         section.keys.forEach { key ->
-                            FieldRow(key, canonByKey[key], state, vm, ::confirm)
+                            FieldRow(key, keys, state, vm, ::confirm)
                         }
                     }
                 }
@@ -363,7 +379,7 @@ fun FillStep(
 
             // Fecha — fila compacta día/mes/año en vez de 3 campos apilados.
             item {
-                val fechaComplete = FECHA_KEYS.all { isFieldOk(it) }
+                val fechaComplete = fechaKeys.all { isFieldOk(it) }
                 Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.tertiaryContainer,
                     modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -381,9 +397,9 @@ fun FillStep(
                             }
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            CompactDateField("Día", "Fecha", state, vm, Modifier.weight(1f))
-                            CompactDateField("Mes", "de", state, vm, Modifier.weight(1f))
-                            CompactDateField("Año", "año", state, vm, Modifier.weight(1f))
+                            CompactDateField("Día", keys.real("Fecha"), state, vm, Modifier.weight(1f))
+                            CompactDateField("Mes", keys.real("de"), state, vm, Modifier.weight(1f))
+                            CompactDateField("Año", keys.real("año"), state, vm, Modifier.weight(1f))
                         }
                     }
                 }
@@ -430,14 +446,22 @@ fun FillStep(
 @Composable
 private fun FieldRow(
     key: String,
-    field: CanonField?,
+    keys: FieldKeys,
     state: WizardUiState,
     vm: WizardViewModel,
     onConfirm: (String) -> Unit = {},
 ) {
     val value = state.fieldValues[key] ?: ""
-    val provKey = provinciaKeyFor(key)
-    val result = FieldValidator.validate(key, value, state.tipoIdentificacion, state.fieldValues[provKey])
+    // Tanda 5·3 — `key` es el nombre REAL del campo. La etiqueta y la canónica (que gobierna
+    // validación y teclado) se resuelven con `FieldKeys`, porque el nombre real de un PDF que no
+    // sea el de Orange no está en `CANON`.
+    val label = keys.labelOf(key)
+    val canonicalHint = keys.canonicalOf(key)
+    val result = FieldValidator.validate(
+        key, value, state.tipoIdentificacion,
+        state.fieldValues[provinciaKeyFor(key, keys)],
+        canonicalHint = canonicalHint,
+    )
     val isError = result?.ok == false
 
     // v0.8.0 — el paso de Relleno absorbe la antigua "Revisión IA":
@@ -471,10 +495,10 @@ private fun FieldRow(
         OutlinedTextField(
             value = value,
             onValueChange = { vm.setFieldValue(key, it) },
-            label = { Text(field?.label ?: key) },
+            label = { Text(label) },
             singleLine = true,
             isError = isError || fState == FieldState.CONFLICT,
-            keyboardOptions = keyboardFor(key),
+            keyboardOptions = keyboardFor(key, canonicalHint),
             placeholder = if (needsDecision) {
                 { Text(if (fState == FieldState.CONFLICT) "Elige una opción" else "Revisa la procedencia") }
             } else null,
@@ -549,18 +573,18 @@ private fun FieldRow(
 
     if (showSheet) {
         CandidateSheet(
-            fieldLabel = field?.label ?: key,
+            fieldLabel = label,
             state = fState,
             candidates = candidates,
             onPick = {
                 vm.chooseCandidate(key, it)
                 showSheet = false
-                onConfirm("${field?.label ?: key}: ${it.value}")
+                onConfirm("$label: ${it.value}")
             },
             onManual = {
                 vm.dismissField(key)
                 showSheet = false
-                onConfirm("${field?.label ?: key}: lo rellenas a mano")
+                onConfirm("$label: lo rellenas a mano")
             },
             onDismiss = { showSheet = false },
         )
@@ -684,8 +708,8 @@ private fun CompactDateField(label: String, key: String, state: WizardUiState, v
  * equivocado no corrompe datos, pero con Aire salían todos como texto: teclear un CP o un
  * teléfono en el teclado alfabético es peor de lo que parece en un formulario de 481 campos.
  */
-private fun keyboardFor(key: String): KeyboardOptions {
-    val canonical = BuiltinSchemas.canonicalFor(key)
+private fun keyboardFor(key: String, canonicalHint: String? = null): KeyboardOptions {
+    val canonical = canonicalHint ?: BuiltinSchemas.canonicalFor(key)
     val b by lazy { FieldNormalizer.norm(key.substringBefore("_")) }
     val type = when {
         canonical == CanonicalKeys.TELEFONO || (canonical == null && b == "telefono") ->

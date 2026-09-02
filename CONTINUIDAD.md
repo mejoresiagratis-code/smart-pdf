@@ -4,8 +4,8 @@
 > o su contenido; con eso y el repo tiene el contexto completo. **No hace falta reenviar los
 > PDFs de Aire**: su análisis está en `docs/ANALISIS_FORMULARIOS_AIRE.md`.
 >
-> **Actualizado**: 2026-08-31, tras `0.10.8-fase5-heuristicas-canonicas` (⚠️ pendiente de verde).
-> La 0.10.7 SÍ salió verde. Este documento **caduca**: la primera regla de abajo
+> **Actualizado**: 2026-08-31, tras `0.10.9-fase5-clave-real` (⚠️ pendiente de verde).
+> La 0.10.8 SÍ salió verde. Este documento **caduca**: la primera regla de abajo
 > existe precisamente porque lo que aquí se afirma puede estar viejo.
 
 Habla en **español de España**.
@@ -22,26 +22,30 @@ git clone https://github.com/mejoresiagratis-code/smart-pdf
 cd smart-pdf && git log --oneline -8
 ```
 
-El último commit **de código** debería ser `0.10.8-fase5-heuristicas-canonicas` · versionCode 78.
+El último commit **de código** debería ser `0.10.9-fase5-clave-real` · versionCode 79.
 Por encima puede haber commits solo de documentación, que no suben versión. Si el último código
 no es ése, este documento está desfasado: manda `git log` y la cabecera del `CHANGELOG.md`.
 
 ### ⚠️ Build pendiente de verde
 
-La **0.10.6 y la 0.10.7 salieron verdes**. La 0.10.8 está sin verificar en Actions: míralo antes
-de escribir código nuevo.
+La **0.10.6, 0.10.7 y 0.10.8 salieron verdes**. La 0.10.9 está sin verificar en Actions.
 
-Lo que sí se comprobó para la 0.10.8 (tanda 5·2b) fue el comportamiento, no la compilación:
-simulación en Python del dispatch de `normVal` antes/después sobre los 21 campos de `CANON`, y
-comprobación de que `realKeyFor` devuelve los mismos literales que las constantes que sustituye
-(`DateAutofill`, `fiscalToComercioKeyPairs`, `keyboardFor`). No se ha pasado `kotlinc` en local.
-Los ficheros tocados no traen dependencias nuevas salvo dos imports de `BuiltinSchemas`/
-`CanonicalKeys` en `FieldNormalizer` — ojo con un ciclo de paquetes si el build falla ahí:
-`data.validation` pasa a depender de `data.model`, y `data.model` NO debe depender de
-`data.validation` (hoy no lo hace).
+De la 0.10.9 (tanda 5·3) sí se verificó en local, con la técnica de la sección 6:
+`kotlinc -Werror` sobre `data/model` + `data/validation` (cero avisos, así que no quedan imports
+huérfanos ni shadowing), y **58 comprobaciones de comportamiento** en dos pruebas ejecutables: que
+con el mapeo vacío `FieldKeys` es la identidad en los 21 campos de `CANON` y en los checkboxes,
+que con un mapeo de Aire resuelve nombre real ↔ canónica ↔ etiqueta en los dos sentidos, que
+`realIfPresent` no inventa campos que el PDF no tiene, y que las dos migraciones son
+**idempotentes**. 0 fallos.
 
-Si sale verde, lo siguiente **no es código**: es probar el etiquetado en el móvil con un PDF real
-de Aire, que sigue pendiente desde la 0.10.5.
+Incluye una prueba específica de que la protección de `AutoFillPolicy` vuelve a funcionar con un
+PDF propio (ver el punto de la sección 5), y de que una fuente legítima sigue autorrellenando.
+
+Lo que NO se pudo verificar es lo que depende de Compose y de Android: `FillStep`,
+`WizardScreen`, `WizardViewModel` y `PrefsRepository`. Si el build falla, mira ahí primero.
+
+Y aunque salga verde, esta tanda **hay que probarla en el móvil con los dos contratos**: ver
+sección 5.
 
 ---
 
@@ -85,7 +89,8 @@ con cuatro formularios rellenables propios: contrato de empresas (481 campos), p
 | 0.10.5 | Fase 3 **cerrada**: `VisionLabelPass` engancha el etiquetado por visión · verde ✅ |
 | 0.10.6 | Fase 5, tandas **5·0 y 5·1**: campo fantasma arreglado + costura de secciones ⚠️ sin verde |
 | 0.10.7 | Fase 5, tanda **5·2**: validación, hermano del CP y `FECHA_KEYS` cuelgan de `canonical` · verde ✅ |
-| 0.10.8 | Fase 5, tanda **5·2b**: `normVal`, `DateAutofill`, copia fiscal, teclado y cobertura, por canónica ⚠️ sin verde |
+| 0.10.8 | Fase 5, tanda **5·2b**: `normVal`, `DateAutofill`, copia fiscal, teclado y cobertura, por canónica · verde ✅ |
+| 0.10.9 | Fase 5, tanda **5·3**: la clave pasa a ser el nombre real del campo; `FieldKeys`; migración v1→v2 ⚠️ sin verde |
 
 ### Qué está enganchado y qué no
 
@@ -117,11 +122,13 @@ Por orden. La primera no es código.
   las tres cosas de una pasada.
 - **Fase 5 — relleno dinámico**: es la que hace que un PDF de Aire se rellene de punta a punta, y
   la que toca `WizardViewModel` (1126 líneas). **No la ataques de una vez: está partida en seis
-  tandas en `docs/PLAN_FASE_5.md`.** Hechas: 5·0 y 5·1 (0.10.6), 5·2 (0.10.7) y 5·2b (0.10.8,
-  tanda añadida al ejecutar). **Las tres decisiones que bloqueaban la 5·3 ya están tomadas y
-  registradas en `docs/PLAN_FASE_5.md` §4** — la verdad del dato va en el valor por nombre real,
-  los perfiles se migran al leerlos, y `MappingEditor` no se toca hasta la 5·4. **La
-  siguiente es la 5·3: la migración de datos** (`fieldValues`/`fieldStates`/`fieldOrigins`/
+  tandas en `docs/PLAN_FASE_5.md`.** Hechas: 5·0 y 5·1 (0.10.6), 5·2 (0.10.7), 5·2b (0.10.8) y
+  **5·3 (0.10.9), la de riesgo alto**. Las decisiones que la bloqueaban están tomadas y registradas
+  en `docs/PLAN_FASE_5.md` §4. **La siguiente es la 5·4**: que las secciones y los campos salgan
+  del `FormSchema` del PDF en vez de de `CANON`. El terreno ya está preparado — `FieldKeys` es el
+  único sitio donde cambiar la fuente de la traducción, y `FillStep` ya recibe secciones y claves
+  por parámetro. En la 5·4 se retira también `MappingEditor`, que hasta ahora se ha dejado intacto.
+  **Ya NO toca la migración de datos** (`fieldValues`/`fieldStates`/`fieldOrigins`/
   `fieldCandidates`/`UndoEntry` pasan a indexarse por nombre real; `PersistedWizardState` v1→v2;
   `ContractProfile.campos` del historial y los perfiles exportados). Es la de **riesgo alto** del
   plan — tanda sola, nada más dentro — y va antes que la 5·4 (que es la que cambia lo que se ve)
@@ -145,6 +152,25 @@ Por orden. La primera no es código.
   que queda expuesto** — misma clase de caso que el de las casillas, justo abajo. Verificar en
   dispositivo metiendo un NIF de representante o un IBAN inválidos en el contrato de Orange:
   ahora deben salir en rojo.
+- **La protección contra datos de terceros estaba apagada con PDFs propios, y la 0.10.9 la
+  reactiva.** `AutoFillPolicy.RISKY_SOURCES` estaba indexado por los nombres de campo de Orange,
+  así que con un PDF de Aire ninguna clave casaba: un IBAN sacado de un «Contrato de alquiler»
+  —que es el del arrendador, no el del distribuidor— se marcaba como AI y se autorrellenaba en
+  vez de pedir confirmación (WARN). Lo mismo con los emails y el teléfono de un alquiler, y con
+  el representante de un Modelo 036 (que suele firmar la gestoría). **Verificar** subiendo un
+  contrato de alquiler junto al resto y comprobando que el IBAN sale marcado «por decidir» y no
+  autorrellenado. En Orange esto ya funcionaba y debe seguir igual.
+- **La 0.10.9 (tanda 5·3) cambia la clave de todos los valores: hay que probar los DOS
+  contratos.** En Orange no debe cambiar nada en absoluto (ahí `FieldKeys` es la identidad, y así
+  está verificado); si algo cambia, es un fallo de esta tanda. Con un PDF propio **debe mejorar**:
+  el paso de Relleno tiene que mostrar ya los campos que la IA extrajo, que hasta ahora salían en
+  blanco. Comprobar además:
+  · que una **sesión guardada antes de actualizar** se restaura sin perder valores (la migración
+    v1→v2 es idempotente y con mapeo vacío no toca nada, pero es la parte que ya dolió en la 0.8.0);
+  · que RELLENO **no** se reabre en DOCUMENTOS al restaurar — el umbral de `migrateStepIndex` se
+    dejó en `>= 1` a propósito y no en `SCHEMA_VERSION`, que ahora vale 2;
+  · que un **perfil del historial** guardado antes se aplica bien (se migra al leerlo);
+  · que un formulario **sin** campo de fecha ya no reporta «falta un campo».
 - **El IBAN se escribe compactado desde la 0.10.8 (tanda 5·2b), y antes no.** Mismo bug de
   espacios que el punto anterior, pero en `FieldNormalizer.normVal`: `"Datos bancarios del
   DISTRIBUIDOR"` nunca casaba con `"datosbancarios"`, así que el valor que devolvía la IA iba al

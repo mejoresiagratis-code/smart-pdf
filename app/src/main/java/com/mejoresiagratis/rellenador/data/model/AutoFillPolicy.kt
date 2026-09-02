@@ -29,12 +29,13 @@ object AutoFillPolicy {
      * al distribuidor. No se autorrellenan nunca: se marcan [FieldState.WARN].
      */
     private val RISKY_SOURCES: Map<String, Set<String>> = mapOf(
-        "Datos bancarios del DISTRIBUIDOR" to setOf("Contrato de alquiler", "Factura"),
-        "Email Comercial" to setOf("Contrato de alquiler", "Alta en RETA"),
-        "Email  Facturación" to setOf("Contrato de alquiler", "Alta en RETA"),
-        "Teléfono" to setOf("Contrato de alquiler"),
-        "Nombre representante" to setOf("Modelo 036"),   // suele firmarlo la gestoría
-        "NIF representante" to setOf("Modelo 036"),
+        CanonicalKeys.IBAN to setOf("Contrato de alquiler", "Factura"),
+        CanonicalKeys.EMAIL_COMERCIAL to setOf("Contrato de alquiler", "Alta en RETA"),
+        CanonicalKeys.EMAIL_FACTURACION to setOf("Contrato de alquiler", "Alta en RETA"),
+        CanonicalKeys.TELEFONO to setOf("Contrato de alquiler"),
+        // suele firmarlo la gestoría
+        CanonicalKeys.REPRESENTANTE_NOMBRE to setOf("Modelo 036"),
+        CanonicalKeys.REPRESENTANTE_NIF to setOf("Modelo 036"),
     )
 
     /** Documentos que acreditan identidad/titularidad: fuente fuerte para datos fiscales. */
@@ -51,16 +52,33 @@ object AutoFillPolicy {
      * - 1 valor de procedencia dudosa      → [FieldState.WARN]     (el usuario confirma)
      * - 1 valor de procedencia legítima    → [FieldState.AI]       (autorrelleno)
      */
-    fun decide(fieldKey: String, candidates: List<FieldCandidate>): FieldState = when {
+    fun decide(
+        fieldKey: String,
+        candidates: List<FieldCandidate>,
+        canonicalHint: String? = null,
+    ): FieldState = when {
         candidates.isEmpty() -> FieldState.EMPTY
         candidates.distinctBy { it.value.trim().lowercase() }.size > 1 -> FieldState.CONFLICT
-        isRisky(fieldKey, candidates.first().origin) -> FieldState.WARN
+        isRisky(fieldKey, candidates.first().origin, canonicalHint) -> FieldState.WARN
         else -> FieldState.AI
     }
 
-    /** ¿El valor viene de una fuente que, para ESTE campo, suele ser de un tercero? */
-    fun isRisky(fieldKey: String, origin: FieldOrigin): Boolean =
-        origin.risky || RISKY_SOURCES[fieldKey]?.contains(origin.document) == true
+    /**
+     * ¿El valor viene de una fuente que, para ESTE campo, suele ser de un tercero?
+     *
+     * Tanda 5·3 — [RISKY_SOURCES] se indexaba por los nombres de campo de Orange, y `fieldKey`
+     * es el nombre real del campo del PDF que se esté rellenando. Con un PDF que no fuera el de
+     * Orange **ninguna clave casaba y esta protección se apagaba en silencio**: el IBAN de un
+     * contrato de alquiler (que es el del arrendador, no el del distribuidor) se habría
+     * autorrellenado como dato verificado. Ahora la tabla va por clave canónica y quien llama la
+     * resuelve con `FieldKeys.canonicalOf()`; el nombre se sigue probando como respaldo para no
+     * perder el caso de Orange si llega sin resolver.
+     */
+    fun isRisky(fieldKey: String, origin: FieldOrigin, canonicalHint: String? = null): Boolean {
+        if (origin.risky) return true
+        val canonical = canonicalHint ?: BuiltinSchemas.canonicalFor(fieldKey)
+        return RISKY_SOURCES[canonical]?.contains(origin.document) == true
+    }
 
     /**
      * Marca como dudosos los candidatos cuyo documento quedó fuera del consenso del lote.

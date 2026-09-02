@@ -37,6 +37,13 @@ object FieldResolver {
         proposals: List<FieldProposal>,
         packages: List<Paquete>,
         alreadyFilled: Map<String, String>,
+        /**
+         * Traductor `clave de CANON -> nombre real` del PDF actual (tanda 5·3). Los candidatos se
+         * indexan por la misma clave que `fieldValues`, y las claves canónicas que aparecen aquí
+         * escritas (las de los paquetes de dirección, las de fecha) se traducen con él. Identidad
+         * para el contrato de Orange.
+         */
+        keys: FieldKeys = FieldKeys.IDENTITY,
     ): Resolution {
         val candidates = LinkedHashMap<String, MutableList<FieldCandidate>>()
 
@@ -71,15 +78,17 @@ object FieldResolver {
                 val street = pk.datos["Dirección"]?.takeIf { it.isNotBlank() } ?: return@forEach
                 val linked = ADDRESS_KEYS.drop(1).mapNotNull { k ->
                     pk.datos[k]?.takeIf { it.isNotBlank() }
-                        ?.let { (if (toBlock2) "${k}_2" else k) to it }
+                        ?.let { keys.real(if (toBlock2) "${k}_2" else k) to it }
                 }.toMap()
-                val key = if (toBlock2) "Dirección_2" else "Dirección"
+                val key = keys.real(if (toBlock2) "Dirección_2" else "Dirección")
                 candidates.getOrPut(key) { mutableListOf() }
                     .add(FieldCandidate(street, origin, linked))
             } else {
                 pk.datos.forEach { (k, v) ->
                     if (v.isNotBlank()) {
-                        candidates.getOrPut(k) { mutableListOf() }.add(FieldCandidate(v, origin))
+                        // Los paquetes vienen descritos con el vocabulario canónico del prompt.
+                        candidates.getOrPut(keys.real(k)) { mutableListOf() }
+                            .add(FieldCandidate(v, origin))
                     }
                 }
             }
@@ -89,7 +98,7 @@ object FieldResolver {
         proposals.forEach { p ->
             // La fecha del contrato es la de la firma: las fechas que la IA lee de los
             // documentos (censal, 036, alquiler…) no son candidatas a nada.
-            if (p.fieldKey in ContractFields.DATE_KEYS) return@forEach
+            if (p.fieldKey in ContractFields.DATE_KEYS.map(keys::real)) return@forEach
             p.candidates.forEach { c ->
                 if (c.value.isBlank()) return@forEach
                 val list = candidates.getOrPut(p.fieldKey) { mutableListOf() }
@@ -131,7 +140,7 @@ object FieldResolver {
             val flagged = AutoFillPolicy.flagIntruders(list, documentHolders, expectedHolders)
             flaggedByKey[key] = flagged
             val distinct = flagged.distinctBy { it.value.trim().lowercase() }
-            when (val state = AutoFillPolicy.decide(key, distinct)) {
+            when (val state = AutoFillPolicy.decide(key, distinct, keys.canonicalOf(key))) {
                 FieldState.AI -> {
                     val chosen = distinct.first()
                     autoValues[key] = chosen.value

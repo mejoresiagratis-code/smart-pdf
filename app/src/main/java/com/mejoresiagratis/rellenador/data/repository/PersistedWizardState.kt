@@ -135,11 +135,26 @@ fun PersistedWizardState.applyTo(base: WizardUiState): WizardUiState {
             aspectRatio = signatureAspectRatio
         )
     }
+    // Tanda 5·3 — migración v1 -> v2 de la CLAVE de los mapas de campo.
+    //
+    // Desde la 0.9.3 la extracción ya devolvía nombres reales para un PDF propio, así que en una
+    // sesión guardada la mayoría de las claves YA son nombres reales; lo que había mezclado eran
+    // las que la app inyectaba con el nombre de Orange (responsable, las tres de fecha, la copia
+    // de dirección fiscal). Reindexar con el `fieldMapping` que este mismo DTO ya guardaba las
+    // pone todas en nombre real, y es **idempotente** sobre las que ya lo estaban, porque
+    // `FieldKeys.real()` deja intacta cualquier clave que el mapeo no cubra.
+    //
+    // Por eso una sesión de Orange (mapeo vacío) se restaura EXACTAMENTE igual que antes.
+    val keys = com.mejoresiagratis.rellenador.data.model.FieldKeys(fieldMapping)
+    val needsKeyMigration = schemaVersion < SCHEMA_VERSION
+    fun <T> reindexed(m: Map<String, T>): Map<String, T> =
+        if (needsKeyMigration) keys.reindex(m) else m
+
     return base.copy(
         step = Step.entries.getOrNull(migrateStepIndex(step, schemaVersion)) ?: Step.CONTRATO,
-        fieldStates = fieldStates,
-        fieldOrigins = fieldOrigins,
-        fieldCandidates = fieldCandidates,
+        fieldStates = reindexed(fieldStates),
+        fieldOrigins = reindexed(fieldOrigins),
+        fieldCandidates = reindexed(fieldCandidates),
         // La pila de deshacer NO se persiste a propósito: deshacer es de la sesión en curso.
         undoStack = emptyList(),
         contractSource = contractSource?.let { runCatching { ContractSource.valueOf(it) }.getOrNull() },
@@ -152,7 +167,7 @@ fun PersistedWizardState.applyTo(base: WizardUiState): WizardUiState {
         packages = packages,
         tipoIdentificacion = tipoIdentificacion,
         enginesOk = enginesOk,
-        fieldValues = fieldValues,
+        fieldValues = reindexed(fieldValues),
         signature = sig,
         stamps = stamps.map { SignatureStamp(it.pageIndex, it.xRel, it.yRel, it.widthRel, it.heightRel) },
         inkColor = inkColor,
@@ -163,8 +178,14 @@ fun PersistedWizardState.applyTo(base: WizardUiState): WizardUiState {
     )
 }
 
-/** Versión actual del esquema de sesión persistida (v0.8.0: asistente de 4 pasos). */
-const val SCHEMA_VERSION = 1
+/**
+ * Versión actual del esquema de sesión persistida.
+ *
+ * - 1 — v0.8.0: asistente de 4 pasos (ver [migrateStepIndex]).
+ * - 2 — tanda 5·3: los mapas de campo se indexan por **nombre real** del campo del AcroForm en
+ *   vez de por clave de `CANON` (ver `applyTo`).
+ */
+const val SCHEMA_VERSION = 2
 
 /**
  * Traduce el índice de paso guardado al esquema actual.
@@ -179,7 +200,11 @@ const val SCHEMA_VERSION = 1
  * REVISION (2) se traduce a RELLENO, que es donde vive ahora esa función.
  */
 fun migrateStepIndex(saved: Int, schemaVersion: Int): Int =
-    if (schemaVersion >= SCHEMA_VERSION) saved
+    // Ojo: el umbral es 1 y NO `SCHEMA_VERSION`. Al subir la versión a 2 en la tanda 5·3, un
+    // `>= SCHEMA_VERSION` habría vuelto a traducir índices de sesiones guardadas con el esquema 1
+    // —que ya tenían el índice correcto de 4 pasos— y RELLENO se habría reabierto en DOCUMENTOS.
+    // Cada migración mira su propio umbral, no el global.
+    if (schemaVersion >= 1) saved
     else when (saved) {
         0 -> 0   // CONTRATO   → CONTRATO
         1 -> 1   // DOCUMENTOS → DOCUMENTOS

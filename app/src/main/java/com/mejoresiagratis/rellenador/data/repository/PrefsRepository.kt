@@ -92,7 +92,11 @@ class PrefsRepository @Inject constructor(
         return ids.mapNotNull { id ->
             val raw = context.dataStore.data.map { it[historyEntryKey(id)] }.first() ?: return@mapNotNull null
             val profile = runCatching { json.decodeFromString<ContractProfile>(raw) }.getOrNull() ?: return@mapNotNull null
-            id to profile
+            // Tanda 5·3 — migración PEREZOSA: el perfil se convierte a claves por nombre real al
+            // LEERLO, y no se reescribe `history_<id>`. Igual que se hizo con `schemas_v1` en la
+            // 0.9.9: no hay un momento en el que todo se reescriba y pueda romperse a la vez, y
+            // volver atrás es dejar de llamar a `migrated()`.
+            id to profile.migrated()
         }.sortedByDescending { it.second.guardado }
     }
 

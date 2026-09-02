@@ -33,12 +33,14 @@ object FieldNormalizer {
      * Normaliza un valor según el campo destino (fiel a normVal de la web):
      * IBAN/NIF/CP en formato, y "Apellidos, Nombre" -> "Nombre Apellidos".
      */
-    fun normVal(fieldName: String, raw: String?): String {
+    fun normVal(fieldName: String, raw: String?, canonicalHint: String? = null): String {
         var v = (raw ?: "").trim()
         if (v.isEmpty()) return v
 
         // Canónica primero; heurística de nombre sólo si el campo no tiene (ver cabecera).
-        val canonical = BuiltinSchemas.canonicalFor(fieldName)
+        // `canonicalHint` (tanda 5·3): con un PDF que no es el de Orange, `fieldName` es un nombre
+        // real que `canonicalFor()` no conoce, así que quien llama la resuelve con `FieldKeys`.
+        val canonical = canonicalHint ?: BuiltinSchemas.canonicalFor(fieldName)
         val b by lazy { norm(baseOf(fieldName)) }
 
         return when {

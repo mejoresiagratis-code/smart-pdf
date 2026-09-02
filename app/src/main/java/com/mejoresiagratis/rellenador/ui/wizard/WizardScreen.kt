@@ -102,7 +102,17 @@ fun WizardScreen(vm: WizardViewModel = hiltViewModel(), onOpenSettings: () -> Un
                     Step.DOCUMENTOS -> DocumentsStep(state, vm)
                     // Las secciones se pasan desde aquí a propósito (tanda 5·1): es la costura
                     // por la que entrará el esquema del PDF subido en la 5·4.
-                    Step.RELLENO -> FillStep(state, vm, sections = canonFillSections())
+                    Step.RELLENO -> {
+                        // Tanda 5·3 — las secciones se expresan en NOMBRES REALES del PDF actual,
+                        // que es la clave con la que se guardan los valores. Con el contrato de
+                        // Orange `FieldKeys` es la identidad y sale exactamente lo de siempre.
+                        val fieldKeys = remember(state.fieldMapping) { vm.fieldKeys() }
+                        FillStep(
+                            state, vm,
+                            sections = remember(fieldKeys) { canonFillSections(fieldKeys) },
+                            keys = fieldKeys,
+                        )
+                    }
                     Step.FIRMA -> SignatureStep(state, vm)
                 }
                 if (state.busy && state.step != Step.DOCUMENTOS) {

@@ -14,10 +14,15 @@ import com.mejoresiagratis.rellenador.data.model.CanonicalKeys
  * (docs/PLAN_FASE_5.md, hallazgo 2.5). Ahora decide primero por la clave CANÓNICA del campo
  * (`BuiltinSchemas.canonicalFor`), que no depende de cómo se llame el campo en el AcroForm.
  *
- * La fuente del mapeo sigue siendo `CANON` (5·3/5·4 la sustituirán por el `FormSchema` real
- * del PDF subido) — por eso `base(fieldName)` se conserva como RESPALDO: sigue haciendo falta
- * para los campos de `CANON` sin canónica propia (checkboxes de tipo de identificación,
- * Responsable Comercial) y para cualquier campo que llegue sin pasar por un esquema.
+ * `base(fieldName)` se conserva como RESPALDO: sigue haciendo falta para los campos sin canónica
+ * propia (checkboxes de tipo de identificación, Responsable Comercial) y para cualquier campo que
+ * llegue sin resolver.
+ *
+ * Tanda 5·3 — se puede pasar la canónica ya resuelta en [canonical]. Hace falta porque desde esta
+ * tanda `fieldName` es el **nombre real** del campo del PDF que se esté rellenando, y
+ * `BuiltinSchemas.canonicalFor()` sólo conoce los nombres de Orange: con un nombre real de Aire no
+ * casaría y la validación volvería a apagarse en silencio. Quien llama resuelve la canónica con
+ * `FieldKeys.canonicalOf()`. Si no se pasa, se busca como antes.
  */
 object FieldValidator {
 
@@ -32,18 +37,21 @@ object FieldValidator {
     /**
      * @param tipoId tipo de identificación elegido (CIF/NIF/NIE) para validar el campo de identificación.
      * @param provinciaSibling valor de la provincia del mismo bloque (para CP).
+     * @param canonicalHint clave de [CanonicalKeys] ya resuelta para este campo (tanda 5·3). Si
+     *   es null se intenta deducir del nombre, que sólo funciona con los nombres de Orange.
      */
     fun validate(
         fieldName: String,
         value: String?,
         tipoId: String? = null,
-        provinciaSibling: String? = null
+        provinciaSibling: String? = null,
+        canonicalHint: String? = null
     ): Result? {
         val v = value?.trim()
         if (v.isNullOrEmpty()) return null
 
         // Canónica primero; heurística de nombre sólo si el campo no tiene (ver cabecera).
-        val canonical = BuiltinSchemas.canonicalFor(fieldName)
+        val canonical = canonicalHint ?: BuiltinSchemas.canonicalFor(fieldName)
         val b by lazy { base(fieldName) }
 
         return when {
