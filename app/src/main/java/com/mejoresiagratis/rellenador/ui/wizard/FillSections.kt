@@ -74,9 +74,51 @@ fun canonFillSections(keys: FieldKeys = FieldKeys.IDENTITY): List<FillSection> =
  * no es la que hay en pantalla. Con `CANON` el resultado es **idéntico** — 18 claves en las
  * secciones + 3 de fecha = 21 = `CANON.size` (verificado) —, así que esta tanda no cambia lo que
  * se ve, sólo deja de depender de una constante ajena a lo que se pinta.
+ *
+ * Tanda 5·4 — si las secciones ya contienen las claves de fecha (porque vienen del `FormSchema`,
+ * y el esquema declara la fecha como sección propia), no se suman otra vez. Se detecta con
+ * intersección, no con un flag: si al menos una clave de `DATE_KEYS` está entre las claves ya
+ * contadas, se asume que la fecha ya vive en secciones. En Orange, `canonFillSections()` no
+ * incluye las fechas (van fuera del bucle en `FillStep`) y el resultado sigue siendo 21.
  */
 fun countedKeys(
     sections: List<FillSection>,
     keys: FieldKeys = FieldKeys.IDENTITY,
-): List<String> =
-    sections.flatMap { it.keys } + ContractFields.DATE_KEYS.map(keys::real)
+): List<String> {
+    val fromSections = sections.flatMap { it.keys }
+    val dateKeys = ContractFields.DATE_KEYS.map(keys::real)
+    val alreadyIncluded = fromSections.toSet().let { s -> dateKeys.any { it in s } }
+    return if (alreadyIncluded) fromSections else fromSections + dateKeys
+}
+
+/**
+ * Traduce un [com.mejoresiagratis.rellenador.data.model.FormSchema] en secciones para `FillStep`.
+ *
+ * Tanda 5·4 — reemplaza a `canonFillSections()` cuando el asistente tiene un esquema del PDF
+ * cargado. Cada `FormSection` del esquema (SIMPLE, TABLE o REPEATED_BLOCK) se aplana en una
+ * `FillSection` con sus nombres reales de campo en el orden en que están, y las tablas se pintan
+ * como bloques cuyas etiquetas incluyen «Fila N · Columna» — sin filas dinámicas, que son la
+ * tanda 5·5. `showCopyFiscal` sólo se marca en la sección cuyos campos declaran `DIRECCION_2` (o
+ * el `_2` en Orange), que es donde el atajo tiene sentido.
+ *
+ * Los campos con `ValueOrigin.CATALOGO`/`CALCULADO`/`FIRMA` se dejan en las secciones tal cual:
+ * la política de qué es editable la decide `FillStep` con `ValueOrigin`, aquí sólo estructuramos.
+ */
+fun fillSectionsFrom(
+    schema: com.mejoresiagratis.rellenador.data.model.FormSchema,
+): List<FillSection> {
+    val out = mutableListOf<FillSection>()
+    for (section in schema.sections) {
+        val names = section.allFields().map { it.name }
+        if (names.isEmpty()) continue
+        val hasDireccion2 = section.allFields().any {
+            it.canonical == com.mejoresiagratis.rellenador.data.model.CanonicalKeys.DIRECCION_2
+        }
+        out += FillSection(
+            title = section.title,
+            keys = names,
+            showCopyFiscal = hasDireccion2,
+        )
+    }
+    return out
+}

@@ -147,8 +147,10 @@ Eran tres. Ya no bloquean.
    re-migrar lo ya migrado.
 
 2. **`MappingEditor` no se toca en la 5·3.** Sólo se usa con `needsMapping = true`, y el mapeo
-   sigue haciendo falta para saber dónde va cada dato extraído. Se retira en la 5·4, cuando el
-   esquema alimente `FillStep` de verdad.
+   sigue haciendo falta para saber dónde va cada dato extraído. *Rectificación (2026-09-03):
+   `MappingEditor` **se conserva** también en la 5·4* — así lo fija el `CONTINUIDAD.md` §4 y el
+   roadmap HTML: sigue sirviendo para enlazar campos con su `canonical` cuando el PDF es un
+   contrato conocido. Lo que sí cambia en 5·4 es la comprobación de tipo compatible del §6.5.
 
 3. **La verdad del dato vive en el VALOR POR NOMBRE REAL de campo.** `Expediente.compartidos`
    (canónicas) se queda como está —existe, sin usar— y pasa a ser la capa de **propagación** entre
@@ -215,12 +217,19 @@ Un alta de Aire con **sólo el contrato** rellena únicamente lo que hay en esas
 La página 2 (productos y servicios, con sus tablas) queda fuera del alta, y por eso la 5·5 no
 bloquea. Cuando entre, entra por ahí.
 
-### 6.3 Casillas de la cabecera: sólo ALTA
+### 6.3 Casillas de la cabecera: marcar ALTA y **desmarcar** las otras dos
 
-La cabecera tiene tres casillas de CLIENTE: `ALTA NUEVA`, `MODIFICACIÓN`, `PORTABILIDAD`. Con sólo
-el contrato subido se marca **ALTA NUEVA** y nada más. Los otros casos llegarán cuando se aporten
-los PDFs correspondientes (servicios, centralita, portabilidad con o sin cambio de titularidad); de
-momento **no se implementa esa lógica**, sólo el alta.
+La cabecera tiene tres casillas de CLIENTE: `ALTA NUEVA`, `MODIFICACIÓN`, `PORTABILIDAD`
+(`Casilla de verificación 56`/`57`/`58` en el AcroForm). Comprobado sobre
+`Contrato_empresas.pdf` con `pypdf` al implementar la 5·4: **las tres vienen del PDF marcadas
+de fábrica** con `/V = /Sí`. La redacción anterior de esta sección — «se marca ALTA NUEVA y nada
+más» — dejaba caso abierto qué hacer con las otras dos. La respuesta correcta es **desmarcarlas
+explícitamente**: la 5·4 emite `ALTA NUEVA=On`, `MODIFICACIÓN=Off`, `PORTABILIDAD=Off`. Si no,
+un alta salta con dos casillas marcadas y no vale como alta.
+
+Los otros casos (modificación, portabilidad con o sin cambio de titularidad, servicios,
+centralita) llegarán cuando se aporten los PDFs correspondientes; de momento **no se implementa
+esa lógica**, sólo el alta.
 
 ### 6.4 Más adelante, no ahora
 
@@ -231,9 +240,21 @@ la 5·4.
 ### 6.5 Un fallo que se ve en la captura del mapeo
 
 El auto-mapeo por similitud asignó **`Fecha · mes` → `Casilla de verificación 56`**: un checkbox
-como destino de un campo de texto. También dejó `Fecha · día` sin asignar mientras la página 3
-tiene tres campos de fecha claros.
+como destino de un campo de texto. Y encima esa casilla es la de ALTA NUEVA (ver §6.3), así que
+el mapeo estaba escribiendo un mes dentro del alta. También dejó `Fecha · día` sin asignar
+mientras la página 3 tiene tres campos de fecha claros.
 
-No merece arreglarse en el mapeo viejo —la 5·4 lo sustituye—, pero sí deja una regla para el
-nuevo: **el destino tiene que ser de un `FieldKind` compatible con el origen**. Un texto nunca
-puede mapear a una casilla. Es una comprobación de una línea que evita un fallo silencioso más.
+Se arregla en el mapeo actual —conservado por decisión del `CONTINUIDAD.md` §4 y del roadmap
+HTML— aplicando la regla obvia: **el destino tiene que ser de un `FieldKind` compatible con el
+origen**. Un texto nunca puede mapear a una casilla. Implementado en `MappingEditor` filtrando
+la lista de opciones por el `FieldKind` esperado de cada canónica, leído de `activeSchema`. Con
+esquema activo, ese fallo desaparece; sin él (sesión previa a la 5·4) el editor se comporta
+como antes, no se pierde información.
+
+Segunda regla, salida al inspeccionar el propio PDF con `pypdf`: **el flag `isRadio` del
+AcroForm miente**. En el contrato de Aire trece campos vienen con ese flag, pero doce son de
+un solo widget con un único estado — o sea casillas sueltas con el flag mal puesto. El único
+radio de verdad es `Botón de opción 10`, la fila de RED INTELIGENTE (6 widgets, estados
+`/0`..`/5`). `FormSchemaBuilder` promociona los doce falsos a `CHECKBOX` mirando el grupo
+completo (número de widgets y de estados distintos). Sin esa promoción, la comprobación de
+tipo compatible de arriba rechazaría doce asignaciones legítimas.

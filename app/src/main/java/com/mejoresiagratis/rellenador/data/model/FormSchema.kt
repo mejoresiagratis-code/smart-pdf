@@ -476,53 +476,174 @@ object BuiltinSchemas {
         }
 
     /**
+     * Nombres de campo de `CANON` que identifican inequívocamente el contrato de Orange: son
+     * literales muy específicos (dobles espacios incluidos) y su coincidencia sobre el conjunto
+     * completo del AcroForm de un PDF cualquiera es prácticamente nula. El reconocimiento por
+     * huella exigiría una tabla de huellas de referencia; comparar contra nombres de campo es
+     * determinista y no arrastra datos que puedan quedar viejos.
+     *
+     * Tanda 5·4 — se usa desde `WizardViewModel.chooseUserContract` para decidir si el PDF
+     * subido es el propio contrato de Orange (caso legado: sigue rellenándose exactamente igual
+     * que siempre, con las 6 secciones de abajo) o un formulario ajeno para el que hay que
+     * construir un esquema `LEARNED`.
+     */
+    private val ORANGE_SIGNATURE_NAMES: Set<String> = setOf(
+        "Nombre  Razón Social",
+        "Datos bancarios del DISTRIBUIDOR",
+        "Email  Facturación",
+        ContractFields.CHECKBOX_NIE,        // el literal "undefined" del AcroForm original
+    )
+
+    /**
+     * Nombres de campo que identifican el `Contrato_empresas.pdf` de Aire (contrato principal,
+     * 481 campos). Tanda 5·4 — verificado sobre el PDF real con `pypdf`: la cabecera del bloque
+     * CLIENTE tiene tres casillas cuyos nombres son `Casilla de verificación 56/57/58`, y las
+     * casillas 56/57/58 vienen del PDF **marcadas de fábrica** con `/V = /Sí` en los tres. El
+     * alta con sólo el contrato marca `ALTA NUEVA` y **desmarca** las otras dos (`MODIFICACIÓN`,
+     * `PORTABILIDAD`), en vez de dejarlas como están: es la corrección al §6.3 del
+     * `docs/PLAN_FASE_5.md`, cuya redacción hablaba sólo de marcar `ALTA NUEVA` sin decir nada
+     * de desmarcar las otras dos.
+     *
+     * El literal `airetech.es` aparece en el texto fijo de las páginas 1 y 3 pero **no** como
+     * nombre de campo del AcroForm, así que no sirve para identificar. Estas cuatro casillas y
+     * los campos `TF cuotalta TOTAL` / `CV cuotalta TOTAL` — que son de tablas y `CATALOGO`,
+     * pero de nombre único en el AcroForm de Aire — sí sirven.
+     */
+    const val AIRE_CONTRATO_EMPRESAS_ID = "builtin:aire-contrato-empresas"
+    private val AIRE_CONTRATO_SIGNATURE_NAMES: Set<String> = setOf(
+        "Casilla de verificación 56",   // ALTA NUEVA
+        "Casilla de verificación 57",   // MODIFICACIÓN
+        "Casilla de verificación 58",   // PORTABILIDAD
+        "TF cuotalta TOTAL",
+    )
+
+    /**
+     * Identifica el esquema `BUILTIN` que corresponde al conjunto de nombres de campo dado, o
+     * null si no es ninguno conocido. La comprobación es por **intersección**: el PDF tiene que
+     * declarar todos los nombres firma del contrato; que declare **más** campos no descarta
+     * (Orange trae 22, Aire 481). El orden y las mayúsculas se comparan tal cual, porque los
+     * nombres de AcroForm no se normalizan nunca en este proyecto.
+     */
+    fun recognize(fieldNames: Collection<String>): String? {
+        val set = fieldNames.toSet()
+        return when {
+            set.containsAll(ORANGE_SIGNATURE_NAMES) -> ORANGE_DISTRIBUTION_ID
+            set.containsAll(AIRE_CONTRATO_SIGNATURE_NAMES) -> AIRE_CONTRATO_EMPRESAS_ID
+            else -> null
+        }
+    }
+
+    /**
      * Construye el esquema del contrato de Orange a partir de `CANON`.
+     *
+     * Tanda 5·4 — deja de ser una única sección plana y estrena las **6 secciones** que
+     * `FillStep` pintaba desde la 5·1 vía `canonFillSections()`. Esas 6 secciones se conservan
+     * literales aquí (mismo orden, mismos títulos, mismas claves) para que la regla de la
+     * fase 5 se cumpla al pie de la letra: en Orange, la app se dibuja exactamente igual que
+     * antes de esta tanda, porque el esquema **es** lo que se pintaba a mano. Verificado en
+     * `docs/roadmap-multiformulario.html` («mismo orden, mismas validaciones, mismo
+     * autorrelleno, misma firma. Cualquier diferencia es un fallo, no una mejora»).
+     *
+     * La fecha, el responsable y las casillas de tipo van cada uno en su sección para que
+     * salgan **al final** del formulario, después del bloque de datos — que es como los pintaba
+     * `FillStep` antes de la 5·4 (`fechaKeys` fuera del bucle de secciones, tipo de
+     * identificación como cabecera). El paso de Relleno tiene que aprender a colocarlos en esos
+     * sitios sea cual sea el esquema; con Orange como testigo, colocarlos aquí en secciones
+     * explícitas hace que el cambio de fuente sea invisible.
      *
      * @param fingerprint huella real del PDF; se calcula al cargarlo, no se puede fijar aquí.
      */
     fun orangeDistribution(fingerprint: String = ""): FormSchema {
-        val datos = ContractFields.CANON.mapIndexed { i, canon ->
-            FormField(
-                name = canon.key,
-                label = canon.label,
-                kind = FieldKind.TEXT,
-                origin = when (canon.key) {
-                    in ContractFields.DATE_KEYS -> ValueOrigin.FIRMA
-                    else -> ValueOrigin.DOCUMENTO
-                },
-                canonical = CANON_TO_CANONICAL[canon.key],
-                order = i,
+
+        fun field(name: String, order: Int): FormField = FormField(
+            name = name,
+            label = ContractFields.labelFor(name),
+            kind = FieldKind.TEXT,
+            origin = when (name) {
+                in ContractFields.DATE_KEYS -> ValueOrigin.FIRMA
+                else -> ValueOrigin.DOCUMENTO
+            },
+            canonical = CANON_TO_CANONICAL[name],
+            order = order,
+        )
+
+        val secciones = listOf(
+            "Empresa / Identificación" to listOf(
+                "Nombre  Razón Social", "Nombre Comercial", "NIE",
+                "Nombre representante", "NIF representante",
+                "Actividad principal del negocio",
+            ),
+            "Dirección fiscal" to listOf(
+                "Dirección", "CP", "Población", "Provincia",
+            ),
+            "Dirección comercio / PdV" to listOf(
+                "Dirección_2", "CP_2", "Población_2", "Provincia_2",
+            ),
+            "Contacto" to listOf(
+                "Teléfono", "Email Comercial", "Email  Facturación",
+            ),
+            "Datos bancarios" to listOf(
+                "Datos bancarios del DISTRIBUIDOR",
+            ),
+        )
+
+        var order = 0
+        val simples = secciones.mapIndexed { i, (title, names) ->
+            FormSection(
+                id = "orange-$i",
+                title = title,
+                kind = SectionKind.SIMPLE,
+                fields = names.map { field(it, order++) },
             )
         }
 
+        val fecha = FormSection(
+            id = "orange-fecha",
+            title = "Fecha del contrato",
+            kind = SectionKind.SIMPLE,
+            fields = ContractFields.DATE_KEYS.map { field(it, order++) },
+        )
+
         // El responsable comercial es constante del distribuidor, no dato del cliente: es el
         // caso que dio origen a ValueOrigin.AJUSTES.
-        val responsable = FormField(
-            name = ContractFields.RESPONSABLE_KEY,
-            label = "Responsable comercial",
-            kind = FieldKind.TEXT,
-            origin = ValueOrigin.AJUSTES,
-            order = datos.size,
+        val responsable = FormSection(
+            id = "orange-responsable",
+            title = "Responsable comercial",
+            kind = SectionKind.SIMPLE,
+            fields = listOf(
+                FormField(
+                    name = ContractFields.RESPONSABLE_KEY,
+                    label = "Responsable comercial",
+                    kind = FieldKind.TEXT,
+                    origin = ValueOrigin.AJUSTES,
+                    order = order++,
+                )
+            ),
         )
 
         // Las tres casillas de tipo de identificación. `onState` queda a null a propósito: el
         // estado real se resuelve contra el documento al rellenar (v0.9.7), no se declara aquí.
         // La tercera se llama literalmente "undefined" en el AcroForm original — no es un
         // error de transcripción, es el nombre real y hay que usarlo tal cual.
-        val casillas = listOf(
-            ContractFields.CHECKBOX_CIF to "CIF",
-            ContractFields.CHECKBOX_NIF to "NIF",
-            ContractFields.CHECKBOX_NIE to "NIE",
-        ).mapIndexed { i, (name, label) ->
-            FormField(
-                name = name,
-                label = "Tipo de identificación · $label",
-                kind = FieldKind.CHECKBOX,
-                origin = ValueOrigin.DOCUMENTO,
-                canonical = CanonicalKeys.TIPO_IDENTIFICACION,
-                order = datos.size + 1 + i,
-            )
-        }
+        val casillasTipo = FormSection(
+            id = "orange-tipo-id",
+            title = "Tipo de identificación",
+            kind = SectionKind.SIMPLE,
+            fields = listOf(
+                ContractFields.CHECKBOX_CIF to "CIF",
+                ContractFields.CHECKBOX_NIF to "NIF",
+                ContractFields.CHECKBOX_NIE to "NIE",
+            ).map { (name, label) ->
+                FormField(
+                    name = name,
+                    label = "Tipo de identificación · $label",
+                    kind = FieldKind.CHECKBOX,
+                    origin = ValueOrigin.DOCUMENTO,
+                    canonical = CanonicalKeys.TIPO_IDENTIFICACION,
+                    order = order++,
+                )
+            },
+        )
 
         return FormSchema(
             id = ORANGE_DISTRIBUTION_ID,
@@ -530,14 +651,7 @@ object BuiltinSchemas {
             source = SchemaSource.BUILTIN,
             fingerprint = fingerprint,
             pageCount = 54,
-            sections = listOf(
-                FormSection(
-                    id = "datos",
-                    title = "Datos del distribuidor",
-                    kind = SectionKind.SIMPLE,
-                    fields = datos + responsable + casillas,
-                )
-            ),
+            sections = simples + fecha + responsable + casillasTipo,
         )
     }
 }

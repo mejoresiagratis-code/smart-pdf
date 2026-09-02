@@ -57,7 +57,13 @@ class WizardViewModel @Inject constructor(
     private val templateMapper: TemplateMapper,
     private val filler: AcroFormFiller,
     private val pageDetector: SignaturePageDetector,
-    private val docStore: com.mejoresiagratis.rellenador.data.pdf.DocumentStore
+    private val docStore: com.mejoresiagratis.rellenador.data.pdf.DocumentStore,
+    // Tanda 5·4 — el asistente construye su propio `FormSchema` al elegir contrato, en vez de
+    // depender de que el PDF haya pasado antes por Ajustes › «Analizar y etiquetar». Los dos
+    // colaboradores ya viven en el grafo (los usa `LabelEditorViewModel`), así que engancharlos
+    // aquí es cero configuración de Hilt.
+    private val pdfInspector: com.mejoresiagratis.rellenador.data.pdf.PdfFieldInspector,
+    private val schemaBuilder: com.mejoresiagratis.rellenador.data.pdf.FormSchemaBuilder,
 ) : ViewModel() {
 
     private var previewRenderer: PdfPageRenderer? = null
@@ -128,6 +134,33 @@ class WizardViewModel @Inject constructor(
             // Copiamos sobre el state actual (que ya trae providers/responsable/perfil)
             val restored = persisted.applyTo(_state.value)
             _state.value = restored
+            // Tanda 5·4 — rehidratar `activeSchema`. La persistencia no lo guarda a propósito
+            // (vive en `schemas_v1` bajo la huella), y al restaurar hay dos casos:
+            //   1) Si el DTO trae `templateFingerprint` no vacía y hay esquema guardado con esa
+            //      huella, lo cargamos: es el caso de un PDF ajeno inspeccionado ya antes.
+            //   2) Si el DTO trae un URI de contrato del usuario cuyo AcroForm contiene los
+            //      nombres firma de un `BUILTIN`, resolvemos ahí sin abrir el PDF — la huella no
+            //      es necesaria para eso, y el `recognize()` sobre los nombres persistidos basta.
+            //   3) Si no, `activeSchema` sigue null y `WizardScreen` cae a `canonFillSections()`
+            //      con `FieldKeys.IDENTITY` — el comportamiento previo a la 5·4, sin regresión.
+            //
+            // Se hace después del `applyTo` para no bloquear la restauración: si algo falla al
+            // leer `schemas_v1`, la sesión se restaura igual, sólo pinta con la red de seguridad.
+            runCatching {
+                val recognizedId = com.mejoresiagratis.rellenador.data.model.BuiltinSchemas
+                    .recognize(restored.userFieldNames)
+                val schema = when (recognizedId) {
+                    com.mejoresiagratis.rellenador.data.model.BuiltinSchemas.ORANGE_DISTRIBUTION_ID ->
+                        com.mejoresiagratis.rellenador.data.model.BuiltinSchemas
+                            .orangeDistribution(restored.templateFingerprint)
+                    else -> restored.templateFingerprint
+                        .takeIf { it.isNotBlank() }
+                        ?.let { prefs.findSchema(it) }
+                }
+                if (schema != null) {
+                    _state.value = _state.value.copy(activeSchema = schema)
+                }
+            }
             // Comprueba accesibilidad real de los URIs restaurados. Si alguno ya no es
             // válido, avisamos al usuario para que sepa qué documentos volver a subir.
             val invalid = mutableListOf<String>()
@@ -234,47 +267,160 @@ class WizardViewModel @Inject constructor(
 
     // ---- Paso 1: contrato ----
     fun chooseDefaultContract() {
-        _state.value = _state.value.copy(contractSource = ContractSource.DEFAULT, userContractUri = null)
+        _state.value = _state.value.copy(
+            contractSource = ContractSource.DEFAULT,
+            userContractUri = null,
+            // Tanda 5·4 — el asistente se dibuja desde el `FormSchema` activo. Con el contrato
+            // por defecto (el de Orange en `assets/contrato-base.pdf`) ese esquema es siempre el
+            // `BUILTIN` de siempre; sin fingerprint porque no se calcula sobre el asset.
+            activeSchema = com.mejoresiagratis.rellenador.data.model.BuiltinSchemas.orangeDistribution(),
+        )
         detectSignaturePages()
     }
     fun chooseUserContract(uri: Uri) {
         _state.value = _state.value.copy(contractSource = ContractSource.USER, userContractUri = uri)
         // Leer los nombres reales de campo del PDF del usuario y auto-mapear.
         viewModelScope.launch {
-            val fields = withContext(Dispatchers.IO) {
+            // Tanda 5·4 — el asistente construye su propio `FormSchema` para cualquier PDF, sin
+            // pasar por Ajustes › «Analizar y etiquetar». Tres cosas en una pasada por I/O
+            // (campos + páginas + geometría), y las tres se resuelven aquí mismo para no abrir el
+            // PDF varias veces (el mismo antipatrón que arrastra `LabelEditorViewModel`).
+            data class Inspected(
+                val fieldNames: List<String>,
+                val inspected: List<com.mejoresiagratis.rellenador.data.pdf.PdfFieldInspector.Field>,
+                val pageCount: Int,
+            )
+            val insp = withContext(Dispatchers.IO) {
                 runCatching {
-                    context.contentResolver.openInputStream(uri)!!.use { filler.listFields(it) }
-                }.getOrElse { emptyList() }
+                    val cr = context.contentResolver
+                    val fieldNames = cr.openInputStream(uri)!!.use { filler.listFields(it) }
+                    val inspected = cr.openInputStream(uri)!!.use { pdfInspector.inspect(it) }
+                    val pageCount = cr.openInputStream(uri)!!.use { pdfInspector.pageCount(it) }
+                    Inspected(fieldNames, inspected, pageCount)
+                }.getOrElse { Inspected(emptyList(), emptyList(), 0) }
             }
+            val fields = insp.fieldNames
             if (fields.isEmpty()) {
-                _state.value = _state.value.copy(userFieldNames = emptyList(), needsMapping = false)
+                _state.value = _state.value.copy(
+                    userFieldNames = emptyList(),
+                    needsMapping = false,
+                    activeSchema = null,
+                )
                 return@launch
             }
             val suggestions = templateMapper.suggest(fields)
             val mapping = suggestions.mapNotNull { sug ->
                 sug.canonicalKey?.let { it to sug.realField }
             }.toMap()
-            val fp = TemplateFingerprint.of(fields.size, fields)  // huella provisional (páginas se ajustan tras detectar)
+
+            // Huella con el número real de páginas — la que usa el editor. La huella provisional
+            // que había aquí (`fields.size` en lugar de `pageCount`) hacía que la huella del
+            // asistente y la del editor no casaran nunca: un PDF etiquetado en Ajustes salía como
+            // «no encontrado» cuando volvía a este flujo. La corrección es la 5·4 la que la
+            // necesita, y sirve además a lo que había: `findTemplate(fp)` sigue funcionando
+            // porque el mapeo se guarda con la huella con la que se buscó, no con otra.
+            val fp = TemplateFingerprint.of(insp.pageCount, fields)
             val saved = runCatching { prefs.findTemplate(fp) }.getOrNull()
+
+            // Esquema del PDF:
+            //   1) si es reconocible por nombres de campo, se resuelve al `BUILTIN`
+            //      correspondiente (hoy: contrato de Orange, contrato de empresas de Aire);
+            //   2) si no, se busca uno guardado por huella (creado por el editor o por una
+            //      apertura anterior);
+            //   3) si no hay, se construye con `FormSchemaBuilder` y se persiste — con eso, la
+            //      siguiente apertura del mismo PDF ya lo reencuentra por huella.
+            val recognizedId = com.mejoresiagratis.rellenador.data.model.BuiltinSchemas.recognize(fields)
+            val schema = when (recognizedId) {
+                com.mejoresiagratis.rellenador.data.model.BuiltinSchemas.ORANGE_DISTRIBUTION_ID ->
+                    com.mejoresiagratis.rellenador.data.model.BuiltinSchemas.orangeDistribution(fp)
+                else -> {
+                    val existing = runCatching { prefs.findSchema(fp) }.getOrNull()
+                    val built = existing
+                        ?: schemaBuilder.build(insp.inspected, fp, insp.pageCount, title = "Formulario")
+                    if (existing == null) {
+                        runCatching { prefs.saveSchema(built) }
+                    }
+                    built
+                }
+            }
+
             _state.value = _state.value.copy(
                 userFieldNames = fields,
                 fieldMapping = saved ?: mapping,
                 needsMapping = saved == null,   // si ya había plantilla guardada, no hace falta revisar
-                templateFingerprint = fp
+                templateFingerprint = fp,
+                activeSchema = schema,
             )
             detectSignaturePages()
         }
     }
 
     /**
-     * Traductor `clave de CANON -> nombre real` del PDF que se está rellenando (tanda 5·3).
+     * Casillas de cabecera propias del contrato reconocido, con el estado que debe llevar el PDF
+     * final. Tanda 5·4 §6.3.
      *
-     * Se construye del `fieldMapping` actual, que es vacío para el contrato de Orange — y
-     * entonces `FieldKeys` es la identidad y nada cambia. En la tanda 5·4 la fuente pasará a ser
-     * el `FormSchema` del PDF y este método será el único sitio que haya que tocar.
+     * Del contrato de Aire (`Contrato_empresas.pdf`, 481 campos) se sabe algo que no está en
+     * ningún analísis y que sí se ve al abrir el PDF con `pypdf`: las tres casillas de la
+     * cabecera CLIENTE — `Casilla de verificación 56` (ALTA NUEVA), `57` (MODIFICACIÓN) y `58`
+     * (PORTABILIDAD) — vienen del PDF **marcadas de fábrica** con `/V = /Sí`. El §6.3 del plan
+     * pedía «marcar ALTA NUEVA y nada más», y con casillas marcadas de fábrica «nada más»
+     * exige `desmarcar` las otras dos, no dejarlas.
+     *
+     * Con Orange no hay nada que añadir aquí (sus tres casillas son las de tipo de
+     * identificación, que ya viajan por `checkboxStateFor(tipoIdentificacion)`).
      */
-    fun fieldKeys(): com.mejoresiagratis.rellenador.data.model.FieldKeys =
-        com.mejoresiagratis.rellenador.data.model.FieldKeys(_state.value.fieldMapping)
+    private fun altaCheckboxes(): Map<String, String> {
+        val schema = _state.value.activeSchema ?: return emptyMap()
+        return when (schema.id) {
+            com.mejoresiagratis.rellenador.data.model.BuiltinSchemas.AIRE_CONTRATO_EMPRESAS_ID -> mapOf(
+                "Casilla de verificación 56" to com.mejoresiagratis.rellenador.data.model.ContractFields.CHECKBOX_ON,
+                "Casilla de verificación 57" to com.mejoresiagratis.rellenador.data.model.ContractFields.CHECKBOX_OFF,
+                "Casilla de verificación 58" to com.mejoresiagratis.rellenador.data.model.ContractFields.CHECKBOX_OFF,
+            )
+            else -> emptyMap()
+        }
+    }
+
+    /**
+     * Traductor `clave de CANON -> nombre real` del PDF que se está rellenando.
+     *
+     * Tanda 5·4 — la fuente es ahora el `FormSchema` activo cuando existe: cada
+     * `FormField.canonical` que apunta a una clave transversal se traduce a su `name` real. Esto
+     * cubre los dos casos:
+     *  - Orange: cada `FormField.name` **es** la clave de `CANON`, y las canónicas apuntan a las
+     *    claves transversales; el mapa resultante es una identidad respecto a `CANON` y
+     *    `FieldKeys` se comporta como antes de esta tanda.
+     *  - PDF ajeno: los canónicos que el esquema ya haya enganchado (por reconocimiento o por
+     *    edición manual) definen el mapeo real; los que no, no se traducen y el sitio que lo
+     *    necesitaba lo verá con la clave original — el mismo comportamiento que había con
+     *    `fieldMapping` vacío.
+     *
+     * Con la fuente aquí, la 5·3 y todos sus consumidores (`FieldValidator`, `AutoFillPolicy`…)
+     * dejan de depender del `fieldMapping` heredado del editor de mapeo, que a partir de la 5·4
+     * es un sitio más para conservar coherencia y no la fuente de verdad.
+     */
+    fun fieldKeys(): com.mejoresiagratis.rellenador.data.model.FieldKeys {
+        val schema = _state.value.activeSchema
+        val fromSchema: Map<String, String> = schema?.let {
+            // Recorre `CANON` para preservar el orden canónico habitual: si dos campos del PDF
+            // apuntan a la misma canónica (no debería pasar, pero es defensivo), gana el primero.
+            val byCanonical = it.allFields()
+                .filter { f -> f.canonical != null }
+                .groupBy { f -> f.canonical!! }
+                .mapValues { (_, fs) -> fs.first().name }
+            com.mejoresiagratis.rellenador.data.model.ContractFields.CANON
+                .mapNotNull { c ->
+                    val canonicalKey = com.mejoresiagratis.rellenador.data.model.BuiltinSchemas
+                        .canonicalFor(c.key) ?: return@mapNotNull null
+                    val realName = byCanonical[canonicalKey] ?: return@mapNotNull null
+                    c.key to realName
+                }.toMap()
+        } ?: emptyMap()
+        // El `fieldMapping` clásico gana sobre lo derivado del esquema — el usuario puede haber
+        // corregido a mano en `MappingEditor` un enganche que el esquema no tenía.
+        val merged = fromSchema + _state.value.fieldMapping
+        return com.mejoresiagratis.rellenador.data.model.FieldKeys(merged)
+    }
 
     /** Persiste el mapeo actual bajo la huella de la plantilla, para reaplicarlo la próxima vez. */
     fun rememberTemplateMapping() {
@@ -1018,10 +1164,13 @@ class WizardViewModel @Inject constructor(
                         // ya NO se pasa: `values` y `checkboxes` llegan con la clave definitiva,
                         // así que `AcroFormFiller` no tiene nada que traducir. Es lo que el plan
                         // llamaba «dejar de necesitar la capa de traducción».
+                        // Tanda 5·4 §6.3 — a las casillas de tipo de identificación se suman las
+                        // de cabecera del contrato reconocido (ALTA NUEVA en el contrato de Aire,
+                        // con MODIFICACIÓN y PORTABILIDAD desmarcadas de propina).
                         checkboxes = fieldKeys().reindex(
                             com.mejoresiagratis.rellenador.data.model.ContractFields
                                 .checkboxStateFor(s.tipoIdentificacion)
-                        )
+                        ) + altaCheckboxes()
                     )
                 }
             }.getOrElse {
@@ -1061,10 +1210,12 @@ class WizardViewModel @Inject constructor(
                     signature = s.signature,
                     stamps = s.stamps,
                     // Tanda 5·3 — ver la nota de `generatePdf`.
+                    // Tanda 5·4 §6.3 — igual que en `generatePdf`, con las casillas de cabecera
+                    // del contrato reconocido (ALTA NUEVA en el contrato de Aire).
                     checkboxes = fieldKeys().reindex(
                         com.mejoresiagratis.rellenador.data.model.ContractFields
                             .checkboxStateFor(s.tipoIdentificacion)
-                    )
+                    ) + altaCheckboxes()
                 )
                 previewRenderer?.close()
                 PdfPageRenderer(file)

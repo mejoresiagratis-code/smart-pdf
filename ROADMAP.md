@@ -166,16 +166,20 @@ paso. Build verde y verificación en el móvil antes de seguir.
   documento tres veces (campos, nº de páginas, nombres). Pide una API del inspector que devuelva
   las tres cosas de una pasada. Tanda pequeña, sin riesgo.
 
-- **Fase 5 — relleno dinámico**: conectar `FillStep`/`WizardViewModel` al `FormSchema` en vez de
-  a las 6 secciones fijas de `CANON`. **Requisitos acordados (2026-09-02)**: al cerrar la 5·4, en
-  vez de los 21 campos de Orange aparecen todos los del PDF subido, agrupados por secciones y en el
-  orden del PDF, tanto en el mapeo como en el relleno. El alta de Aire cubre sólo las páginas 1 y 3
-  del contrato y marca únicamente la casilla ALTA NUEVA. Detalle en `docs/PLAN_FASE_5.md` §6. **Planificada en detalle en `docs/PLAN_FASE_5.md`**
-  (2026-08-31, leyendo el código): se parte en **seis tandas** por riesgo, y el orden no es por
-  tamaño — la migración de datos (tanda 5·3) va **antes** de cambiar lo que se dibuja (5·4), para
-  que se migre con una referencia visible contra la que comparar. Leer ese documento antes de
-  tocar nada; incluye tres hallazgos que no estaban aquí, entre ellos que la validación se apagaría
-  en silencio con los nombres de campo de Aire.
+- **Fase 5 — relleno dinámico**: conectar `FillStep`/`WizardViewModel` al `FormSchema` en vez
+  de a las 6 secciones fijas de `CANON`. Planificada en detalle en `docs/PLAN_FASE_5.md`
+  (2026-08-31, leyendo el código): **siete tandas** por riesgo (5·0, 5·1, 5·2, 5·2b, 5·3, 5·4,
+  5·5), y el orden no es por tamaño — la migración de datos (5·3) va **antes** de cambiar lo
+  que se dibuja (5·4), para que se migre con una referencia visible contra la que comparar. Leer
+  ese documento antes de tocar nada; incluye tres hallazgos que no estaban aquí, entre ellos
+  que la validación se apagaría en silencio con los nombres de campo de Aire. Estado: 5·0 a 5·4
+  cerradas (hasta la `0.10.10`), queda la 5·5 (tablas en el Relleno).
+
+  **Requisitos acordados (2026-09-02, ejecutados en la 5·4)**: en vez de los 21 campos de Orange
+  aparecen todos los del PDF subido, agrupados por secciones y en el orden del PDF, tanto en el
+  mapeo como en el relleno. El alta de Aire cubre sólo las páginas 1 y 3 del contrato y marca
+  únicamente la casilla ALTA NUEVA, desmarcando las otras dos que vienen `/Sí` de fábrica.
+  Detalle en `docs/PLAN_FASE_5.md` §6.
 
 
 - ~~**Persistencia de documentos (Fase 2 de robustez)**~~ ✅ *Completado en v0.8.7* — `DocumentStore`

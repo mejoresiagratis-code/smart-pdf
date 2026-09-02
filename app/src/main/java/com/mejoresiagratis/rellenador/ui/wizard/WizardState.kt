@@ -87,6 +87,21 @@ data class WizardUiState(
     val fieldMapping: Map<String, String> = emptyMap(),  // canónica -> real
     val needsMapping: Boolean = false,
     val templateFingerprint: String = "",
+    /**
+     * Esquema del PDF activo — la fuente de las secciones del paso de Relleno desde la tanda 5·4.
+     *
+     * Con el contrato de Orange se reconoce por nombres de campo característicos y se resuelve al
+     * `BuiltinSchemas.orangeDistribution()` de siempre; con un PDF ajeno se construye con
+     * `PdfFieldInspector` + `FormSchemaBuilder` y se persiste por huella en `schemas_v1` para
+     * reutilizarlo la próxima vez. Sin esquema activo (sesión restaurada de una versión antigua,
+     * o restauración con el URI de origen caducado), `FillStep` cae a `canonFillSections()` con
+     * `FieldKeys.IDENTITY` — es la red de seguridad para Orange y sólo para él.
+     *
+     * No se persiste: el esquema vive en `schemas_v1` bajo la huella, y se recupera al restaurar
+     * la sesión leyendo esa huella. Duplicar la carga aquí obligaría a versionar
+     * `PersistedWizardState` otra vez para nada.
+     */
+    val activeSchema: com.mejoresiagratis.rellenador.data.model.FormSchema? = null,
     val responsableComercial: String = com.mejoresiagratis.rellenador.data.model.ContractFields.RESPONSABLE_VALUE,
     val proxyBaseUrlOverride: String = "",
 

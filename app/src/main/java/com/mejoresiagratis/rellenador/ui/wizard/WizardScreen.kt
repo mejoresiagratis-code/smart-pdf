@@ -104,12 +104,29 @@ fun WizardScreen(vm: WizardViewModel = hiltViewModel(), onOpenSettings: () -> Un
                     // por la que entrará el esquema del PDF subido en la 5·4.
                     Step.RELLENO -> {
                         // Tanda 5·3 — las secciones se expresan en NOMBRES REALES del PDF actual,
-                        // que es la clave con la que se guardan los valores. Con el contrato de
-                        // Orange `FieldKeys` es la identidad y sale exactamente lo de siempre.
-                        val fieldKeys = remember(state.fieldMapping) { vm.fieldKeys() }
+                        // que es la clave con la que se guardan los valores.
+                        //
+                        // Tanda 5·4 — la fuente de las secciones es el `FormSchema` activo, no la
+                        // constante `CANON`. Cuando el asistente reconoce el contrato de Orange, ese
+                        // esquema es `BuiltinSchemas.orangeDistribution()`, que se derivó de las
+                        // mismas 6 secciones que había aquí — así que la app se dibuja exactamente
+                        // igual con el contrato de siempre. Con un PDF ajeno, las secciones salen
+                        // del propio PDF (una por página con lo suelto + una por tabla), en el
+                        // orden de lectura.
+                        //
+                        // La caída a `canonFillSections()` sólo actúa como red de seguridad: se
+                        // llega ahí si el estado se restauró de una versión previa a la 5·4 y aún
+                        // no se ha vuelto a pasar por el paso 1 (`activeSchema` = null). Es el
+                        // mismo criterio que aplica `WizardViewModel.chooseUserContract` cuando el
+                        // PDF no tiene AcroForm.
+                        val fieldKeys = remember(state.fieldMapping, state.activeSchema) { vm.fieldKeys() }
+                        val sections = remember(state.activeSchema, fieldKeys) {
+                            state.activeSchema?.let { fillSectionsFrom(it) }
+                                ?: canonFillSections(fieldKeys)
+                        }
                         FillStep(
                             state, vm,
-                            sections = remember(fieldKeys) { canonFillSections(fieldKeys) },
+                            sections = sections,
                             keys = fieldKeys,
                         )
                     }

@@ -8,6 +8,161 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.10.10-fase5-esquema] — 2026-09-03
+
+**Tanda 5·4 de `docs/PLAN_FASE_5.md`, con las correcciones al §6.3 y al §6.5 verificadas contra
+el PDF real.** `FillStep` y `MappingEditor` dejan de recorrer los 21 campos de Orange sea cual
+sea el PDF y se dibujan a partir del `FormSchema` del PDF cargado. Al cerrar la tanda, en vez
+de los 21 destinos de siempre aparecen todos los campos del PDF subido — 481 en el contrato de
+Aire — agrupados por sección y en el orden en que están en el PDF, y eso vale para las dos
+pantallas. Con el contrato de Orange sale exactamente lo mismo que antes: el esquema `BUILTIN`
+mudó dentro las 6 secciones que `FillStep` pintaba desde la 5·1, y el `FieldKeys` derivado del
+esquema es la identidad respecto a `CANON`, así que la regla del roadmap HTML — *«mismo orden,
+mismas validaciones, mismo autorrelleno, misma firma»* — se cumple por construcción.
+
+### Añadido — el asistente construye su propio `FormSchema`
+
+`WizardViewModel.chooseUserContract` deja de ser un lector de nombres de campo y pasa a
+inspeccionar el PDF, calcular la huella con el número de páginas real, buscarlo en
+`schemas_v1` y construirlo con `FormSchemaBuilder` si no estaba. Con eso, subir un PDF de Aire
+por el paso 1 ya no exige haber pasado antes por Ajustes › «Analizar y etiquetar»: el mismo
+grafo de Hilt que ya usaba `LabelEditorViewModel` (inspector + builder) queda inyectado también
+aquí, sin configuración nueva.
+
+De paso se arregla un desajuste que estaba en producción sin diagnosticar: la huella del
+asistente era `TemplateFingerprint.of(fields.size, fields)` — el nº de campos ocupando el
+lugar del nº de páginas —, incompatible con `TemplateFingerprint.of(pageCount, fieldNames)` del
+editor. Un PDF etiquetado en Ajustes salía como «no encontrado» al volver por el asistente, y
+al revés. El comentario `// huella provisional (páginas se ajustan tras detectar)` de la 5·3
+anticipaba el ajuste que nunca llegó a haber. Ya lo hay.
+
+### Añadido — reconocimiento por nombres de campo
+
+`BuiltinSchemas.recognize(fieldNames)`. Se prometió en `CONTINUIDAD.md` §4 («Orange se
+reconoce por huella») y no estaba implementado — `BuiltinSchemas.orangeDistribution()` era
+código muerto, sin llamador. La huella depende del nº de páginas del PDF concreto y no se
+puede fijar en una constante, así que se compara contra un puñado de nombres de campo
+característicos (dobles espacios y `"undefined"` para Orange; casillas 56/57/58 y
+`TF cuotalta TOTAL` para el contrato de Aire), que son deterministas y no dependen de la
+página. Un PDF que contenga esos nombres se resuelve al `BUILTIN` correspondiente y se
+rellena con su propio esquema.
+
+### Cambiado — casillas de cabecera del contrato de Aire
+
+Verificado sobre `Contrato_empresas.pdf` con `pypdf`: las tres casillas de la cabecera
+CLIENTE — `Casilla de verificación 56/57/58` (ALTA NUEVA, MODIFICACIÓN, PORTABILIDAD) —
+vienen del PDF marcadas de fábrica con `/V = /Sí`. La redacción del §6.3 hablaba sólo de
+«marcar ALTA NUEVA», y dejarlo así saca un alta con tres casillas marcadas y sin valor. La
+5·4 emite `ALTA NUEVA=On`, `MODIFICACIÓN=Off`, `PORTABILIDAD=Off` cuando el esquema activo
+es el del contrato de Aire. Corrección al §6.3 del plan, ejecutada.
+
+### Cambiado — `FormSchemaBuilder` promociona los grupos radio disfrazados
+
+El AcroForm de Aire declara 13 grupos con el flag de radio; verificado con `pypdf`, sólo uno
+es radio de verdad (`Botón de opción 10`, 6 widgets, estados `/0`..`/5`). Los otros 12 son
+un widget con un único estado — o sea casillas sueltas con el flag mal puesto. La
+comprobación de tipo compatible del `MappingEditor` (§6.5) rechazaría sin esto 12
+asignaciones legítimas. El builder ahora decide el tipo por grupo: si un grupo `RADIO` tiene
+un solo widget o un solo estado, se guarda como `CHECKBOX`. Corrección al §6.5 del plan.
+
+### Cambiado — `MappingEditor` filtra opciones por `FieldKind` compatible
+
+El §6.5 del plan describía un fallo real del auto-mapeo: `Fecha · mes` → `Casilla de
+verificación 56`. Un texto contra un checkbox. Con `activeSchema`, la lista de opciones se
+restringe al subconjunto del `FieldKind` esperado por cada canónica: TEXT contra TEXT,
+CHECKBOX contra CHECKBOX. Sin `activeSchema` (sesión restaurada de una versión previa a la
+5·4) se muestran todas, para no perder asignaciones válidas por una comprobación defensiva.
+
+### Cambiado — `FormSchemaBuilder` parte los sueltos por página
+
+La sección «Campos» global que emitía el builder colocaba las decenas de filas sueltas del
+contrato de Aire (unas 40) en una única sección al principio, delante de todas las tablas.
+Con un objetivo declarado visual, eso es prácticamente una lista plana. Ahora se emite una
+sección simple por página con lo que ha quedado suelto en ella, intercalada con las tablas
+en el orden real de aparición.
+
+### Verificación
+
+- `kotlinc -Werror` sobre el paquete `data/model` completo + `FormSchemaBuilder` + los
+  stubs conocidos, cero avisos.
+- `BuiltinSchemas.recognize()` sobre los 481 nombres reales del contrato de Aire devuelve
+  `AIRE_CONTRATO_EMPRESAS_ID`; sobre los de Orange devuelve `ORANGE_DISTRIBUTION_ID`; sobre
+  la unión de ambos gana Orange (porque su firma es más específica y aparece primero).
+- La promoción de radios en el builder: verificada contando widgets y estados por grupo en
+  el PDF real — 12 grupos pasan a CHECKBOX y `Botón de opción 10` queda como RADIO.
+
+### Pendiente de verificar en dispositivo
+
+- **Orange sale idéntico.** Es la regla que gobierna la fase 5 según el roadmap HTML;
+  cualquier diferencia visible al cargar el contrato de Orange es un fallo, no una mejora.
+- **El contrato de Aire abre en el paso 1 sin pasar por Ajustes** y en Relleno aparecen sus
+  campos por sección y en orden de PDF, no los 21 de Orange.
+- **En el PDF final del contrato de Aire, MODIFICACIÓN y PORTABILIDAD salen sin marcar** y
+  ALTA NUEVA sí.
+
+## [0.10.9-fase5-clave-real] — 2026-09-02
+
+**Fase 5, tanda 5·3 — «la clave».** `fieldValues`/`fieldStates`/`fieldOrigins`/
+`fieldCandidates`/`UndoEntry` pasan a indexarse por **nombre real del campo del AcroForm**,
+y `fieldMapping` deja de pasarse a la salida (`AcroFormFiller` ya no traduce). Pieza nueva
+`FieldKeys` como única capa de traducción `clave de CANON <-> nombre real`; en la 5·4 su
+fuente pasará a ser el `FormSchema` y será el único sitio que tocar.
+
+Arregla un fallo vivo en producción: desde la 0.9.3 el prompt pide los nombres reales del
+PDF cargado, así que la IA ya guardaba por nombre real mientras `FillStep` seguía leyendo
+por clave de Orange — **el paso de Relleno mostraba vacíos los campos que la IA sí había
+extraído** (sólo se veían fecha y responsable, que eran los que la app inyectaba con clave
+de Orange). El PDF final salía bien por casualidad, vía el `?: canonical` de `realName()`.
+
+Migraciones: `PersistedWizardState` v1→v2 reindexando con el `fieldMapping` que el propio
+DTO ya guardaba, y `ContractProfile` gana `version` + `migrated()` **perezoso** (cada
+perfil lleva dentro su `fieldMapping`, así que no hay perfiles huérfanos). Las fechas y el
+responsable ya no se escriben si el formulario no tiene esos campos (`realIfPresent`) — el
+fallo que la 5·0 arregló para el responsable y seguía vivo en las fechas.
+
+Auditoría sobre el repo completo: dos consumidores más seguían en claves de Orange.
+`AutoFillPolicy.RISKY_SOURCES` — con un PDF propio la protección se apagaba en silencio y
+el IBAN de un contrato de alquiler (el del arrendador) se habría autorrellenado como dato
+verificado — y `FieldResolver` (claves de los paquetes de dirección, `DATE_KEYS` y el
+`decide()` que llama a la política). Los dos migrados a clave canónica.
+
+En Orange `FieldKeys` es la identidad: verificado con `kotlinc -Werror` (cero avisos) y 58
+comprobaciones de comportamiento ejecutables, 0 fallos.
+
+## [0.10.8-fase5-heuristicas-canonicas] — 2026-09-01
+
+**Fase 5, tanda 5·2b.** Cierra los cuatro (cinco) acoplamientos a nombres de campo de
+Orange que quedaban repartidos y que la 5·3 habría cambiado por debajo. `FieldNormalizer.
+normVal` decide por canónica (mismo patrón que la 5·2 en `FieldValidator`), `DateAutofill`
+resuelve sus tres claves con `BuiltinSchemas.realKeyFor`, `copyFiscalToComercio` usa
+`fiscalToComercioKeyPairs()` en vez de concatenar `_2`, `keyboardFor` decide por canónica,
+y el `coverageKeys` de `MultiAiExtractor` usa `DATE_KEYS` en vez de repetir el literal.
+
+Cuatro de las cinco son cero-cambio en Orange (verificado: `realKeyFor` devuelve los mismos
+literales). `normVal` sí cambia en tres campos por el **mismo bug de espacios** que destapó
+la 5·2: ahora el IBAN se compacta, el NIF del representante se limpia y «Apellidos, Nombre»
+se invierte. El IBAN compactado se ve en el PDF final — es paridad con la web, no una
+regresión.
+
+Se hace ANTES de la 5·3 a propósito: con las heurísticas ya colgadas de la canónica, la
+migración de clave llega a terreno despejado.
+
+## [0.10.7-fase5-validacion-canonica] — 2026-08-31
+
+**Fase 5, tanda 5·2.** `FieldValidator.validate()` decide primero por
+`BuiltinSchemas.canonicalFor(fieldName)` en vez de por heurística sobre el nombre del campo
+(`docs/PLAN_FASE_5.md`, hallazgo 2.5) — evita que la validación se apague en silencio en
+cuanto la 5·4 traiga campos de Aire. El hermano de Provincia para el CP y `FECHA_KEYS` en
+`FillStep` dejan de asumir la convención de nombre `_2`/literal de Orange y se resuelven
+por canónica (`BuiltinSchemas.realKeyFor`/`provinciaKeyFor`), hallazgo 2.6. Fuente todavía
+`CANON` (5·3/5·4 la sustituyen).
+
+**Efecto colateral, no una regresión**: dos campos de `CANON` tenían la validación rota
+desde antes de esta tanda por un desajuste de espacios en la comparación por nombre
+(`"NIF representante"` normalizaba a `"nif representante"`, con espacio, y se comparaba
+contra `"nifrepresentante"`; iban nunca casaba con `"datosbancarios"` por el mismo motivo)
+— con la canónica sí validan. Ver sección 5 de `CONTINUIDAD.md`.
+
 ## [0.10.6-fase5-costura] — 2026-08-31
 
 **Tandas 5·0 y 5·1 de `docs/PLAN_FASE_5.md`**, juntas porque las dos son de riesgo bajo y ninguna

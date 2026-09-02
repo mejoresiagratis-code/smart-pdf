@@ -73,19 +73,76 @@ class FormSchemaBuilder @Inject constructor() {
             )
         }
 
-        val rows = groupIntoRows(fields)
+        // Tanda 5·4 — promoción de radios disfrazados a checkbox, decidida por GRUPO.
+        //
+        // El AcroForm de Aire declara 13 grupos con el flag de radio, pero verificado sobre
+        // `Contrato_empresas.pdf` con `pypdf`: sólo `Botón de opción 10` es un radio de verdad
+        // (6 widgets con estados `/0`..`/5` — la fila de RED INTELIGENTE). Los otros 12 son un
+        // widget con un solo estado, o sea una casilla suelta con el flag mal puesto. La
+        // comprobación de tipo compatible del `docs/PLAN_FASE_5.md` §6.5, sin esta promoción,
+        // rechazaría 12 asignaciones legítimas en el mapeo.
+        //
+        // Se hace por `name`: dos widgets del mismo grupo tienen el mismo `name` en el AcroForm.
+        // El único radio de verdad tiene >1 widget o >1 estado on distinto de Off; los
+        // disfrazados, exactamente uno de cada.
+        val radioGroupSize: Map<String, Int> = fields
+            .filter { it.isRadio }
+            .groupBy { it.name }
+            .mapValues { (_, widgets) ->
+                maxOf(widgets.size, widgets.mapNotNull { it.onState }.toSet().size)
+            }
+
+        fun promoted(f: PdfFieldInspector.Field): PdfFieldInspector.Field =
+            if (f.isRadio && (radioGroupSize[f.name] ?: 0) <= 1) {
+                // Copia como casilla: pierde `isRadio`, gana `isCheckbox`. Todo lo demás intacto.
+                f.copy(isRadio = false, isCheckbox = true)
+            } else f
+
+        val rows = groupIntoRows(fields.map(::promoted))
         val columnXs = detectColumnXs(rows)
         val sections = mutableListOf<FormSection>()
 
         var pending = mutableListOf<List<PdfFieldInspector.Field>>()   // filas de tabla en curso
-        val loose = mutableListOf<PdfFieldInspector.Field>()           // campos fuera de tabla
+        // Sueltos por página: 5·4 — el objetivo declarado es visual (que el usuario sepa en qué
+        // parte del formulario está mientras rellena), y con un contrato de 3 páginas metiéndolo
+        // todo en una única sección "Campos" al principio se pierde por completo esa referencia.
+        // Se emite una sección simple por página con sus sueltos, intercalada con las tablas en
+        // el orden real de aparición.
+        val loosePerPage = linkedMapOf<Int, MutableList<PdfFieldInspector.Field>>()
+
+        fun addLoose(row: List<PdfFieldInspector.Field>) {
+            if (row.isEmpty()) return
+            val bucket = loosePerPage.getOrPut(row.first().page) { mutableListOf() }
+            bucket += row
+        }
+
+        // Antes de flush(): materializa el bloque de sueltos que quede pendiente **de páginas ya
+        // completadas**. La sección simple de una página se emite en cuanto empieza una tabla o
+        // una fila de otra página, para que las tablas caigan intercaladas y no siempre al final.
+        fun flushLooseBefore(pageOfNext: Int?) {
+            val closed = loosePerPage.keys.filter { pageOfNext == null || it < pageOfNext }
+            for (page in closed) {
+                val loose = loosePerPage.remove(page) ?: continue
+                if (loose.isEmpty()) continue
+                sections += FormSection(
+                    id = "pag_${page}",
+                    title = "Página ${page + 1}",
+                    kind = SectionKind.SIMPLE,
+                    fields = loose.sortedWith(compareBy({ it.y }, { it.x }))
+                        .mapIndexed { i, f -> toField(f, i) },
+                )
+            }
+        }
 
         fun flushTable() {
             if (pending.size >= MIN_ROWS_FOR_TABLE) {
+                // Antes de cerrar la tabla, cierra los sueltos de páginas anteriores a la que
+                // arranca la tabla, para conservar el orden PDF.
+                flushLooseBefore(pending.first().first().page)
                 sections += tableSection(pending, columnXs, sections.size)
             } else {
                 // Una fila suelta no hace tabla: sus campos vuelven a la sección simple.
-                pending.forEach { loose += it }
+                pending.forEach { addLoose(it) }
             }
             pending = mutableListOf()
         }
@@ -94,7 +151,7 @@ class FormSchemaBuilder @Inject constructor() {
             val isTableRow = row.count { xKey(it.x) in columnXs } >= MIN_COLS_FOR_ROW
             if (!isTableRow) {
                 flushTable()
-                loose += row
+                addLoose(row)
             } else if (pending.isEmpty() || sharesColumns(pending.last(), row, columnXs)) {
                 pending += row
             } else {
@@ -103,19 +160,7 @@ class FormSchemaBuilder @Inject constructor() {
             }
         }
         flushTable()
-
-        if (loose.isNotEmpty()) {
-            sections.add(
-                0,
-                FormSection(
-                    id = "campos",
-                    title = "Campos",
-                    kind = SectionKind.SIMPLE,
-                    fields = loose.sortedWith(compareBy({ it.page }, { it.y }, { it.x }))
-                        .mapIndexed { i, f -> toField(f, i) },
-                )
-            )
-        }
+        flushLooseBefore(pageOfNext = null)
 
         return FormSchema(
             id = "learned:$fingerprint",
