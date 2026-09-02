@@ -4,8 +4,8 @@
 > o su contenido; con eso y el repo tiene el contexto completo. **No hace falta reenviar los
 > PDFs de Aire**: su análisis está en `docs/ANALISIS_FORMULARIOS_AIRE.md`.
 >
-> **Actualizado**: 2026-08-31, tras `0.10.9-fase5-clave-real` (⚠️ pendiente de verde).
-> La 0.10.8 SÍ salió verde. Este documento **caduca**: la primera regla de abajo
+> **Actualizado**: 2026-09-02. La **0.10.9 salió verde**; es el último commit de código.
+> Por encima hay commits sólo de documentación, que no suben versión. Este documento **caduca**: la primera regla de abajo
 > existe precisamente porque lo que aquí se afirma puede estar viejo.
 
 Habla en **español de España**.
@@ -26,26 +26,11 @@ El último commit **de código** debería ser `0.10.9-fase5-clave-real` · versi
 Por encima puede haber commits solo de documentación, que no suben versión. Si el último código
 no es ése, este documento está desfasado: manda `git log` y la cabecera del `CHANGELOG.md`.
 
-### ⚠️ Build pendiente de verde
+### Estado del build
 
-La **0.10.6, 0.10.7 y 0.10.8 salieron verdes**. La 0.10.9 está sin verificar en Actions.
+De la 0.10.6 a la **0.10.9, todas verdes**. No hay nada pendiente de verificar en Actions.
 
-De la 0.10.9 (tanda 5·3) sí se verificó en local, con la técnica de la sección 6:
-`kotlinc -Werror` sobre `data/model` + `data/validation` (cero avisos, así que no quedan imports
-huérfanos ni shadowing), y **58 comprobaciones de comportamiento** en dos pruebas ejecutables: que
-con el mapeo vacío `FieldKeys` es la identidad en los 21 campos de `CANON` y en los checkboxes,
-que con un mapeo de Aire resuelve nombre real ↔ canónica ↔ etiqueta en los dos sentidos, que
-`realIfPresent` no inventa campos que el PDF no tiene, y que las dos migraciones son
-**idempotentes**. 0 fallos.
-
-Incluye una prueba específica de que la protección de `AutoFillPolicy` vuelve a funcionar con un
-PDF propio (ver el punto de la sección 5), y de que una fuente legítima sigue autorrellenando.
-
-Lo que NO se pudo verificar es lo que depende de Compose y de Android: `FillStep`,
-`WizardScreen`, `WizardViewModel` y `PrefsRepository`. Si el build falla, mira ahí primero.
-
-Y aunque salga verde, esta tanda **hay que probarla en el móvil con los dos contratos**: ver
-sección 5.
+Lo siguiente **no es código**: es probar en el móvil lo que ya está subido. Ver sección 5.
 
 ---
 
@@ -54,10 +39,13 @@ sección 5.
 1. `ROADMAP.md` — plan multi-formulario, decisión de arquitectura de expediente, fases.
 2. `docs/ANALISIS_FORMULARIOS_AIRE.md` — análisis de los PDFs de Aire, verificado contra los
    ficheros reales. Es el brief técnico de las fases que quedan.
-3. `docs/PLAN_FASE_5.md` — plan de la fase 5 partido en seis tandas, escrito leyendo el código.
-   **De lectura obligada antes de tocar el asistente.**
-4. `CHANGELOG.md`, entradas **0.9.4 a 0.10.5**.
-5. `docs/ESTADO_Y_GUIA_DE_CONTINUIDAD.md` — arquitectura e historia. **Ojo**: su bloque
+3. `docs/PLAN_FASE_5.md` — plan de la fase 5 partido en tandas, escrito leyendo el código.
+   **De lectura obligada antes de tocar el asistente.** Su §6 tiene los requisitos acordados para
+   la 5·4 (secciones en el orden del PDF, alcance del alta, casilla de ALTA).
+4. `docs/roadmap-multiformulario.html` — el roadmap de las 7 fases con el **estado real** de cada
+   una, qué falta y por qué. Ábrelo en el navegador; la primera pestaña es el resumen.
+5. `CHANGELOG.md`, entradas **0.9.4 a 0.10.9**.
+6. `docs/ESTADO_Y_GUIA_DE_CONTINUIDAD.md` — arquitectura e historia. **Ojo**: su bloque
    «ESTADO ACTUAL» se quedó en `v0.7.10` / versionCode 48 (agosto de 2026), 26 versiones por
    detrás. La parte de arquitectura y la de «archivo histórico» siguen siendo útiles; el estado
    por versión está en el `CHANGELOG.md`, que es la fuente de verdad.
@@ -90,7 +78,7 @@ con cuatro formularios rellenables propios: contrato de empresas (481 campos), p
 | 0.10.6 | Fase 5, tandas **5·0 y 5·1**: campo fantasma arreglado + costura de secciones ⚠️ sin verde |
 | 0.10.7 | Fase 5, tanda **5·2**: validación, hermano del CP y `FECHA_KEYS` cuelgan de `canonical` · verde ✅ |
 | 0.10.8 | Fase 5, tanda **5·2b**: `normVal`, `DateAutofill`, copia fiscal, teclado y cobertura, por canónica · verde ✅ |
-| 0.10.9 | Fase 5, tanda **5·3**: la clave pasa a ser el nombre real del campo; `FieldKeys`; migración v1→v2 ⚠️ sin verde |
+| 0.10.9 | Fase 5, tanda **5·3**: la clave pasa a ser el nombre real del campo; `FieldKeys`; migración v1→v2 · verde ✅ |
 
 ### Qué está enganchado y qué no
 
@@ -121,18 +109,30 @@ Por orden. La primera no es código.
   documento tres veces (campos, nº de páginas, nombres). Pide una API del inspector que devuelva
   las tres cosas de una pasada.
 - **Fase 5 — relleno dinámico**: es la que hace que un PDF de Aire se rellene de punta a punta, y
-  la que toca `WizardViewModel` (1126 líneas). **No la ataques de una vez: está partida en seis
-  tandas en `docs/PLAN_FASE_5.md`.** Hechas: 5·0 y 5·1 (0.10.6), 5·2 (0.10.7), 5·2b (0.10.8) y
-  **5·3 (0.10.9), la de riesgo alto**. Las decisiones que la bloqueaban están tomadas y registradas
-  en `docs/PLAN_FASE_5.md` §4. **La siguiente es la 5·4**: que las secciones y los campos salgan
-  del `FormSchema` del PDF en vez de de `CANON`. El terreno ya está preparado — `FieldKeys` es el
-  único sitio donde cambiar la fuente de la traducción, y `FillStep` ya recibe secciones y claves
-  por parámetro. En la 5·4 se retira también `MappingEditor`, que hasta ahora se ha dejado intacto.
-  **Ya NO toca la migración de datos** (`fieldValues`/`fieldStates`/`fieldOrigins`/
-  `fieldCandidates`/`UndoEntry` pasan a indexarse por nombre real; `PersistedWizardState` v1→v2;
-  `ContractProfile.campos` del historial y los perfiles exportados). Es la de **riesgo alto** del
-  plan — tanda sola, nada más dentro — y va antes que la 5·4 (que es la que cambia lo que se ve)
-  a propósito: así lo que se rompa se ve comparando contra Orange, que sigue en pantalla.
+  la que toca `WizardViewModel` (1126 líneas). **No la ataques de una vez: está partida en tandas en
+  `docs/PLAN_FASE_5.md`.** Hechas: 5·0 y 5·1 (0.10.6), 5·2 (0.10.7), 5·2b (0.10.8) y **5·3 (0.10.9),
+  la de riesgo alto**. Quedan la **5·4** y la **5·5**.
+
+  **La siguiente es la 5·4**, con requisitos ya acordados en `docs/PLAN_FASE_5.md` §6:
+    · las secciones y los campos salen del `FormSchema` del PDF, no de `CANON`;
+    · al terminar, en vez de los 21 campos de Orange aparecen **todos los del PDF subido**,
+      **agrupados por secciones y en el orden del PDF**, y eso vale para las **dos** pantallas
+      (mapeo y relleno) — el objetivo es visual: que el usuario sepa en qué parte del formulario
+      está mientras rellena;
+    · el alcance del alta es sólo **páginas 1 y 3** del contrato de Aire (la 2 son productos y
+      tablas, y entra con la 5·5);
+    · con sólo el contrato subido se marca **únicamente la casilla ALTA NUEVA**; los demás casos
+      (modificación, portabilidad, servicios, centralita) llegarán cuando se aporten esos PDFs.
+
+  El terreno está preparado: `FieldKeys` es el único sitio donde cambiar la fuente de la traducción,
+  y `FillStep` ya recibe secciones y claves por parámetro. **El mapeo se conserva**: `MappingEditor`
+  y `TemplateMapper.suggest()` no se retiran — siguen sirviendo para enlazar campos con su
+  `canonical` cuando el PDF es un contrato conocido. Lo que se quita es proyectar Orange encima de
+  un PDF que no es el suyo.
+
+- **Tanda 5·5 — tablas en el Relleno**: filas dinámicas, catálogo local (lleva comisiones: no sale
+  del dispositivo) y `cuota total = cantidad × cuota unitaria`. No bloquea el alta, porque el alta
+  usa páginas 1 y 3 y ahí no hay tablas.
 - **Fase 6 — firma**: manejar los campos `/Sig` del AcroForm (4 en el contrato, 2 en
   portabilidad), no sólo estampar imagen en coordenadas.
 
@@ -193,9 +193,10 @@ Por orden. La primera no es código.
   la única tarea de visión que expone el proxy. Funciona, pero el nombre engaña a quien lea el
   código o el log del servidor. Arreglarlo es tocar `ai-proxy.php`, que se despliega por
   FTP/cPanel y no vive en este repo.
-- **Basura en la raíz**: `hotfix-contractstep-scope.zip` y `v0.7.7-estructura-detectada.zip`,
-  1,1 MB commiteados desde la 0.7.7. Restos de mover ficheros a mano, no un método. Borrarlos y
-  añadir `*.zip` al `.gitignore` es una tanda de dos minutos.
+- **El auto-mapeo puede asignar un checkbox a un campo de texto.** Visto en una captura con el
+  contrato de Aire cargado: `Fecha · mes` → `Casilla de verificación 56`. No se arregla en el mapeo
+  viejo (la 5·4 lo sustituye), pero el nuevo debe comprobar que el `FieldKind` del destino es
+  compatible con el del origen. Ver `docs/PLAN_FASE_5.md` §6.5.
 
 ---
 

@@ -291,3 +291,37 @@ Marcado explícitamente para que nadie lo dé por bueno sin comprobarlo:
 | **5 · Relleno** | Tablas con filas dinámicas + selector de catálogo + cálculo de totales. Los checkboxes de fila se resuelven por geometría. |
 | **6 · Firma** | Hay que mirar los campos `/Sig`, no sólo estampar imagen en coordenadas. |
 | **7 · Biblioteca** | Sin cambios. |
+
+---
+
+## Alcance del alta con sólo el contrato (2026-09-02)
+
+Decidido con las capturas de las páginas 1 y 3 delante. Un alta en la que el usuario **sólo aporta
+el contrato** toca únicamente estas dos páginas:
+
+**Página 1**
+- Cabecera CLIENTE: tres casillas — `ALTA NUEVA`, `MODIFICACIÓN`, `PORTABILIDAD`. Con sólo el
+  contrato se marca **ALTA NUEVA** y ninguna más.
+- Cabecera DISTRIBUIDOR: nombre, teléfono, email y código de distribuidor. Son constantes del
+  distribuidor → `ValueOrigin.AJUSTES`.
+- `FECHA DE ALTA EN TEKI` y `CÓDIGO DE CLIENTE EN TEKI` → `ValueOrigin.PLATAFORMA`: no salen de
+  ningún documento del cliente y **no deben bloquear el avance** por estar vacíos.
+- DATOS DEL CLIENTE: nombre o razón social, NIF/CIF/NIE, domicilio, teléfono, CP, localidad,
+  provincia, fax, nombre del representante, NIF, móvil del representante, email del representante,
+  contacto de administración, TIF, email de administración.
+
+**Página 3**
+- Fecha del contrato: `Madrid,` + tres campos (día / mes / año). Es la fecha de la **firma**, no la
+  que aparezca en la documentación aportada → `ValueOrigin.FIRMA`.
+- Bloque CLIENTE: firma y sello, nombre y DNI.
+- Bloque COMERCIAL/DISTRIBUIDOR: firma, nombre y DNI → los datos son de Ajustes.
+- Bloque AIRE NETWORKS DEL MEDITERRÁNEO SLU: **viene ya firmado y sellado en el PDF. No se toca.**
+
+**Página 2** (productos y servicios contratados, con sus tablas) queda **fuera** del alta. Entra
+con la tanda 5·5, que es la que añade tablas al Relleno.
+
+### Pendiente para más adelante
+
+Si el usuario aporta en Documentación un PDF de **servicios, centralita o portabilidad** (con o sin
+cambio de titularidad), la IA debería reconocer los campos **ya rellenos** de ese PDF y trasladarlos
+al contrato. Anotado, fuera del alcance actual.

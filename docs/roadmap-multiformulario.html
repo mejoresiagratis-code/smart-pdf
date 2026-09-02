@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#ECD0FF">
+<title>Roadmap · Rellenador multi-formulario</title>
+<style>
+:root{
+  --primary:#7B0BD1;--primary-deep:#5E0A99;--primary-container:#ECD0FF;--on-primary-container:#2A0044;
+  --tertiary:#00095A;--tertiary-container:#D9DEFF;--on-tertiary-container:#000A3D;
+  --surface:#FDF9FF;--sc-low:#F9F1FE;--sc:#F4E9FB;--sc-high:#EDDEF7;--sc-highest:#E6D4F2;
+  --on-surface:#1D1526;--on-surface-var:#4A4055;--outline:#CFC0DA;
+  --ok:#2E6B2A;--ok-c:#DCEFD9;--warn:#8A5300;--warn-c:#FFE9C7;--err:#BA1A1A;--err-c:#FFDAD6;
+  --e1:0 1px 2px rgba(42,0,68,.13),0 1px 3px 1px rgba(42,0,68,.08);
+  --sp:cubic-bezier(.34,1.45,.44,1);
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{font-family:Roboto,system-ui,"Segoe UI",sans-serif;background:var(--surface);color:var(--on-surface);
+ line-height:1.6;font-size:15px;-webkit-font-smoothing:antialiased;padding-bottom:48px}
+.wrap{max-width:600px;margin:0 auto;padding:0 16px}
+header{background:linear-gradient(160deg,#F7E6FF,var(--primary-container));padding:26px 16px 22px}
+header .wrap{padding:0}
+header h1{font-size:22px;font-weight:800;letter-spacing:-.3px;color:var(--on-primary-container);line-height:1.28}
+header p{color:#5E2A80;font-weight:600;margin-top:6px;font-size:13.5px}
+.badges{margin-top:12px;display:flex;gap:6px;flex-wrap:wrap}
+.badge{background:#fff;border-radius:999px;padding:4px 12px;font-size:11.5px;font-weight:800;
+ color:var(--primary-deep);box-shadow:var(--e1)}
+.badge.t{background:var(--tertiary-container);color:var(--on-tertiary-container)}
+nav{position:sticky;top:0;z-index:30;background:rgba(253,249,255,.95);backdrop-filter:blur(10px);
+ border-bottom:1px solid var(--outline);padding:9px 0;margin-bottom:16px}
+nav .row{display:flex;gap:6px;overflow-x:auto;padding:0 16px;scrollbar-width:none}
+nav .row::-webkit-scrollbar{display:none}
+nav button{border:1.4px solid var(--outline);background:#fff;border-radius:999px;padding:7px 14px;
+ font-size:12.5px;font-weight:700;cursor:pointer;color:var(--on-surface-var);white-space:nowrap;
+ transition:all .3s var(--sp);font-family:inherit;flex:0 0 auto}
+nav button.on{background:var(--primary);border-color:var(--primary);color:#fff;box-shadow:var(--e1)}
+nav button:active{transform:scale(.94)}
+nav button:focus-visible{outline:3px solid var(--tertiary);outline-offset:2px}
+section{display:none;animation:fade .4s var(--sp)}
+section.on{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(8px)}}
+@media (prefers-reduced-motion:reduce){
+  *{animation:none!important;transition:none!important}
+}
+h2{font-size:19px;margin:4px 0 12px;padding-bottom:8px;border-bottom:2px solid var(--primary-container)}
+h3{font-size:15.5px;margin:20px 0 8px;color:var(--primary-deep)}
+h4{font-size:14px;margin-bottom:5px}
+p{margin-bottom:10px}
+ul,ol{margin:0 0 12px 20px}li{margin-bottom:5px}
+code{background:var(--sc-high);border-radius:5px;padding:1px 6px;font-size:12.4px;
+ font-family:ui-monospace,Consolas,monospace;word-break:break-word}
+pre{background:#241F2A;color:#E8E0F0;border-radius:12px;padding:13px 15px;overflow-x:auto;font-size:11.8px;
+ font-family:ui-monospace,Consolas,monospace;line-height:1.55;margin:10px 0 14px}
+pre .c{color:#8E85A0}pre .k{color:#C79BFF}pre .s{color:#9FD69F}
+.card{background:var(--sc-low);border-radius:16px;padding:14px 16px;margin:11px 0;box-shadow:var(--e1)}
+.card.ok{border-left:5px solid var(--ok)}
+.card.warn{border-left:5px solid var(--warn);background:#FFFBF2}
+.card.err{border-left:5px solid var(--err);background:#FFF6F5}
+.card.info{border-left:5px solid var(--tertiary);background:#F4F6FE}
+.card p:last-child{margin-bottom:0}
+table{width:100%;border-collapse:collapse;margin:10px 0 16px;font-size:12.6px;background:#fff;
+ border-radius:13px;overflow:hidden;box-shadow:var(--e1)}
+th{background:var(--sc);text-align:left;padding:9px 10px;font-size:10.8px;
+ letter-spacing:.3px;color:var(--on-surface-var)}
+td{padding:8px 10px;border-top:1px solid var(--sc-high);vertical-align:top}
+.tag{display:inline-block;border-radius:999px;padding:2px 9px;font-size:10.5px;font-weight:800;margin-right:4px}
+.tag.hi{background:var(--err-c);color:var(--err)}
+.tag.md{background:var(--warn-c);color:var(--warn)}
+.tag.lo{background:var(--sc-high);color:var(--on-surface-var)}
+.tag.ok{background:var(--ok-c);color:var(--ok)}
+details{background:#fff;border-radius:12px;padding:11px 14px;margin-bottom:8px;box-shadow:var(--e1)}
+summary{cursor:pointer;font-weight:700;font-size:13.6px;list-style:none}
+summary::-webkit-details-marker{display:none}
+summary::before{content:"▸ ";color:var(--primary);font-weight:900}
+details[open] summary::before{content:"▾ "}
+summary:focus-visible{outline:3px solid var(--tertiary);outline-offset:2px;border-radius:6px}
+details p,details ul,details pre,details table{margin-top:8px;font-size:13px}
+.phase{background:#fff;border-radius:18px;padding:0;margin:14px 0;box-shadow:var(--e1);overflow:hidden}
+.phase .hd{display:flex;align-items:center;gap:11px;padding:14px 16px;background:var(--sc)}
+.phase .n{width:34px;height:34px;border-radius:11px;background:var(--primary);color:#fff;flex:0 0 auto;
+ display:grid;place-items:center;font-weight:900;font-size:14px}
+.phase.done .n{background:var(--ok)}
+.phase.part .n{background:var(--warn)}
+.phase.todo .n{background:var(--on-surface-var)}
+.phase .ti{flex:1}
+.phase .ti b{display:block;font-size:15px}
+.phase .ti small{font-size:11.5px;color:var(--on-surface-var);font-weight:600}
+.phase .bd{padding:14px 16px}
+.dep{background:var(--warn-c);border-radius:10px;padding:9px 12px;font-size:12.3px;color:#5E3A00;margin:8px 0}
+.dep b{color:#4A2E00}
+.gap{background:var(--err-c);border-radius:10px;padding:9px 12px;font-size:12.3px;color:#6B1010;margin:8px 0}
+.gap b{color:#5A0D0D}
+.foot{text-align:center;color:var(--on-surface-var);font-size:11.5px;margin-top:26px}
+</style>
+</head>
+<body>
+
+<header><div class="wrap">
+  <h1>De rellenador de contratos<br>a rellenador de formularios</h1>
+  <p>Roadmap de la transformación a esquema dinámico · opción B</p>
+  <div class="badges">
+    <span class="badge">estado real: v0.10.9 · code 79</span>
+    <span class="badge t">fases 1–3 hechas</span>
+    <span class="badge t">fase 5 en curso</span>
+  </div>
+</div></header>
+
+<nav><div class="row">
+  <button class="on" data-t="estado">Estado</button>
+  <button data-t="ctx">Contexto</button>
+  <button data-t="hallazgo">Hallazgos</button>
+  <button data-t="fases">Fases</button>
+  <button data-t="deps">Dependencias</button>
+  <button data-t="riesgos">Riesgos</button>
+</div></nav>
+
+<div class="wrap">
+
+<!-- ═══════ ESTADO ═══════ -->
+<section id="estado" class="on">
+  <h2>Dónde estamos de verdad</h2>
+
+  <p>Este documento se escribió en la v0.9.3 planificando siete fases. Hoy el repo está en
+  <code>0.10.9</code> y las versiones que se planearon aquí <b>ya están ocupadas por otra cosa</b>:
+  la tabla usa las <b>reales</b>, y las fases que aún no existen llevan versión reasignada.</p>
+
+  <p>Comprobado leyendo el código de <code>main</code>, no la documentación.</p>
+
+  <table>
+    <tr><th>Fase</th><th>Versión real</th><th>Estado</th></tr>
+    <tr><td>1 · Inspector de campos</td><td><code>0.9.4</code></td><td><span class="tag ok">hecha</span></td></tr>
+    <tr><td>2 · Modelo de esquema</td><td><code>0.9.7</code>–<code>0.10.0</code></td><td><span class="tag ok">hecha</span></td></tr>
+    <tr><td>3 · Etiquetado por IA</td><td><code>0.10.1</code> + <code>0.10.5</code></td><td><span class="tag ok">hecha</span></td></tr>
+    <tr><td>4 · Editor de esquema</td><td><code>0.10.3</code> + <code>0.10.4</code></td><td><span class="tag md">objetivo a medias</span></td></tr>
+    <tr><td>5 · Relleno dinámico</td><td><code>0.10.6</code>–<code>0.10.9</code></td><td><span class="tag md">en curso</span></td></tr>
+    <tr><td>6 · Firma por esquema</td><td><i>reasignada a</i> <code>0.11.0</code></td><td><span class="tag lo">sin empezar</span></td></tr>
+    <tr><td>7 · Biblioteca de modelos</td><td><i>reasignada a</i> <code>1.0.0</code></td><td><span class="tag lo">sin empezar</span></td></tr>
+  </table>
+
+  <div class="card warn">
+    <h4>La fase 4 está marcada como completa y no cumple lo que prometía</h4>
+    <p>El editor existe y funciona, pero vive en <b>Ajustes › Herramientas (beta)</b> como pantalla
+    aparte. El paso 1 del asistente sigue usando el mapeo de siempre, así que la promesa de esta
+    fase —«el mapeo ya tiene sentido con cualquier PDF»— todavía no se ha cumplido.</p>
+  </div>
+
+  <div class="card err">
+    <h4>El hueco que no estaba en ningún plan: las tablas</h4>
+    <p>El paso de Relleno <b>no sabe pintar tablas</b>. Cero referencias a
+    <code>SectionKind.TABLE</code> en <code>FillStep</code>. El contrato de Aire tiene 5 tablas y
+    portabilidad una de 25×7, así que «rellenar un formulario de punta a punta» seguirá siendo
+    imposible aunque el resto de la fase 5 esté terminado.</p>
+    <p>Estaba escrito en un documento de continuidad antiguo (filas dinámicas, catálogo,
+    <code>cuota total = cantidad × cuota unitaria</code>) y se perdió al reescribir el plan de la
+    fase 5 en seis tandas. Aquí queda recuperado como tanda <b>5·5</b>.</p>
+  </div>
+
+  <h3>Lo que falta para que algo esté terminado</h3>
+  <table>
+    <tr><th>Falta</th><th>Bloquea</th></tr>
+    <tr><td>Tablas en el Relleno (tanda 5·5)</td><td>Fase 5 con Aire</td></tr>
+    <tr><td>Secciones desde el esquema (tanda 5·4)</td><td>Quitar el esqueleto de Orange</td></tr>
+    <tr><td>Validación de campos sin canónica</td><td>Calidad de datos</td></tr>
+    <tr><td>Editor de fase 4 dentro del asistente</td><td>Objetivo de la fase 4</td></tr>
+    <tr><td>Campos <code>/Sig</code></td><td>Fase 6</td></tr>
+    <tr><td>Pantalla de biblioteca</td><td>Fase 7</td></tr>
+    <tr><td>Tarea <code>label_fields</code> en el proxy</td><td>Deuda, fuera de este repo</td></tr>
+    <tr><td>Probar el etiquetado en el móvil</td><td>Confianza en la fase 3</td></tr>
+    <tr><td>Paridad del prompt con la web (2 cambios)</td><td>Coherencia web ↔ Android</td></tr>
+    <tr><td><code>Expediente</code> enganchado</td><td>Alta de 4 PDFs de Aire</td></tr>
+  </table>
+</section>
+
+<!-- ═══════ CONTEXTO ═══════ -->
+<section id="ctx">
+  <h2>Qué se quiere conseguir</h2>
+
+  <p>La app se construyó alrededor de <b>un</b> formulario: el contrato de distribución de
+  Orange/MASORANGE. Sus 22 campos viven en una constante (<code>ContractFields.CANON</code>) y todo
+  el asistente los recorre: el mapeo, el relleno, la validación y la firma.</p>
+
+  <div class="card info">
+    <h4>El caso real: los cuatro formularios de Aire</h4>
+    <p>Aire Networks pide cuatro PDFs rellenables por alta: contrato de empresas
+    (<b>481 campos</b>), portabilidad fija (<b>202</b>), conectividad (<b>141</b>) y mandato SEPA
+    (<b>19</b>). Al subir cualquiera de ellos, el asistente detecta bien sus campos pero el paso de
+    Relleno sigue mostrando los 22 del contrato de Orange.</p>
+    <p>Y los mismos datos se repiten en los cuatro con nombres distintos: la razón social es
+    <code>Nombre o razón social</code> en el contrato, <code>NOMBRE DEL DEUDOR</code> en el SEPA y
+    <code>Titular</code> en portabilidad.</p>
+  </div>
+
+  <p><b>El objetivo:</b> que el esquema de campos lo defina <b>el PDF cargado y mapeado</b>, no una
+  constante. Que el mapeo muestre los campos reales agrupados por sección y en orden de relleno,
+  que la IA extraiga contra esas etiquetas, y que el esquema quede guardado por modelo para
+  reconocerlo la próxima vez.</p>
+
+  <div class="card">
+    <h4>Qué pasa con Orange</h4>
+    <p>Se <b>conserva</b>, y solo para cuando se use ese contrato: sigue siendo un esquema
+    <code>BUILTIN</code> que se reconoce por huella y se rellena igual que siempre. Lo que se quita
+    es <b>proyectarlo sobre los demás</b>: hoy el Relleno pinta el esqueleto de Orange encima de
+    cualquier PDF, y eso es justo lo que cierra la tanda 5·4.</p>
+    <p>El mapeo también se conserva. <code>MappingEditor</code> y
+    <code>TemplateMapper.suggest()</code> siguen siendo útiles para enlazar campos con su
+    <code>canonical</code> cuando el PDF sí es un contrato conocido.</p>
+  </div>
+
+  <h3>Lo que ya existía y se ha reutilizado</h3>
+  <table>
+    <tr><th>Pieza</th><th>Qué aporta</th></tr>
+    <tr><td><code>TemplateFingerprint</code></td><td>Huella del PDF: identifica el modelo sin depender del nombre de archivo</td></tr>
+    <tr><td><code>PrefsRepository</code></td><td>Almacén de esquemas por huella en DataStore, y reconocimiento al recargar</td></tr>
+    <tr><td><code>AcroFormFiller.listFields()</code></td><td>Nombres de campo del PDF</td></tr>
+    <tr><td><code>PdfPageRenderer</code></td><td>Rasteriza una página a bitmap</td></tr>
+    <tr><td><code>MultiAiExtractor</code> + proxy</td><td>Fan-out multi-motor con la tarea <code>extract</code></td></tr>
+    <tr><td><code>ExtractionPrompt.fieldNames</code></td><td>Acepta una lista de campos arbitraria (v0.9.3)</td></tr>
+  </table>
+</section>
+
+<!-- ═══════ HALLAZGOS ═══════ -->
+<section id="hallazgo">
+  <h2>Los hallazgos que decidieron el diseño</h2>
+
+  <p>Tres, y solo el primero estaba previsto. Los otros dos salieron al implementar, y cada uno
+  cambió el plan.</p>
+
+  <div class="card">
+    <h4>1 · Los nombres de campo no sirven para etiquetar</h4>
+    <p>El contrato de Aire mezcla campos con nombre legible
+    (<code>Nombre o razón social</code>, <code>NIF/CIF/NIE</code>, <code>Móvil representante</code>)
+    con cientos de nombres autogenerados que no dicen nada:</p>
+<pre><span class="c">// nombres reales del AcroForm de Contrato_empresas.pdf</span>
+"Campo de texto 116"   "Campo de texto 128"   "TF cantidad 01"
+"Casilla de verificación 27"   "Check Box4.4.5.10.5"
+</pre>
+    <p><b>Consecuencia:</b> hay que etiquetar por <b>visión</b>. La página se rasteriza y se manda a
+    la IA junto con las coordenadas de cada campo, pidiéndole el rótulo impreso al lado de cada uno
+    y a qué sección pertenece.</p>
+    <p>Funciona igual con PDFs cuyo nombre de campo sí es legible, así que no hacen falta dos rutas
+    — aunque conviene aprovechar el nombre real cuando existe y gastar visión solo en los
+    autogenerados.</p>
+  </div>
+
+  <div class="card">
+    <h4>2 · Las tablas se detectan por geometría, nunca por el nombre</h4>
+    <p>En una misma fila del tarifario conviven <code>TF cantidad 01</code> y
+    <code>Campo de texto 116</code>. La columna la da la <code>x</code> y la fila la
+    <code>y</code>; el nombre no da ninguna pista. Igual con los checkboxes de fila: en portabilidad
+    los 100 de «Provisión» se llaman <code>Check Box4.0</code>…<code>Check Box4.4.5.10.5</code>,
+    pero el prefijo da la columna y la posición da la fila.</p>
+    <p>De aquí salió <code>FormSchemaBuilder</code> (0.10.0), que no estaba en el plan original.</p>
+  </div>
+
+  <div class="card err">
+    <h4>3 · Las heurísticas por nombre se apagan en silencio</h4>
+    <p>El hallazgo más incómodo, y el que más trabajo ha generado. Media docena de piezas decidían
+    qué hacer <b>comparando el nombre del campo</b> con los de Orange. Con los nombres de Aire no
+    casa ninguna comparación, y entonces no fallan: <b>dejan de actuar sin decir nada</b>.</p>
+    <table>
+      <tr><th>Pieza</th><th>Qué dejaba de hacer</th></tr>
+      <tr><td><code>FieldValidator</code></td><td>Dígitos de control, IBAN mod-97, CP↔provincia</td></tr>
+      <tr><td><code>FieldNormalizer.normVal</code></td><td>Compactar el IBAN, rellenar el CP con ceros</td></tr>
+      <tr><td><code>AutoFillPolicy</code></td><td><b>Avisar de datos de terceros</b></td></tr>
+      <tr><td><code>DateAutofill</code>, <code>keyboardFor</code></td><td>Fecha de firma, teclado numérico</td></tr>
+    </table>
+    <p>El de <code>AutoFillPolicy</code> es el grave: un IBAN sacado de un contrato de alquiler es el
+    del arrendador, y sin esa regla se autorrellenaba como dato verificado en vez de pedir
+    confirmación. Se arregló en la 0.10.9 colgando todas las decisiones de la <b>clave canónica</b>
+    en vez del nombre.</p>
+    <p>Buscar más casos de este patrón es la revisión que merece la pena repetir en cada fase que
+    quede.</p>
+  </div>
+
+  <div class="card warn">
+    <h4>4 · El auto-mapeo puede asignar una casilla a un campo de texto</h4>
+    <p>Con el contrato de Aire cargado, el mapeo por similitud asignó
+    <code>Fecha · mes</code> → <code>Casilla de verificación 56</code>, y dejó
+    <code>Fecha · día</code> sin asignar aunque la página 3 tiene tres campos de fecha claros.</p>
+    <p>No se arregla en el mapeo actual —la 5·4 lo sustituye—, pero deja una regla para el nuevo:
+    <b>el destino tiene que ser de un <code>FieldKind</code> compatible con el origen</b>. Un texto
+    nunca puede mapear a una casilla. Una comprobación de una línea, un fallo silencioso menos.</p>
+  </div>
+
+  <details>
+    <summary>El orden de lectura, ya validado</summary>
+    <p>Ordenando los widgets por página → fila (con tolerancia de 6 pt) → columna, el formulario
+    sale <b>en el orden en que se rellena</b>. La tolerancia de fila es imprescindible: las casillas
+    no están perfectamente alineadas.</p>
+    <p>El primer intento troceaba el eje Y en tramos fijos y partía filas por la mitad. Se detectó en
+    la fila del BIC del SEPA y se corrigió agrupando por hueco respecto al ancla de fila (0.9.6),
+    verificado contra los cuatro PDFs: <b>0 posiciones cambian</b> en el contrato de 481 campos.</p>
+  </details>
+</section>
+
+<!-- ═══════ FASES ═══════ -->
+<section id="fases">
+  <h2>Fases</h2>
+  <p>Cada fase es una tanda con su versión y su build verde. El orden no es arbitrario: cada una
+  deja la app <b>en estado usable</b>, aunque las siguientes no lleguen nunca.</p>
+
+  <!-- FASE 1 -->
+  <div class="phase done">
+    <div class="hd">
+      <div class="n">1</div>
+      <div class="ti"><b>Inspector de campos</b>
+      <small><code>0.9.4</code> · hecha · base invisible</small></div>
+    </div>
+    <div class="bd">
+      <p><b>Implementado:</b> <code>PdfFieldInspector</code> lee los widgets del AcroForm y devuelve
+      nombre, página, coordenadas (origen arriba-izquierda), tamaño y si es casilla, todo
+      <b>en orden de lectura</b>.</p>
+      <p><b>Añadido después, y necesario:</b></p>
+      <ul>
+        <li><code>0.9.6</code> — corregido el agrupado de filas (ver Hallazgos).</li>
+        <li><code>0.10.2</code> — <code>isRadio</code> y <code>onState</code> por widget. Sin esto
+        <b>ningún esquema tenía grupos de opción</b>: todo botón salía como casilla o texto.</li>
+        <li><code>0.10.4</code> — <code>pageCount()</code> aparte de <code>inspect()</code>, porque
+        las páginas sin campos rellenables no se contaban.</li>
+      </ul>
+      <details>
+        <summary>Sugerencia no planeada</summary>
+        <p>Una sola llamada que devuelva campos, número de páginas y nombres en una pasada. Hoy
+        <code>LabelEditorViewModel</code> abre el mismo PDF <b>tres veces</b> para eso.</p>
+      </details>
+    </div>
+  </div>
+
+  <!-- FASE 2 -->
+  <div class="phase done">
+    <div class="hd">
+      <div class="n">2</div>
+      <div class="ti"><b>Modelo de esquema dinámico</b>
+      <small><code>0.9.7</code>–<code>0.10.0</code> · hecha · el cambio de fondo</small></div>
+    </div>
+    <div class="bd">
+      <p><b>Implementado</b>, y bastante más de lo que se planeó aquí: los cuatro PDFs de Aire
+      obligaron a ampliar el modelo.</p>
+      <table>
+        <tr><th>Se planeó</th><th>Se implementó</th></tr>
+        <tr><td><code>FieldType</code>: texto, casilla, fecha, número</td>
+            <td><code>FieldKind</code>: texto, casilla, <b>radio</b>, <b>firma</b></td></tr>
+        <tr><td><code>Origin</code>: builtin, IA, manual</td>
+            <td><code>ValueOrigin</code>: documento, ajustes, <b>plataforma</b>, <b>catálogo</b>, <b>calculado</b>, firma</td></tr>
+        <tr><td>Secciones planas</td>
+            <td><code>SectionKind</code>: simple, <b>tabla</b>, <b>bloque repetido</b></td></tr>
+        <tr><td>—</td>
+            <td><code>TableColumn</code>/<code>TableRow</code>, <code>combGroup</code>, <code>LabelSource</code>, <code>FieldRect</code>, <code>CanonicalKeys</code></td></tr>
+      </table>
+      <p>Dos nombres cambiaron por razones concretas: <code>FormField.key</code> se llama
+      <code>name</code> (es el nombre real del AcroForm y conviene que se lea así), y
+      <code>Origin</code> pasó a <code>ValueOrigin</code> porque chocaba con el
+      <code>FieldOrigin</code> que ya existía en <code>ui.wizard</code> — la colisión tumbó un build
+      (0.9.8.1).</p>
+      <p><b>Piezas nuevas que no estaban en el plan:</b></p>
+      <ul>
+        <li><code>FormSchemaBuilder</code> (0.10.0): detección de tablas por geometría. Verificado
+        contra los cuatro PDFs — contrato: 5 tablas; portabilidad: una de 25×7; conectividad: 10
+        filas; SEPA: ninguna, correcto.</li>
+        <li><code>Expediente</code> (0.9.9): un alta de Aire son cuatro PDFs con los mismos datos, así
+        que la unidad persistida es un expediente con una lista de formularios (que arranca con uno)
+        y encima los datos compartidos por <code>CanonicalKeys</code>. Extraer una vez sirve para los
+        cuatro.</li>
+      </ul>
+      <div class="dep"><b>Pendiente:</b> el modelo de <code>Expediente</code> existe pero
+      <b>no está enganchado a nada</b>. Se decidió así para no pagar dos migraciones sobre datos de
+      trabajo reales.</div>
+      <details>
+        <summary>Migración: cómo se hizo</summary>
+        <p>Los esquemas guardados eran <code>Map&lt;canónica, real&gt;</code>. La conversión es
+        <b>perezosa y no destructiva</b>: <code>templates_v1</code> no se toca, se convierte al pedir
+        el esquema, y volver atrás es dejar de leer la clave nueva. Es lo contrario de lo que rompió
+        en la 0.8.0.</p>
+      </details>
+      <details>
+        <summary>Sugerencia no planeada</summary>
+        <p><code>Conectividad.pdf</code> tiene un defecto de origen: las filas 07 y 08 están
+        superpuestas en la misma coordenada (y = 271,02). <code>FormSchemaBuilder</code> lo refleja
+        en vez de taparlo. Hay que decidir si se apaña por software o se corrige el PDF en Aire.</p>
+      </details>
+    </div>
+  </div>
+
+  <!-- FASE 3 -->
+  <div class="phase done">
+    <div class="hd">
+      <div class="n">3</div>
+      <div class="ti"><b>Etiquetado por IA</b>
+      <small><code>0.10.1</code> + <code>0.10.5</code> · hecha</small></div>
+    </div>
+    <div class="bd">
+      <p><b>Implementado:</b> <code>FieldLabeler</code> (0.10.1) construye la pregunta y
+      <code>VisionLabelPass</code> (0.10.5) la pasa sobre un esquema entero, una llamada por página
+      con huecos y en tandas de 24 objetivos.</p>
+      <p>Los tres requisitos que se pidieron aquí se cumplen: avisa si no hay ningún motor con
+      visión, respeta «solo motores europeos», y lo que se manda es <b>la plantilla en blanco</b>,
+      no documentación del cliente — una diferencia que el aviso de privacidad refleja.</p>
+      <p><b>Optimización no planeada:</b> se pregunta por <b>columna</b>, no por celda. En una tabla
+      de 25×7 son 7 preguntas en vez de 175.</p>
+      <p>Y <code>SchemaLabeling.apply()</code> nunca pisa lo que el usuario corrigió a mano
+      (<code>LabelSource.USUARIO</code>).</p>
+      <div class="gap"><b>Sin verificar en dispositivo.</b> La lógica está probada, pero nadie ha
+      visto todavía qué etiquetas devuelve la visión sobre el contrato de 481 campos. Es el pendiente
+      más antiguo del proyecto. Si salen mal, los sitios a ajustar son el prompt de
+      <code>FieldLabeler</code> y el ancho de render (1400 px).</div>
+      <div class="dep"><b>Deuda:</b> usa <code>task = "locate_signature"</code> porque es la única
+      tarea de visión que expone <code>ai-proxy.php</code>. Funciona, pero el nombre engaña a quien
+      lea el código o el log del servidor. Arreglarlo es tocar el proxy, que se despliega a mano y
+      no vive en este repo.</div>
+      <details>
+        <summary>Un desajuste que solo apareció al enganchar</summary>
+        <p><code>FieldLabeler</code> manda identificadores opacos a propósito, pero
+        <code>SchemaLabeling</code> indexa por nombre de campo. Sin traducirlos
+        <b>no se habría aplicado ninguna etiqueta, y sin ningún error</b>. Se resolvió traduciendo en
+        el orquestador, sin tocar ninguna de las dos piezas.</p>
+      </details>
+    </div>
+  </div>
+
+  <!-- FASE 4 -->
+  <div class="phase part">
+    <div class="hd">
+      <div class="n">4</div>
+      <div class="ti"><b>Editor de esquema</b>
+      <small><code>0.10.3</code> + <code>0.10.4</code> · implementada, objetivo a medias</small></div>
+    </div>
+    <div class="bd">
+      <p><b>Implementado:</b> <code>SchemaEditing</code> (ediciones puras: campo, grupo de opción
+      completo por <code>name</code>, columna entera, título de sección — siempre marcando
+      <code>LabelSource.USUARIO</code>), <code>LabelEditor</code> (la UI),
+      <code>LabelEditorViewModel</code> y su propia ruta, accesible desde
+      <b>Ajustes › Herramientas (beta)</b>. El camino completo funciona: elegir PDF → inspeccionar →
+      huella → esquema guardado o construido → editar → guardar. Y tiene el botón «Etiquetar con IA»
+      de la fase 3.</p>
+      <div class="gap"><b>Lo que falta para cumplir el objetivo.</b> Esta fase debía sustituir la
+      pantalla que hoy pregunta «¿cuál de tus campos es la razón social?». No lo hace: el editor está
+      en Ajustes y el asistente sigue con su mapeo. Mientras siga así, subir un PDF de Aire por el
+      paso 1 <b>sigue haciendo preguntas que no encajan</b>.</div>
+      <p>Y cuando la 5·4 lleve las secciones del esquema al asistente, <b>el mapeo debe mostrarse igual:
+      por secciones y en el orden del PDF</b>, no como la lista plana de destinos de Orange que
+      pregunta hoy.</p>
+      <p><b>Del plan original quedan dos detalles sin hacer:</b> cabeceras de sección pegajosas
+      (<code>stickyHeader</code>) —con 481 campos hace falta saber en qué sección se está— y plegar
+      con <code>ExpressiveAccordion</code> las secciones ya revisadas.</p>
+      <p>Sí se cumplió lo importante: el estado vive en el ViewModel y no en <code>remember</code>,
+      y cada campo muestra su nombre técnico, que es lo que permite detectar un etiquetado erróneo.</p>
+      <details>
+        <summary>Sugerencia no planeada</summary>
+        <p>Un contador «N campos sin etiquetar» que lleve directo a lo que la IA no resolvió. Con 481
+        campos, revisar en orden no es viable; lo que hace falta es ir a lo que falla.</p>
+      </details>
+      <details>
+        <summary>Nota de nombres</summary>
+        <p>No confundir <code>LabelEditor</code> (esto) con <code>MappingEditor</code>, que es del
+        flujo de Orange y <b>se conserva</b>. La colisión de nombres se detectó antes de escribir, y
+        comprobarlo con un <code>grep</code> es ahora obligatorio: una colisión ya tumbó un build.</p>
+      </details>
+    </div>
+  </div>
+
+  <!-- FASE 5 -->
+  <div class="phase part">
+    <div class="hd">
+      <div class="n">5</div>
+      <div class="ti"><b>Relleno dinámico</b>
+      <small><code>0.10.6</code>–<code>0.10.9</code> · en curso · la fase más grande</small></div>
+    </div>
+    <div class="bd">
+      <p>Es la que hace que un PDF de Aire se rellene de punta a punta, y la que toca
+      <code>WizardViewModel</code>. Está partida en tandas porque de una vez no es verificable.</p>
+      <table>
+        <tr><th>Tanda</th><th>Qué</th><th>Estado</th></tr>
+        <tr><td>5·0</td><td>El responsable de Orange dejaba de existir en otros PDFs y acababa siempre en «falta un campo»</td><td><span class="tag ok">0.10.6</span></td></tr>
+        <tr><td>5·1</td><td>Las secciones salen de <code>FillStep</code> y se reciben como parámetro: la costura</td><td><span class="tag ok">0.10.6</span></td></tr>
+        <tr><td>5·2</td><td>Validación y hermano del CP por clave canónica</td><td><span class="tag ok">0.10.7</span></td></tr>
+        <tr><td>5·2b</td><td>Normalización, fecha, copia fiscal, teclado y cobertura, por canónica</td><td><span class="tag ok">0.10.8</span></td></tr>
+        <tr><td>5·3</td><td><b>La clave</b>: todo se indexa por nombre real de campo + migraciones</td><td><span class="tag ok">0.10.9</span></td></tr>
+        <tr><td>5·4</td><td>Las secciones salen del <code>FormSchema</code>: <b>todos</b> los campos del PDF, por secciones y en su orden</td><td><span class="tag md">siguiente</span></td></tr>
+        <tr><td>5·5</td><td><b>Tablas en el Relleno</b> (recuperada, ver abajo)</td><td><span class="tag hi">sin plan</span></td></tr>
+      </table>
+
+      <div class="card ok">
+        <h4>La 5·3 arregló dos fallos que estaban en producción</h4>
+        <p>Desde la 0.9.3 el prompt pide los nombres reales del PDF cargado, así que la IA ya
+        guardaba por nombre real mientras el Relleno seguía leyendo por clave de Orange:
+        <b>los campos extraídos salían vacíos en pantalla</b> con cualquier PDF propio. Solo se veían
+        la fecha y el responsable, que eran justo los que la app inyectaba con clave de Orange. El PDF
+        final salía bien por casualidad.</p>
+        <p>Y el de <code>AutoFillPolicy</code> descrito en Hallazgos: la protección contra datos de
+        terceros estaba apagada con PDFs propios.</p>
+      </div>
+
+      <div class="card info">
+        <h4>Requisitos acordados para la 5·4</h4>
+        <p><b>Todos los campos del PDF, no 21.</b> Al cerrar la tanda, en vez de los 21 destinos de
+        Orange aparecen los campos del PDF subido — 481 en el contrato de Aire — <b>agrupados por
+        secciones y en el orden en que están en el PDF</b>. No en el orden de <code>CANON</code>.</p>
+        <p><b>En las dos pantallas, mapeo y relleno.</b> El objetivo es visual: que el usuario sepa
+        en qué parte del formulario está mientras rellena. Con 481 campos una lista plana no sirve.
+        El orden ya lo calcula <code>PdfFieldInspector</code> (página → fila → columna) y la
+        agrupación ya la hace <code>FormSchemaBuilder</code>; falta dibujarla.</p>
+        <p><b>Alcance del alta: páginas 1 y 3.</b> Con sólo el contrato subido se rellenan la
+        cabecera y los datos del cliente (página 1) y la fecha y los bloques de firma del cliente y
+        del comercial (página 3). El bloque de Aire Networks ya viene firmado y sellado: no se toca.
+        La página 2 son productos y tablas, y entra con la 5·5.</p>
+        <p><b>Sólo se marca ALTA NUEVA.</b> La cabecera tiene tres casillas — alta, modificación,
+        portabilidad. Con sólo el contrato se marca el alta y ninguna más. Los demás casos llegarán
+        cuando se aporten sus PDFs; esa lógica no se implementa ahora.</p>
+      </div>
+
+      <div class="gap">
+        <b>Tanda 5·5 — tablas.</b> El Relleno no sabe pintarlas, y sin ellas la fase no cierra para
+        Aire. Hace falta: filas dinámicas (añadir y quitar), selector del catálogo de tarifas,
+        <code>cuota total = cantidad × cuota unitaria</code> y la fila de totales.
+        <br><b>El tarifario lleva las comisiones del distribuidor: se queda local, no viaja al proxy
+        ni a ningún motor de IA.</b>
+      </div>
+
+      <p><b>Lo que se planeó aquí y sigue a medias:</b> la validación de campos <b>sin</b>
+      <code>canonical</code>. Las tandas 5·2 a 5·3 la resolvieron para los ~20 campos que tienen
+      canónica; los ~460 restantes de Aire no validan nada. Lo que se pidió —validar por tipo de
+      campo y por heurística sobre la <b>etiqueta</b>, no sobre el nombre técnico— está sin hacer.</p>
+
+      <div class="card warn">
+        <h4>La regla que gobierna esta fase</h4>
+        <p>Aquí se toca lo que se usa a diario. El esquema del contrato de Orange debe producir
+        <b>exactamente</b> el mismo comportamiento que hoy: mismo orden, mismas validaciones, mismo
+        autorrelleno, misma firma. Cualquier diferencia es un fallo, no una mejora.</p>
+        <p>Así se ha verificado cada tanda, y así salieron los tres fallos silenciosos: comparando
+        contra Orange, donde la traducción es la identidad.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- FASE 6 -->
+  <div class="phase todo">
+    <div class="hd">
+      <div class="n">6</div>
+      <div class="ti"><b>Firma y salida por esquema</b>
+      <small>reasignada a <code>0.11.0</code> · sin empezar</small></div>
+    </div>
+    <div class="bd">
+      <p><b>Nada implementado.</b> Comprobado: no hay ni una referencia a <code>/Sig</code> en el
+      código. El paso de Firma sigue con las anclas calibradas de las páginas 24/30/33/45/54 del
+      contrato de Orange, y no se salta cuando no hay huecos.</p>
+      <p><b>Qué hace falta:</b></p>
+      <ul>
+        <li>Manejar los campos <code>/Sig</code> del AcroForm: 4 en el contrato de Aire y 2 en
+        portabilidad. Es un tipo de widget que la app no conoce; hoy solo sabe estampar una imagen en
+        coordenadas.</li>
+        <li>Si el esquema no declara huecos, el paso <b>se salta</b> o se ofrece solo «descargar sin
+        firmar».</li>
+        <li>Los anclajes calibrados pasan a ser parte del esquema <code>BUILTIN</code> del contrato,
+        no constantes globales.</li>
+        <li>Poder marcar a mano dónde firmar en un formulario nuevo.</li>
+      </ul>
+      <div class="dep"><b>Necesita</b> las fases 2 y 5. Sin ella, cargar un formulario sin huecos y
+      llegar a Firma deja al usuario en una pantalla que no tiene sentido.</div>
+      <details>
+        <summary>Sugerencia no planeada</summary>
+        <p>Si el PDF trae campos <code>/Sig</code>, ofrecer estampar la imagen encima como se hace
+        hoy en vez de dejar el paso muerto. Firma digital real es otro proyecto (certificados,
+        cadena de confianza); estampar sobre el hueco declarado es un paso intermedio útil y
+        barato.</p>
+      </details>
+    </div>
+  </div>
+
+  <!-- FASE 7 -->
+  <div class="phase todo">
+    <div class="hd">
+      <div class="n">7</div>
+      <div class="ti"><b>Biblioteca de modelos</b>
+      <small>reasignada a <code>1.0.0</code> · sin empezar</small></div>
+    </div>
+    <div class="bd">
+      <p><b>Nada implementado.</b> Los esquemas se guardan en <code>schemas_v1</code>, pero no hay
+      forma de verlos, renombrarlos, borrarlos ni compartirlos.</p>
+      <p><b>Qué hace falta:</b> una pantalla en Ajustes con los esquemas guardados —nombre, número de
+      campos, cuándo se usó por última vez— y exportar e importar.</p>
+      <p>El backend de exportar/importar perfil (<code>exportProfileJson</code>) <b>ya existe y sigue
+      sin UI</b>, tal como se preveía aquí. Se aprovecha en esta fase.</p>
+      <p><b>Por qué importa:</b> etiquetar un modelo de 481 campos cuesta un rato; poder
+      <b>compartirlo</b> significa hacerlo una vez para todo el equipo. Es la fase más barata en
+      esfuerzo y la de más valor por persona.</p>
+      <div class="dep"><b>Necesita</b> solo la fase 2. Es la única totalmente opcional: la app es
+      plenamente funcional sin ella.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════ DEPENDENCIAS ═══════ -->
+<section id="deps">
+  <h2>Qué es funcional en cada momento</h2>
+  <p>La pregunta clave: si nos paramos en la fase N, <b>¿qué tiene el usuario?</b></p>
+
+  <table>
+    <tr><th>Tras</th><th>Qué funciona</th><th>Qué no todavía</th></tr>
+    <tr><td>1</td><td>Todo como antes</td><td>Nada visible cambia</td></tr>
+    <tr><td>2</td><td>Todo como antes, ya sobre esquemas</td><td>Nada visible cambia</td></tr>
+    <tr><td>3</td><td>La IA propone etiquetas</td><td>Sin verificar con un PDF real</td></tr>
+    <tr><td>4</td><td>Se puede etiquetar un PDF <b>desde Ajustes</b></td><td>El asistente sigue con el mapeo de siempre</td></tr>
+    <tr><td>5·3 <i>(hoy)</i></td><td>El Relleno ya muestra lo que la IA extrajo de un PDF propio</td><td>Las secciones siguen siendo el esqueleto de Orange; sin tablas</td></tr>
+    <tr><td>5 completa</td><td>Se rellena un formulario de Aire de principio a fin</td><td>La firma no encaja sin huecos</td></tr>
+    <tr><td>6</td><td>Flujo completo para cualquier formulario</td><td>Los esquemas no se pueden compartir</td></tr>
+    <tr><td>7</td><td>Biblioteca compartible</td><td>—</td></tr>
+  </table>
+
+  <div class="card info">
+    <h4>Los dos puntos de parada razonables</h4>
+    <p><b>Tras la 5·4</b> — si lo que molesta es el sinsentido de ver campos de Orange en un PDF que
+    no lo es. Deja de pasar, aunque las tablas sigan sin poder rellenarse.</p>
+    <p><b>Tras la 6</b> — el objetivo real: rellenar cualquier formulario de principio a fin. La 7 es
+    comodidad, y muy rentable.</p>
+  </div>
+
+  <h3>Orden obligatorio</h3>
+<pre>1 ──▶ 2 ──▶ 3 ──▶ 4 ──▶ 5 ──▶ 6
+             │
+             └──────────▶ 7 (solo necesita la 2)
+</pre>
+  <p>La 7 puede adelantarse si interesa compartir esquemas antes de terminar el flujo.</p>
+
+  <h3>Dentro de la fase 5</h3>
+<pre><span class="c">hechas</span>          5·0 ─ 5·1 ─ 5·2 ─ 5·2b ─ 5·3
+                                          │
+<span class="c">siguiente</span>                                 ├─▶ 5·4  secciones del esquema
+<span class="c">y para cerrar</span>                             └─▶ 5·5  tablas
+</pre>
+  <p>La 5·3 fue antes que la 5·4 a propósito: migrar la clave con Orange todavía en pantalla da una
+  referencia contra la que comparar. Y la 5·2b antes que la 5·3, porque manipulaban claves de campo
+  y de otro modo se habrían roto a la vez que la migración, sin saber cuál fue.</p>
+</section>
+
+<!-- ═══════ RIESGOS ═══════ -->
+<section id="riesgos">
+  <h2>Riesgos y decisiones tomadas</h2>
+
+  <div class="card warn">
+    <h4>El riesgo mayor: romper lo que se usa a diario</h4>
+    <p>El contrato de distribución es trabajo real. La fase 5 toca justo eso.</p>
+    <p><b>Mitigación:</b> el esquema <code>BUILTIN</code> del contrato debe producir un
+    comportamiento <b>idéntico</b> al actual, y así se verifica antes de dar cada tanda por buena.</p>
+    <p>Ha funcionado: es comparando contra Orange como salieron los tres fallos silenciosos. Con el
+    mapeo vacío la traducción es la identidad, así que cualquier diferencia salta.</p>
+  </div>
+
+  <div class="card err">
+    <h4>El patrón de fallo de este proyecto: el silencio</h4>
+    <p>Los cuatro fallos más caros hasta ahora <b>no daban error</b>: la validación que no valida, la
+    política que no protege, las etiquetas que no se aplican, el campo que no existe y acaba en
+    «falta un campo». Todos venían de comparar nombres de campo con los de Orange.</p>
+    <p><b>Regla:</b> cuando una pieza decide algo mirando el nombre de un campo, hay que preguntarse
+    qué hace con un PDF que no es el de Orange. Si la respuesta es «nada», es un fallo silencioso.</p>
+  </div>
+
+  <div class="card">
+    <h4>El etiquetado por IA no será perfecto</h4>
+    <p>Un formulario de 481 campos con bloques repetidos dará errores. Por eso la fase 4 no es
+    opcional: el valor no está en que la IA acierte siempre, sino en que deje el 80 % hecho y el
+    usuario corrija el resto <b>una sola vez por modelo</b>.</p>
+  </div>
+
+  <div class="card">
+    <h4>Coste en tokens y en tiempo</h4>
+    <p>Mandar la imagen de cada página no es gratis. Mitigaciones ya aplicadas: hacerlo
+    <b>una sola vez por modelo</b> (luego se reconoce por huella), preguntar por columna y no por
+    celda, un solo motor con visión (no fan-out), y a petición del usuario con un botón, no
+    automático al abrir el PDF.</p>
+  </div>
+
+  <details>
+    <summary>Verificar antes de subir, no después</summary>
+    <p>Dos builds se rompieron por no hacerlo: un método de librería recordado de memoria que no
+    existía (<code>PDRadioButton.getSelectableValues()</code>), y un nombre de clase que ya existía
+    en otro paquete. De ahí dos comprobaciones obligatorias: <b>clonar el fuente de la dependencia</b>
+    en el tag correcto y confirmar que el método existe, y hacer <b>grep de colisiones</b> antes de
+    escribir un símbolo nuevo.</p>
+    <p>Y el Kotlin puro sí se puede typecheckear en local con <code>kotlinc</code> y cuatro stubs,
+    aunque no haya SDK de Android. Es mucho mejor que subir a ver qué dice el CI.</p>
+  </details>
+
+  <h3>Lo que se ha descartado, y por qué</h3>
+  <ul>
+    <li><b>Derivar etiquetas del texto del PDF</b> — los nombres autogenerados y las capas de texto
+    poco fiables lo hacen inservible como única vía; mantener dos rutas no compensa.</li>
+    <li><b>Tocar <code>ai-proxy.php</code> para añadir una tarea nueva</b> — se despliega a mano y ya
+    ha costado tiempo. Queda como deuda anotada, no como bloqueo.</li>
+    <li><b>Un esquema por fichero en vez de por huella</b> — los nombres de archivo son inservibles:
+    los documentos llegan por WhatsApp (<code>DOC-…-WA….PDF</code>). La huella ya funciona.</li>
+    <li><b>Borrar <code>CANON</code> y el mapeo</b> — <code>CANON</code> sigue siendo la definición
+    del contrato de Orange y la base de su esquema <code>BUILTIN</code>, y el mapeo sigue enlazando
+    campos con su <code>canonical</code>. Se conservan; lo que se quita es proyectarlos sobre
+    formularios ajenos.</li>
+  </ul>
+
+  <h3>Invariantes que no se tocan</h3>
+  <ul>
+    <li>Claves del AcroForm literales, con sus dobles espacios y su casilla llamada
+    <code>undefined</code>.</li>
+    <li>Semántica fiscal frente a <code>_2</code> (comercio) en el contrato.</li>
+    <li>Paridad del prompt con la web para la tarea <code>extract</code>.
+    <b>Dos cambios siguen sin replicar</b>: <code>tipo_documento</code> (0.7.9) y la genericización
+    del operador (0.9.5).</li>
+    <li><code>material3:1.4.0-alpha16</code>; <code>@OptIn</code> en cada función que use
+    <code>motionScheme</code>.</li>
+    <li>El tarifario, con las comisiones, no sale del dispositivo.</li>
+  </ul>
+</section>
+
+<p class="foot">Actualizado sobre el estado real de <code>main</code> · v0.10.9 · code 79</p>
+
+</div>
+
+<script>
+  document.querySelectorAll('nav button').forEach(b=>{
+    b.onclick=()=>{
+      document.querySelectorAll('nav button').forEach(x=>x.classList.remove('on'));
+      b.classList.add('on');
+      document.querySelectorAll('section').forEach(s=>s.classList.remove('on'));
+      document.getElementById(b.dataset.t).classList.add('on');
+      window.scrollTo({top:0,behavior:'smooth'});
+    };
+  });
+</script>
+</body>
+</html>

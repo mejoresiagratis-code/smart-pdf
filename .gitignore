@@ -42,3 +42,10 @@ Thumbs.db
 
 # ---- NDK ----
 obj/
+
+# ---- Artefactos de sesión (no son fuente) ----
+# Los parches y zips que se usan para pasar cambios entre el chat y el repo NO deben
+# commitearse: Gradle compila el árbol de fuentes, así que un zip o un .patch en la raíz
+# no aporta nada al build y ya se acumularon 1,1 MB de restos hasta la 0.10.9.
+*.patch
+*.zip

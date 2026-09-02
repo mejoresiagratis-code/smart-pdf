@@ -4,7 +4,14 @@ Estado real del proyecto y próximas tandas planificadas. Este documento sustitu
 "roadmap" informal que vivía en las notas de continuidad de las sesiones. Se actualiza
 al final de cada tanda con lo que quede pendiente.
 
-Última actualización: **2026-08-31** (versión `0.10.9-fase5-clave-real`, versionCode 79).
+Última actualización: **2026-09-02** (versión `0.10.9-fase5-clave-real`, versionCode 79, verde).
+
+> **El roadmap visual, con el estado real de las 7 fases, está en
+> [`docs/roadmap-multiformulario.html`](docs/roadmap-multiformulario.html)** — se actualizó el
+> 2026-09-02 contra el código de `main`. Ahí está qué se implementó de cada fase, qué falta y por
+> qué. Resumen: fases 1–3 hechas, fase 4 implementada pero con su objetivo a medias (el editor vive
+> en Ajustes y no sustituye el mapeo del asistente), fase 5 en curso (faltan 5·4 y 5·5), fases 6 y 7
+> sin empezar y reasignadas a `0.11.0` y `1.0.0`.
 
 > **Cambio de contexto (2026-08-31):** Pablo ya no trabaja con Orange/MASORANGE. La
 > prioridad pasa a ser multi-contrato de verdad, con los PDFs de la empresa nueva
@@ -160,7 +167,10 @@ paso. Build verde y verificación en el móvil antes de seguir.
   las tres cosas de una pasada. Tanda pequeña, sin riesgo.
 
 - **Fase 5 — relleno dinámico**: conectar `FillStep`/`WizardViewModel` al `FormSchema` en vez de
-  a las 6 secciones fijas de `CANON`. **Planificada en detalle en `docs/PLAN_FASE_5.md`**
+  a las 6 secciones fijas de `CANON`. **Requisitos acordados (2026-09-02)**: al cerrar la 5·4, en
+  vez de los 21 campos de Orange aparecen todos los del PDF subido, agrupados por secciones y en el
+  orden del PDF, tanto en el mapeo como en el relleno. El alta de Aire cubre sólo las páginas 1 y 3
+  del contrato y marca únicamente la casilla ALTA NUEVA. Detalle en `docs/PLAN_FASE_5.md` §6. **Planificada en detalle en `docs/PLAN_FASE_5.md`**
   (2026-08-31, leyendo el código): se parte en **seis tandas** por riesgo, y el orden no es por
   tamaño — la migración de datos (tanda 5·3) va **antes** de cambiar lo que se dibuja (5·4), para
   que se migre con una referencia visible contra la que comparar. Leer ese documento antes de

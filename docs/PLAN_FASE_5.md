@@ -107,11 +107,11 @@ contra la que comparar. Si primero se cambia lo que se dibuja y luego la clave, 
 |---|---|---|---|
 | ~~**5·0**~~ ✅ | Quitar el `putIfAbsent` incondicional del responsable (2.4). *Hecho en `0.10.6`: se inyecta sólo si la plantilla tiene el campo. Colgarlo de `ValueOrigin.AJUSTES` se deja para la 5·4, cuando haya esquema de verdad en el relleno.* | Bajo | `missingFields` deja de mentir con un PDF que no sea de Orange. |
 | ~~**5·1**~~ ✅ | `FillStep` recibe las secciones como parámetro. *Hecho en `0.10.6`: `FillSections.kt` con `FillSection` + `canonFillSections()`; `WizardScreen` se las pasa. El denominador del progreso se deriva de las secciones y da el mismo 21.* | Bajo | **La app se comporta idéntica.** Verificado con una prueba contra la lista original transcrita literal. |
-| **5·2** | Validación, hermano del CP, fecha y tipo de identificación pasan a colgar de `canonical` (2.5, 2.6). Fuente todavía `CANON`, que ya tiene su mapeo canónico. | Medio | Orange sigue validando exactamente igual: mismos mensajes, mismos campos en rojo. |
+| ~~**5·2**~~ ✅ | Validación, hermano del CP, fecha y tipo de identificación pasan a colgar de `canonical` (2.5, 2.6). *Hecha en `0.10.7`.* | Medio | Orange sigue validando exactamente igual: mismos mensajes, mismos campos en rojo. |
 | ~~**5·2b**~~ ✅ | Tanda que no estaba en el plan original, abierta al ejecutar la 5·2: los mismos acoplamientos por nombre quedaban en otros cinco sitios (`normVal`, `DateAutofill`, `copyFiscalToComercio`, `keyboardFor`, `coverageKeys`). *Hecho en `0.10.8`.* Va antes de la 5·3 porque manipulan claves de campo: si la 5·3 les cambia la clave por debajo estando aún en literales, se rompen a la vez que la migración y no se sabe cuál fue. | Bajo | Cuatro de cinco son cero-cambio en Orange. `normVal` cambia en 3 campos (bug de espacios, ver `CONTINUIDAD.md` §5). |
 | ~~**5·3**~~ ✅ | **La clave.** *Hecha en `0.10.9`.* ⚠️ Al ejecutarla se vio que el diagnóstico de este plan era incompleto: desde la 0.9.3 el prompt ya pide los nombres REALES del PDF cargado (`WizardViewModel:440` manda `userFieldNames`), así que la IA ya devolvía nombres reales y `fieldValues` **ya estaba** indexado por nombre real con un PDF propio. Lo que había no era una clave equivocada sino **contaminación** en cinco puntos que inyectaban claves de Orange (responsable, tres fechas, copia fiscal). Consecuencias: (a) la migración de datos era mucho menor de lo que se temía, y (b) había un **fallo vivo**: `FillStep` leía por clave de Orange lo que estaba guardado por nombre real, así que con un PDF propio el Relleno mostraba vacíos los campos extraídos. | `fieldValues`/`fieldStates`/`fieldOrigins`/`fieldCandidates`/`UndoEntry` pasan a indexarse por nombre real; `fieldMapping` desaparece de la salida (2.3). Migración de `PersistedWizardState` v1→v2 y de `ContractProfile.campos` del historial y los perfiles exportados. | **Alto** | Sesión guardada con la versión anterior que se restaura sin perder nada; perfil del historial que se aplica bien. **Tanda sola, nada más dentro.** |
-| **5·4** | El `FormSchema` del PDF subido alimenta las secciones de verdad, con caída a `CANON` si no hay esquema. | Medio | Un PDF de Aire muestra SUS campos. Aquí ya no hay migración: la clave es la correcta desde 5·3. |
-| **5·5** | Tablas con filas dinámicas, catálogo **local** (lleva comisiones: no sale del dispositivo), `cuota total = cantidad × cuota unitaria`. | Alto | Funcionalidad nueva, no refactor. Se planifica al llegar. |
+| **5·4** | El `FormSchema` del PDF subido alimenta las secciones de verdad, con caída a `CANON` si no hay esquema. **Al terminar, en vez de los 21 campos de Orange aparecen TODOS los del PDF subido, agrupados en secciones y en el orden del PDF** — y eso vale para las dos pantallas, mapeo y relleno (ver §6). | Medio | Un PDF de Aire muestra SUS campos, por secciones. Aquí ya no hay migración: la clave es la correcta desde 5·3. |
+| **5·5** | Tablas con filas dinámicas, catálogo **local** (lleva comisiones: no sale del dispositivo), `cuota total = cantidad × cuota unitaria`. | Alto | Funcionalidad nueva, no refactor. Se planifica al llegar. **No bloquea el alta**: el alta de Aire sólo usa páginas 1 y 3, que no tienen tabla (ver §6). |
 
 ### Por qué 5·3 antes de 5·4
 
@@ -176,3 +176,64 @@ Eran tres. Ya no bloquean.
   etiquetas empiezan a ser lo que se ve en pantalla.
 - **La fase 6 (`/Sig`)**: 4 campos de firma en el contrato de Aire, 2 en portabilidad. Independiente.
 - **La tarea `label_fields` del proxy**: fuera de este repo.
+
+---
+
+## 6. Requisitos acordados para la 5·4 (2026-09-02, por Pablo)
+
+Salen de tres capturas: la pantalla de mapeo actual con el contrato de Aire cargado, y las páginas
+1 y 3 de ese contrato.
+
+### 6.1 Secciones en el orden del PDF, en las DOS pantallas
+
+Hoy el mapeo pregunta por los 21 destinos de Orange en una lista plana («Razón social», «Nombre
+comercial», «CIF/NIF/NIE de la empresa»…), y el relleno hace lo mismo con sus 6 secciones fijas.
+Al cerrar la 5·4:
+
+- **Mapeo** — muestra los campos **del PDF subido**, agrupados por sección y **en el orden en que
+  aparecen en el PDF**, no en el orden de `CANON`. Es el orden que `PdfFieldInspector` ya calcula
+  (página → fila → columna) y que `FormSchemaBuilder` ya agrupa; sólo hay que dibujarlo.
+- **Relleno** — la misma agrupación y el mismo orden. El objetivo declarado es **visual**: que el
+  usuario sepa en qué parte del formulario está mientras rellena. Con 481 campos, una lista plana
+  es inservible.
+
+Ambas pantallas leen del mismo `FormSchema`, así que la agrupación se define una vez.
+
+### 6.2 Alcance del alta: sólo páginas 1 y 3
+
+Un alta de Aire con **sólo el contrato** rellena únicamente lo que hay en esas dos páginas:
+
+- **Página 1** — cabecera (nombre, teléfono, email y código del DISTRIBUIDOR; `FECHA DE ALTA EN
+  TEKI` y `CÓDIGO DE CLIENTE EN TEKI`, ambos `ValueOrigin.PLATAFORMA`) y el bloque DATOS DEL
+  CLIENTE: nombre o razón social, NIF/CIF/NIE, domicilio, teléfono, CP, localidad, provincia, fax,
+  nombre y NIF del representante, móvil y email del representante, contacto de administración, TIF
+  y email de administración.
+- **Página 3** — la fecha (`Madrid, dd / mm / aa`, tres campos) y los bloques de firma: CLIENTE
+  (firma y sello, nombre y DNI) y COMERCIAL/DISTRIBUIDOR (firma, nombre y DNI). El bloque de AIRE
+  NETWORKS viene ya firmado y sellado en el PDF: **no se toca**.
+
+La página 2 (productos y servicios, con sus tablas) queda fuera del alta, y por eso la 5·5 no
+bloquea. Cuando entre, entra por ahí.
+
+### 6.3 Casillas de la cabecera: sólo ALTA
+
+La cabecera tiene tres casillas de CLIENTE: `ALTA NUEVA`, `MODIFICACIÓN`, `PORTABILIDAD`. Con sólo
+el contrato subido se marca **ALTA NUEVA** y nada más. Los otros casos llegarán cuando se aporten
+los PDFs correspondientes (servicios, centralita, portabilidad con o sin cambio de titularidad); de
+momento **no se implementa esa lógica**, sólo el alta.
+
+### 6.4 Más adelante, no ahora
+
+Si el usuario aporta en el paso de Documentación un PDF de servicios, centralita o portabilidad, la
+IA debería **reconocer los campos ya rellenos de ese PDF** y trasladarlos. Queda anotado y fuera de
+la 5·4.
+
+### 6.5 Un fallo que se ve en la captura del mapeo
+
+El auto-mapeo por similitud asignó **`Fecha · mes` → `Casilla de verificación 56`**: un checkbox
+como destino de un campo de texto. También dejó `Fecha · día` sin asignar mientras la página 3
+tiene tres campos de fecha claros.
+
+No merece arreglarse en el mapeo viejo —la 5·4 lo sustituye—, pero sí deja una regla para el
+nuevo: **el destino tiene que ser de un `FieldKind` compatible con el origen**. Un texto nunca
+puede mapear a una casilla. Es una comprobación de una línea que evita un fallo silencioso más.
