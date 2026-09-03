@@ -57,13 +57,35 @@ object FieldNormalizer {
                 if (d.isNotEmpty() && d.length < 5) d.padStart(5, '0') else v
             }
             (canonical == CanonicalKeys.REPRESENTANTE_NOMBRE ||
-                (canonical == null && b == "nombrerepresentante")) && v.contains(",") -> {
-                val parts = v.split(",").map { it.trim() }
-                if (parts.size == 2 && parts[0].isNotEmpty() && parts[1].isNotEmpty())
-                    "${parts[1]} ${parts[0]}" else v
-            }
+                (canonical == null && b == "nombrerepresentante")) && v.contains(",") ->
+                invertirNombre(v)
             else -> v
         }
+    }
+
+    /**
+     * «Apellidos, Nombre» -> «Nombre Apellidos», partiendo por la **última** coma.
+     *
+     * La versión de la 5·2b exigía exactamente dos trozos, y el Modelo 036 escribe el
+     * representante con **tres**: `APELLIDO1, APELLIDO2, NOMBRE` (casilla 305, verificado sobre
+     * un 036 real). Con tres trozos la condición no se cumplía y el valor **salía tal cual al
+     * PDF**, con sus comas y en orden apellidos-primero, en un campo rotulado «Nombre
+     * Representante». No producía un nombre inventado —la guarda lo impedía— pero tampoco hacía
+     * su trabajo.
+     *
+     * La última coma es la que separa apellidos de nombre en la convención de la AEAT, y con dos
+     * trozos coincide con la primera, así que el caso de Orange sigue dando exactamente lo mismo.
+     *
+     * Se limita a 3 trozos a propósito: cuatro o más ya no es un nombre en esa convención (es una
+     * lista, o un valor que la IA no ha sabido acotar) y se devuelve intacto, que es lo
+     * conservador. Si algún trozo queda vacío (`APELLIDO, , NOMBRE`) tampoco se toca.
+     */
+    private fun invertirNombre(v: String): String {
+        val parts = v.split(",").map { it.trim() }
+        if (parts.size !in 2..3 || parts.any { it.isEmpty() }) return v
+        val nombre = parts.last()
+        val apellidos = parts.dropLast(1).joinToString(" ")
+        return "$nombre $apellidos"
     }
 
     // Prefijos de CP -> nombres de provincia (fiel a PROV de la web).

@@ -25,17 +25,46 @@ import com.mejoresiagratis.rellenador.ui.wizard.FieldState
 object AutoFillPolicy {
 
     /**
+     * Documentos de identidad de una PERSONA FÍSICA.
+     *
+     * Son fuente fuerte para el nombre y el NIF del representante (siguen en [STRONG_ID_SOURCES]
+     * y ahí se quedan) y fuente dudosa para todo lo demás: el domicilio del reverso de un DNI es
+     * el particular de la persona, no el de la empresa, y lo mismo el teléfono y el correo.
+     *
+     * Verificado con un juego real de documentación de un alta: el domicilio del DNI y el
+     * domicilio fiscal de la sociedad estaban en el mismo municipio y la misma provincia, así que
+     * **`cpProvinciaMsg` daba verde con el equivocado**. La validación no puede detectar esto;
+     * sólo la procedencia.
+     *
+     * Efecto en Orange, deliberado: cuando la dirección venga ÚNICAMENTE de un documento de
+     * identidad (distribuidor autónomo sin censal ni 036 en el lote), pasa de autorrellenarse a
+     * pedir una confirmación. No se pierde el valor: sale como alternativa en la hoja de decisión.
+     * Es un toque de más a cambio de no escribir el domicilio particular de una persona en el
+     * campo de domicilio de una sociedad.
+     */
+    private val ID_DOCS = setOf("DNI", "NIE / Permiso de residencia", "Pasaporte")
+
+    /**
      * Campos cuyo valor, viniendo de estos documentos, suele pertenecer a un TERCERO y no
      * al distribuidor. No se autorrellenan nunca: se marcan [FieldState.WARN].
      */
     private val RISKY_SOURCES: Map<String, Set<String>> = mapOf(
-        CanonicalKeys.IBAN to setOf("Contrato de alquiler", "Factura"),
-        CanonicalKeys.EMAIL_COMERCIAL to setOf("Contrato de alquiler", "Alta en RETA"),
-        CanonicalKeys.EMAIL_FACTURACION to setOf("Contrato de alquiler", "Alta en RETA"),
-        CanonicalKeys.TELEFONO to setOf("Contrato de alquiler"),
+        CanonicalKeys.IBAN to setOf("Contrato de alquiler", "Factura") + ID_DOCS,
+        CanonicalKeys.EMAIL_COMERCIAL to setOf("Contrato de alquiler", "Alta en RETA") + ID_DOCS,
+        CanonicalKeys.EMAIL_FACTURACION to setOf("Contrato de alquiler", "Alta en RETA") + ID_DOCS,
+        CanonicalKeys.TELEFONO to setOf("Contrato de alquiler") + ID_DOCS,
         // suele firmarlo la gestoría
         CanonicalKeys.REPRESENTANTE_NOMBRE to setOf("Modelo 036"),
         CanonicalKeys.REPRESENTANTE_NIF to setOf("Modelo 036"),
+        // El domicilio de un documento de identidad es el PARTICULAR de la persona. Ver ID_DOCS.
+        CanonicalKeys.DIRECCION to ID_DOCS,
+        CanonicalKeys.CP to ID_DOCS,
+        CanonicalKeys.POBLACION to ID_DOCS,
+        CanonicalKeys.PROVINCIA to ID_DOCS,
+        CanonicalKeys.DIRECCION_2 to ID_DOCS,
+        CanonicalKeys.CP_2 to ID_DOCS,
+        CanonicalKeys.POBLACION_2 to ID_DOCS,
+        CanonicalKeys.PROVINCIA_2 to ID_DOCS,
     )
 
     /** Documentos que acreditan identidad/titularidad: fuente fuerte para datos fiscales. */

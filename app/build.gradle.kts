@@ -15,8 +15,8 @@ android {
         applicationId = "com.mejoresiagratis.rellenador"
         minSdk = 26
         targetSdk = 35
-        versionCode = 80
-        versionName = "0.10.10-fase5-esquema"
+        versionCode = 81
+        versionName = "0.10.11-procedencia-y-nombre"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // Base URL of your PHP proxy. Override per build type.

@@ -8,6 +8,61 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.10.11-procedencia-y-nombre] — 2026-09-03
+
+**Dos arreglos pequeños de los que meten un dato equivocado en el PDF final, destapados probando
+el flujo con un juego real de documentación de un alta** (DNI por las dos caras, tarjeta del NIF
+de la AEAT y Modelo 036 completo). No tocan el asistente ni el esquema: son `FieldNormalizer` y
+`AutoFillPolicy`, dos ficheros. La 5·4b (`docs/PLAN_ETIQUETADO_ORGANICO.md`) va después.
+
+### Corregido — «Apellidos, Nombre» se invierte también con tres trozos
+
+`FieldNormalizer.normVal` exigía **exactamente dos** trozos separados por coma, y el Modelo 036
+escribe el representante con **tres**: `APELLIDO1, APELLIDO2, NOMBRE` (casilla 305, verificado
+sobre un 036 real). Con tres, la guarda no se cumplía y el valor **salía tal cual al PDF** —con
+sus comas y en orden apellidos-primero— en un campo rotulado «Nombre Representante». No producía
+un nombre inventado, la guarda lo impedía, pero tampoco hacía su trabajo.
+
+Ahora parte por la **última** coma, que es la que separa apellidos de nombre en la convención de
+la AEAT. Con dos trozos la última coma es la primera, así que **el caso de Orange da exactamente
+lo mismo que antes**. Se limita a 3 trozos: cuatro o más ya no es un nombre en esa convención y se
+devuelve intacto. Si algún trozo queda vacío tampoco se toca.
+
+### Corregido — el domicilio de un documento de identidad ya no se autorrellena
+
+`AutoFillPolicy.RISKY_SOURCES` gana `ID_DOCS` (`DNI`, `NIE / Permiso de residencia`, `Pasaporte`)
+para los campos de dirección (los dos bloques), teléfono, correos e IBAN. El domicilio del reverso
+de un DNI es el **particular de la persona**, no el de la empresa.
+
+Lo que hace grave el caso es que **la validación no lo puede detectar**: en el juego probado, el
+domicilio del DNI y el domicilio fiscal de la sociedad estaban en el mismo municipio y la misma
+provincia, así que `cpProvinciaMsg` daba verde con el equivocado. Sólo la procedencia lo para.
+
+Los documentos de identidad **siguen en `STRONG_ID_SOURCES`** y siguen siendo fuente legítima para
+el nombre y el NIF del representante, que es para lo que sirven.
+
+**Cambio de comportamiento en Orange, deliberado**: cuando la dirección venga *únicamente* de un
+documento de identidad (distribuidor autónomo, sin censal ni 036 en el lote), pasa de
+autorrellenarse a pedir una confirmación. No se pierde el valor —sale como alternativa en la hoja
+de decisión—; es un toque de más a cambio de no escribir el domicilio particular de una persona en
+el campo de domicilio de una sociedad. Si hay censal, 036 o tarjeta CIF en el lote, no cambia nada.
+
+### Verificación
+
+`kotlinc 2.1.0 -Werror` sobre `data/model` + `data/validation` completos (con los stubs de
+`kotlinx.serialization` y de los tres tipos de `ui.wizard`, que no alteran la comprobación de
+tipos), cero avisos. Y **31 comprobaciones de comportamiento ejecutables, 0 fallos**: las siete
+formas del nombre (tres trozos, dos, sin coma, trozo vacío, cuatro trozos, coma final, espacios),
+las otras tres ramas de `normVal` intactas (IBAN, NIF, CP), catorce de `isRisky` —incluidas las
+que comprueban que lo de antes sigue igual y que el DNI **no** es dudoso para el representante— y
+cinco de `decide()`.
+
+Queda por comprobar en dispositivo, que es donde se ve: que con un 036 el nombre del
+representante entra al PDF como «Nombre Apellido1 Apellido2», y que una dirección que sólo salga
+del DNI aparece «por decidir» en vez de rellenada.
+
+---
+
 ## [0.10.10-fase5-esquema] — 2026-09-03
 
 **Tanda 5·4 de `docs/PLAN_FASE_5.md`, con las correcciones al §6.3 y al §6.5 verificadas contra

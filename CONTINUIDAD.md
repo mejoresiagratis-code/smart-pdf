@@ -4,7 +4,7 @@
 > o su contenido; con eso y el repo tiene el contexto completo. **No hace falta reenviar los
 > PDFs de Aire**: su análisis está en `docs/ANALISIS_FORMULARIOS_AIRE.md`.
 >
-> **Actualizado**: 2026-09-03. La **0.10.10 salió verde**; es el último commit de código.
+> **Actualizado**: 2026-09-03. La **0.10.11** es el último commit de código (⚠️ pendiente de verde).
 > Por encima hay commits sólo de documentación, que no suben versión. Este documento **caduca**: la primera regla de abajo
 > existe precisamente porque lo que aquí se afirma puede estar viejo.
 
@@ -22,14 +22,14 @@ git clone https://github.com/mejoresiagratis-code/smart-pdf
 cd smart-pdf && git log --oneline -8
 ```
 
-El último commit **de código** debería ser `0.10.10-fase5-esquema` · versionCode 80.
+El último commit **de código** debería ser `0.10.11-procedencia-y-nombre` · versionCode 81.
 Por encima puede haber commits solo de documentación, que no suben versión. Si el último código
 no es ése, este documento está desfasado: manda `git log` y la cabecera del `CHANGELOG.md`.
 
 ### Estado del build
 
-De la 0.10.6 a la **0.10.10, todas verdes** (comprobado en la API de Actions: el run de
-`ea02fc7` concluye `success`). No hay nada pendiente de verificar en Actions.
+De la 0.10.6 a la **0.10.10, todas verdes**. La **0.10.11 está pendiente de verde**: se subió
+verificada con `kotlinc -Werror` y 31 comprobaciones de comportamiento, pero el juez es Actions.
 
 Lo siguiente **no es código**: es probar en el móvil lo que ya está subido. Ver sección 5.
 
@@ -84,6 +84,7 @@ con cuatro formularios rellenables propios: contrato de empresas (481 campos), p
 | 0.10.8 | Fase 5, tanda **5·2b**: `normVal`, `DateAutofill`, copia fiscal, teclado y cobertura, por canónica · verde ✅ |
 | 0.10.9 | Fase 5, tanda **5·3**: la clave pasa a ser el nombre real del campo; `FieldKeys`; migración v1→v2 · verde ✅ |
 | 0.10.10 | Fase 5, tanda **5·4**: `FillStep` y `MappingEditor` se dibujan desde el `FormSchema` del PDF; `BuiltinSchemas.recognize()`; casillas de cabecera de Aire · verde ✅ |
+| 0.10.11 | Procedencia y nombre: inversión «Apellidos, Nombre» por la última coma; el domicilio de un documento de identidad deja de autorrellenarse ⚠️ sin verde |
 
 ### Qué está enganchado y qué no
 
@@ -118,18 +119,14 @@ Por orden. La primera no es código.
 - **Unificar las tres aperturas del PDF** en `LabelEditorViewModel.pickPdf()`: hoy abre el
   documento tres veces (campos, nº de páginas, nombres). Pide una API del inspector que devuelva
   las tres cosas de una pasada.
-- **Arreglos de normalización y procedencia** (los del bloque de la documentación real, §5). Son
-  pequeños, no tocan el asistente y se verifican en local con un juego de documentos de verdad.
-  Van primero porque cada uno mete un dato equivocado en el PDF final:
-    · la inversión «Apellidos, Nombre» parte por la **primera** coma y con tres campos
-      (`APELLIDO1, APELLIDO2, NOMBRE`, que es lo que da el Modelo 036) produce un nombre
-      inventado — debe partir por la **última**;
-    · `AutoFillPolicy` no contempla el documento de identidad como fuente de riesgo: de un DNI
-      sólo deben aceptarse nombre y NIF del representante, nunca el domicilio (que es el
-      particular de la persona, no el de la empresa);
-    · el firmante de un Modelo 036 suele ser la gestoría o un PAE, no el representante — el
-      representante real está en la casilla 305 de la página 3;
-    · el merge debe **deduplicar por valor** antes de declarar conflicto.
+- ~~**Arreglos de normalización y procedencia**~~ ✅ *hechos en la `0.10.11`*: la inversión del
+  nombre por la última coma y el domicilio de los documentos de identidad. Los otros dos que se
+  habían apuntado **no hacían falta**, comprobado leyendo el código: el firmante del 036 ya estaba
+  cubierto (`RISKY_SOURCES` marca `REPRESENTANTE_NOMBRE`/`_NIF` desde un `Modelo 036` como dudosos
+  desde antes), y **el merge sí deduplica por valor** — `FieldResolver` enriquece el candidato que
+  ya existe en vez de añadirlo, y `decide()` vuelve a aplicar `distinctBy` antes de declarar
+  conflicto. Lo que hay que verificar en dispositivo es que esa protección del 036 **se dispara**,
+  no añadirla.
 
 - **Fase 5 — relleno dinámico**: es la que hace que un PDF de Aire se rellene de punta a punta, y
   la que toca `WizardViewModel`. **No la ataques de una vez: está partida en tandas en
@@ -193,20 +190,23 @@ personales); lo que sigue son los patrones, que sí conviene tener escritos.
   caracteres — un 24%. El resto es IVA, IRPF, retenciones y actividades. Con
   `DocumentTypeDetector` ya identificando el modelo, recortar ahorra el 76% del contexto y quita
   ruido.
-- **La dirección del DNI no es el domicilio del cliente.** El reverso del DNI trae el domicilio
+- ~~**La dirección del DNI no es el domicilio del cliente.**~~ ✅ *arreglado en la `0.10.11`.* El reverso del DNI trae el domicilio
   particular del representante; el de la empresa está en el 036 y en la tarjeta del NIF. En el
   caso probado las dos estaban en el mismo municipio y la misma provincia, así que **la validación
   CP↔provincia da verde con la equivocada**. Sólo la política de procedencia lo puede parar, y hoy
-  `AutoFillPolicy.RISKY_SOURCES` no contempla el documento de identidad.
+  `AutoFillPolicy.RISKY_SOURCES` ya contempla el documento de identidad (`ID_DOCS`). **Verificar
+  en dispositivo** que una dirección que sólo salga del DNI aparece «por decidir», y que con un
+  censal o un 036 en el lote no cambia nada.
 - **El firmante del 036 era la gestoría**, no el representante: el pie de la página 1 traía una
   razón social de un organismo y «En calidad de: Funcionario Público Habilitado» (alta tramitada
   por un PAE). El representante real estaba en la casilla 305 de la página 3. Es exactamente el
   caso que la 0.10.9 dice haber reactivado y que sigue sin comprobarse en dispositivo.
-- **La inversión de nombre se rompe con dos comas.** El 036 escribe el representante como
-  `APELLIDO1, APELLIDO2, NOMBRE`. La regla de la 0.10.8 parte por la **primera** coma y produce
-  `APELLIDO2, NOMBRE APELLIDO1`, que es un nombre que no existe. Hay que partir por la **última**.
-  Y hay confirmación cruzada gratis: la página 11 del mismo 036 lo escribe sin comas y el DNI
-  separa apellidos de nombre en campos distintos.
+- ~~**La inversión de nombre no se aplica con tres trozos.**~~ ✅ *arreglado en la `0.10.11`.* El
+  036 escribe el representante como `APELLIDO1, APELLIDO2, NOMBRE` y la regla de la 0.10.8 exigía
+  exactamente dos trozos, así que el valor **salía tal cual al PDF**, con comas y en orden
+  apellidos-primero. (Corrección a lo que decía antes esta línea: la guarda `parts.size == 2`
+  impedía que se produjera un nombre inventado; el fallo era por omisión, no por invención.)
+  **Verificar en el PDF final** que ahora entra como «Nombre Apellido1 Apellido2».
 - **Dos formas de la misma razón social** (la tarjeta del NIF añade `(EN CONSTITUCIÓN)`). No es un
   conflicto que preguntarle al usuario: es normalización.
 - **Un NIF provisional valida igual.** La tarjeta lo dice expresamente y el dígito de control es
@@ -216,9 +216,11 @@ personales); lo que sigue son los patrones, que sí conviene tener escritos.
   avisos de la AEAT **de la entidad**; el contrato tiene `Tfno.` del cliente, `Móvil
   Representante` y `E-mail Representante` por separado. Autorrellenar los tres con lo mismo es
   plausible pero no está escrito: deben salir «por decidir».
-- **Tres candidatos idénticos no son un conflicto.** El 036 repite el bloque de local una vez por
-  epígrafe IAE (tres, en el caso probado) con la misma dirección. Hay que deduplicar por valor
-  antes de contar alternativas, o el usuario resuelve a mano «3 opciones» que son la misma cadena.
+- **Tres candidatos idénticos no son un conflicto** — y esto **ya está bien resuelto**, revisado
+  al implementar la 0.10.11. El 036 repite el bloque de local una vez por epígrafe IAE (tres, en el
+  caso probado) con la misma dirección; `FieldResolver` enriquece el candidato existente en vez de
+  añadirlo y `decide()` aplica `distinctBy` por valor antes de declarar conflicto. Se deja escrito
+  para que nadie lo «arregle» dos veces.
 - **Cobertura real del alta con esos tres documentos**: de los 15 campos de DATOS DEL CLIENTE, 8
   autorrellenados con certeza, 3 «por decidir» y 4 vacíos por falta de dato (fax, contacto de
   administración, TIF y correo de administración). Los 8 del bloque DISTRIBUIDOR y los 2 del
