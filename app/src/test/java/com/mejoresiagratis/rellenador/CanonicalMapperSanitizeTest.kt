@@ -12,11 +12,12 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Tanda 5·4g — el filtro de [CanonicalMapper.sanitize].
+ * Tanda 5·4g — el filtro de [CanonicalMapper.sanitize]. Tanda 5·4i: deja de descartar duplicados
+ * y ya no recibe `ocupadas` (ver `CanonicalMapper` para el porqué).
  *
- * Es la parte que no se puede saltar: un motor puede devolver claves que no existen, campos que
- * no se le preguntaron, o la misma canónica para dos huecos. Un enganche equivocado no da ningún
- * error — sale impreso en el contrato y nadie lo ve.
+ * Es la parte que no se puede saltar: un motor puede devolver claves que no existen o campos
+ * que no se le preguntaron. Un enganche equivocado no da ningún error — sale impreso en el
+ * contrato y nadie lo ve.
  */
 class CanonicalMapperSanitizeTest {
 
@@ -38,8 +39,7 @@ class CanonicalMapperSanitizeTest {
     private fun sanitize(
         raw: Map<String, String>,
         preguntados: List<String> = listOf("A", "B"),
-        ocupadas: Set<String> = emptySet(),
-    ) = mapper.sanitize(CanonicalProposal(raw), preguntados, ocupadas)
+    ) = mapper.sanitize(CanonicalProposal(raw), preguntados)
 
     @Test
     fun `una propuesta valida pasa tal cual`() {
@@ -60,18 +60,11 @@ class CanonicalMapperSanitizeTest {
     }
 
     @Test
-    fun `en un duplicado gana el primero`() {
+    fun `desde la 5;4i un duplicado se conserva en los dos campos`() {
+        // El caso que motiva la tanda: el mismo dato (p. ej. el nombre del cliente) repetido en
+        // dos huecos del mismo formulario.
         val out = sanitize(mapOf("A" to CanonicalKeys.CP, "B" to CanonicalKeys.CP))
-        assertEquals(mapOf("A" to CanonicalKeys.CP), out)
-    }
-
-    @Test
-    fun `una canonica ya asignada en el esquema no se vuelve a proponer`() {
-        val out = sanitize(
-            mapOf("A" to CanonicalKeys.CP),
-            ocupadas = setOf(CanonicalKeys.CP),
-        )
-        assertTrue(out.isEmpty())
+        assertEquals(mapOf("A" to CanonicalKeys.CP, "B" to CanonicalKeys.CP), out)
     }
 
     @Test

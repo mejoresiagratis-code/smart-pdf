@@ -643,11 +643,16 @@ private fun FieldRow(
         disabledContainerColor = container,
     )
 
-    // Tanda 5·4i, mitad 2 — candidatos a compartir este valor, entre los que siguen vacíos.
-    // `remember` con estas claves porque cambia cuando el propio valor cambia o cuando OTRO
-    // campo se rellena/vacía (deja de/empieza a estar vacío y entra o sale de la lista).
+    // Tanda 5·4i, mitad 2 (arreglo tras probar en el móvil) — candidatos a compartir este
+    // valor. `remember(key, value.isNotBlank())` a propósito, y NO también `state.fieldValues`
+    // entero: antes se recalculaba con CUALQUIER cambio de valor en CUALQUIER campo del
+    // formulario, así que en cuanto se marcaba una casilla (que rellena esa hermana), la lista
+    // entera se recomponía y esa hermana —ya con valor— desaparecía de golpe junto con las
+    // demás filas, que se repintaban desde cero. Fijar la lista sólo a "este campo pasó de
+    // vacío a con valor" congela los candidatos ofrecidos la primera vez, y de ahí en más el
+    // usuario puede marcar los que quiera sin que la lista se le encoja debajo del dedo.
     val schema = state.activeSchema
-    val affinityCandidates = remember(key, value, schema, state.fieldValues) {
+    val affinityCandidates = remember(key, value.isNotBlank(), schema) {
         val filled = schema?.allFields()?.firstOrNull { it.name == key }
         if (schema == null || filled == null || value.isBlank()) {
             emptyList()
@@ -660,6 +665,10 @@ private fun FieldRow(
                 .candidatesFor(schema, filled, emptyNames)
         }
     }
+    // Qué candidatos ha marcado el usuario, aparte de si su campo ya tiene valor: así una
+    // casilla marcada se sigue viendo marcada (no desaparece de la lista) aunque otra parte
+    // de la pantalla lea que ese campo ya no está vacío.
+    val confirmedAffinities = remember(key) { mutableStateMapOf<String, Boolean>() }
 
     Column(Modifier.fillMaxWidth()) {
         OutlinedTextField(
@@ -742,10 +751,12 @@ private fun FieldRow(
 
         // Tanda 5·4i, mitad 2 — afines: huecos vacíos que podrían llevar este mismo dato.
         // Se OFRECEN, nunca se aplican solos (ver `AffinityGroup`); marcar la casilla es lo
-        // que de verdad copia el valor (`vm.confirmAffinity`). Al confirmarse deja de estar
-        // vacío y desaparece de la lista en la siguiente recomposición — no hace falta
-        // "desmarcarlo": no hay vuelta atrás salvo deshacer (Icons.Filled.Refresh, arriba) o
-        // vaciar el campo a mano.
+        // que de verdad copia el valor (`vm.confirmAffinity`). Arreglo tras probar en el
+        // móvil: marcar una casilla ya NO hace desaparecer las demás — la lista está congelada
+        // (ver `affinityCandidates` arriba) y cada casilla lleva su propio estado marcado en
+        // `confirmedAffinities`, así que se pueden marcar los 3 campos, uno detrás de otro, sin
+        // que la lista se encoja. Una vez marcada, la casilla no se puede desmarcar desde aquí:
+        // deshacer (Icons.Filled.Refresh, arriba) o vaciar el campo a mano.
         if (affinityCandidates.isNotEmpty()) {
             var showAffinity by rememberSaveable(key) { mutableStateOf(false) }
             Column(Modifier.padding(start = 10.dp, top = 6.dp, end = 12.dp)) {
@@ -764,17 +775,26 @@ private fun FieldRow(
                 if (showAffinity) {
                     affinityCandidates.forEach { candidate ->
                         val candidateLabel = candidate.label.ifBlank { candidate.name }
+                        val checked = confirmedAffinities[candidate.name] == true
+                        fun confirm() {
+                            if (!checked) {
+                                confirmedAffinities[candidate.name] = true
+                                vm.confirmAffinity(key, candidate.name)
+                            }
+                        }
                         Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .clickable { vm.confirmAffinity(key, candidate.name) },
+                            Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Checkbox(
-                                checked = false,
-                                onCheckedChange = { vm.confirmAffinity(key, candidate.name) },
+                                checked = checked,
+                                onCheckedChange = { isChecked -> if (isChecked) confirm() },
                             )
-                            Text(candidateLabel, style = MaterialTheme.typography.bodyMedium)
+                            Text(
+                                candidateLabel,
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.clickable { confirm() },
+                            )
                         }
                     }
                 }

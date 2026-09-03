@@ -250,10 +250,15 @@ class LabelEditorViewModel @Inject constructor(
      * transversal, y lo aplica al esquema con [SchemaEditing.setCanonical].
      *
      * Se aplica en bloque a propósito, en vez de ir campo a campo: son cientos de huecos y
-     * confirmarlos de uno en uno no lo haría nadie. La red de seguridad es doble — el filtro de
-     * [CanonicalMapper.sanitize] tira las claves inventadas y los duplicados, y en el editor cada
-     * enganche queda visible en su chip y se puede cambiar o quitar. Como toda edición manual,
-     * lo que el usuario corrija después manda sobre esto.
+     * confirmarlos de uno en uno no lo haría nadie. La red de seguridad es que el filtro de
+     * [CanonicalMapper.sanitize] tira las claves inventadas, y en el editor cada enganche queda
+     * visible en su chip y se puede cambiar o quitar. Como toda edición manual, lo que el
+     * usuario corrija después manda sobre esto.
+     *
+     * Tanda 5·4i — la IA puede proponer la MISMA canónica para varios campos (el mismo dato
+     * repetido en el PDF) y aquí se aplican todas: `SchemaEditing.setCanonical` ya no le quita
+     * la canónica al campo anterior, así que el `fold` deja los dos enganchados en vez de que el
+     * segundo borre al primero.
      *
      * No manda ningún valor: sólo nombres de campo y los rótulos impresos de la plantilla en
      * blanco, igual que el etiquetado por visión.

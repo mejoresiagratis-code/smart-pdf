@@ -8,6 +8,72 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.10.25-qa-afines] — 2026-09-04
+
+Dos arreglos del reporte de Pablo tras probar en el móvil (0.10.22/23/24 confirmadas verdes).
+
+### «Al marcar un check se oculta el resto»
+
+La lista de afines (0.10.23) se recalculaba con `remember(key, value, schema, state.fieldValues)`
+— `state.fieldValues` entero, así que CUALQUIER cambio de valor en CUALQUIER campo del formulario
+la recomponía entera. Marcar una casilla rellena esa hermana (cambia `fieldValues`), lo que
+disparaba la recomposición, y la lista entera se repintaba desde cero con una fila menos —
+percibido como «se oculta el resto» al no poder marcar la segunda o la tercera a tiempo.
+
+Arreglo: `remember(key, value.isNotBlank(), schema)` — la lista de candidatos se congela cuando
+este campo (no cualquier otro) pasa de vacío a con valor, y no se vuelve a tocar aunque se marquen
+casillas. Cada casilla lleva además su propio estado marcado (`confirmedAffinities`, por campo),
+así que las tres se pueden marcar una detrás de otra sin que la lista encoja. De paso, se quita el
+`clickable` duplicado que tenía la fila entera (disparaba `confirmAffinity` dos veces por toque
+junto con el propio `Checkbox`): ahora casilla y texto son objetivos de toque independientes, no
+anidados, y ambos comprueban que no esté ya marcada antes de aplicar.
+
+### «Asignar mis datos con IA» dejaba campos coincidentes sin vincular
+
+Reportado: al pedirle a la IA que proponga canónicas (`CanonicalMapper.propose`, el botón
+«Asignar mis datos con IA» del editor de mapeo — distinto del paso de Relleno tras subir
+documentación, aunque los dos usan IA y es fácil confundirlos), varios campos que claramente
+coinciden con otros ya enganchados se quedaban sin proponer nada.
+
+Causa: dos frenos que tenían sentido cuando `setCanonical` era exclusivo (5·4i, mitad 1, los
+quitó para el enganche manual, pero `CanonicalMapper` se dejó a propósito sin tocar) y que ahora
+sólo estorbaban:
+- `disponibles` excluía las canónicas `ocupadas` (ya asignadas a CUALQUIER campo) de lo que se le
+  ofrecía a la IA — un segundo campo con el mismo dato ni se enteraba de que esa opción existía.
+- `sanitize()` descartaba cualquier segunda propuesta con una clave repetida dentro de la misma
+  respuesta («gana el primero»).
+
+Arreglo: se ofrece el catálogo completo (`CanonicalCatalog.ALL`, sin filtrar por `ocupadas`) y
+`sanitize()` ya no descarta duplicados — si la IA reconoce el mismo dato en varios huecos, los
+engancha todos. El riesgo que esto reabre (confundir al titular con un tercero que comparte
+rótulo) se cierra en el PROMPT, no en el filtro: regla 2 ahora pide explícitamente compartir la
+clave cuando es el mismo dato, y una regla 5 nueva prohíbe compartirla entre el titular y
+cualquier tercero (donante, representante, fiador…) aunque el rótulo impreso sea idéntico.
+`LabelEditorViewModel.proposeCanonicals()` ya aplicaba las propuestas con un `fold` de
+`setCanonical` por cada una — con `setCanonical` ya no exclusivo, aplicar dos propuestas con la
+misma clave las deja ENGANCHADAS a las dos en vez de que la segunda borre a la primera.
+
+Tests de `CanonicalMapperSanitizeTest` actualizados: `sanitize()` ya no recibe `ocupadas`, y el
+test de duplicados verifica ahora que se CONSERVAN los dos.
+
+### Pendiente — no se ha podido probar aquí
+
+Dos peticiones de este mismo reporte requieren un dispositivo, un PDF real de Aire y/o el proxy
+de IA, ninguno de los cuales está disponible en esta sesión (sin emulador, sin red hacia
+`datingtrck.com`, y el único PDF en el repo es `contrato-base.pdf` de Orange — 26 campos, no el
+de Aire con 461):
+
+1. **QA de principio a fin subiendo el 036**: comprobar que lo mapeado a mano + lo propuesto por
+   IA + lo extraído del 036 llega a Relleno como autorrellenado y no como «sin sugerencias». La
+   0.10.24 ya arregló la mitad de esto (la extracción reparte por canónica); esta versión arregla
+   la otra mitad (el mapeo por IA deja más campos enganchados de los que había). Falta la prueba
+   real.
+2. **«Algunos etiquetan mal»** (`FieldLabeler`/«Etiquetar con IA»): sin ver qué campos concretos
+   salen mal etiquetados no hay nada que diagnosticar — es una cuestión de qué ve el modelo de
+   visión en ESE PDF, no algo que un cambio de código a ciegas vaya a arreglar.
+
+---
+
 ## [0.10.24-afines-extraccion] — 2026-09-04
 
 Tanda 5·4i, arreglo tras probar 0.10.22/0.10.23 en el móvil (confirmadas verdes las dos). Reporte

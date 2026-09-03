@@ -42,8 +42,25 @@ data class CanonicalProposal(
  *
  * Una canónica equivocada no falla: mete el dato del cliente en el hueco de otro y el PDF sale
  * mal sin que salte nada. Así que la respuesta se filtra contra el catálogo, se descartan las
- * claves inventadas y los duplicados, y lo que queda **se ofrece** en el editor para que el
- * usuario confirme — la misma regla que el etiquetado: lo que corrija manda sobre la IA.
+ * claves inventadas o preguntadas a un campo que no era, y lo que queda **se ofrece** en el
+ * editor para que el usuario confirme — la misma regla que el etiquetado: lo que corrija manda
+ * sobre la IA.
+ *
+ * ### Tanda 5·4i — ya no es 1:1
+ *
+ * Hasta aquí, una canónica sólo podía proponerse para un campo: `disponibles` excluía las que
+ * ya estuvieran usadas en el esquema, y `sanitize()` descartaba cualquier segunda propuesta con
+ * la misma clave dentro de la misma respuesta. Eso era conservador a propósito mientras
+ * `SchemaEditing.setCanonical` tampoco permitía que dos campos compartieran canónica — pero
+ * desde que sí lo permite (5·4i, mitad 1), esa conservadurismo dejaba fuera justo el caso que
+ * motivó la tanda: un contrato con el nombre del cliente repetido en tres páginas no proponía
+ * nada para la 2ª y 3ª, que quedaban «sin vincular» esperando a que el usuario las enganchara a
+ * mano una a una. Ahora se ofrece el catálogo entero (también las canónicas ya usadas) y no se
+ * descarta ningún duplicado: si la IA reconoce el mismo dato en varios huecos del PDF, los
+ * engancha todos. El riesgo que esto reabre —confundir al TITULAR con un TERCERO que comparte
+ * rótulo (el titular donante de una portabilidad, el representante y la empresa)— se cierra en
+ * el propio prompt (regla 5), no en el filtro: aquí sólo se sigue comprobando que la clave exista
+ * y que el campo sea uno de los preguntados.
  */
 class CanonicalMapper @Inject constructor(
     private val api: ProxyApi
@@ -63,7 +80,8 @@ class CanonicalMapper @Inject constructor(
     /**
      * Propone canónicas para los campos de texto del esquema que aún no la tengan.
      *
-     * @return `nombre real -> clave canónica`, ya validado y sin duplicados. Vacío si ningún
+     * @return `nombre real -> clave canónica`, ya validado. Puede repetir una clave en varios
+     *   nombres si la IA reconoce el mismo dato en más de un hueco (tanda 5·4i). Vacío si ningún
      *   motor respondió algo utilizable.
      */
     suspend fun propose(schema: FormSchema, available: List<AiProvider>): Map<String, String> {
@@ -74,10 +92,11 @@ class CanonicalMapper @Inject constructor(
             .distinctBy { it.name }
         if (pendientes.isEmpty()) return emptyMap()
 
-        // Las que ya están cogidas no se vuelven a ofrecer: una canónica es exclusiva de un campo.
-        val ocupadas = schema.allFields().mapNotNull { it.canonical }.toSet()
-        val disponibles = CanonicalCatalog.ALL.filter { it.key !in ocupadas }
-        if (disponibles.isEmpty()) return emptyMap()
+        // Tanda 5·4i — antes se excluían las canónicas `ocupadas` (ya asignadas a otro campo) de
+        // lo que se ofrecía: un segundo campo con el MISMO dato nunca podía enterarse de que esa
+        // opción existía. Se ofrece el catálogo entero para que la IA pueda reconocer el mismo
+        // dato en varios huecos, no sólo en el primero.
+        val disponibles = CanonicalCatalog.ALL
 
         val prompt = buildPrompt(pendientes.map { it.name to it.label }, disponibles)
 
@@ -102,7 +121,7 @@ class CanonicalMapper @Inject constructor(
             // `ProxyResponse.text` es nullable: un motor puede responder ok sin cuerpo.
             val limpio = resp.text
                 ?.let { parse(it) }
-                ?.let { sanitize(it, pendientes.map { f -> f.name }, ocupadas) }
+                ?.let { sanitize(it, pendientes.map { f -> f.name }) }
             if (!limpio.isNullOrEmpty()) return limpio
         }
         return emptyMap()
@@ -110,29 +129,24 @@ class CanonicalMapper @Inject constructor(
 
     /**
      * Filtra la respuesta del motor. Es la parte que no se puede saltar: un motor puede devolver
-     * claves que no existen, campos que no se le preguntaron, o la misma canónica para dos
-     * campos.
+     * claves que no existen, o campos que no se le preguntaron.
      *
-     * En caso de duplicado gana el primero y los demás se descartan, en vez de elegir al azar:
-     * lo que quede sin proponer el usuario lo asigna a mano, y eso es preferible a un enganche
-     * silenciosamente equivocado.
+     * Tanda 5·4i — ya NO descarta duplicados: si la IA propone la misma clave para dos campos,
+     * ambos se conservan (era «gana el primero» hasta esta tanda). El filtro que evita
+     * confundir al titular con un tercero vive en el prompt (regla 5), no aquí.
      */
     internal fun sanitize(
         raw: CanonicalProposal,
         preguntados: List<String>,
-        ocupadas: Set<String>,
     ): Map<String, String> {
         val validas = CanonicalCatalog.ALL.map { it.key }.toSet()
         val nombres = preguntados.toSet()
-        val usadas = ocupadas.toMutableSet()
         val out = LinkedHashMap<String, String>()
         for ((name, canonical) in raw.enganches) {
             val c = canonical.trim()
             if (name !in nombres) continue      // campo que no se preguntó
             if (c !in validas) continue         // clave inventada
-            if (c in usadas) continue           // ya ocupada, aquí o por otra propuesta
             out[name] = c
-            usadas += c
         }
         return out
     }
@@ -174,12 +188,19 @@ Para cada hueco, dime qué dato de la segunda lista le corresponde.
 REGLAS
 1. Usa EXACTAMENTE la clave de la segunda lista (la parte antes de los dos puntos). No inventes
    claves ni las traduzcas.
-2. Cada dato se usa COMO MÁXIMO UNA VEZ. Si dudas entre dos huecos, elige uno solo.
+2. Si el MISMO dato aparece repetido en varios huecos del formulario (el nombre del cliente en
+   dos páginas, la misma dirección partida en columnas idénticas de dos tablas), usa la MISMA
+   clave en todos esos huecos. No es un error compartirla — es lo correcto.
 3. Un contrato tiene DOS direcciones: la fiscal o social de la empresa, y la de instalación o
    suministro del servicio. No las confundas: fíjate en el rótulo y en el título de la sección.
 4. Distingue a la EMPRESA de su REPRESENTANTE. "NIF" a secas suele ser de la empresa;
    "NIF del firmante" o "DNI del apoderado" es del representante.
-5. Si un hueco no corresponde claramente a ningún dato de la lista, OMÍTELO. Es mejor dejarlo
+5. NUNCA uses la misma clave para el TITULAR del contrato y un TERCERO (el titular DONANTE de
+   una portabilidad, un representante frente a la empresa que representa, un fiador, un
+   coarrendatario…) aunque el rótulo impreso sea idéntico ("Nombre y apellidos" aparece en
+   ambos). Son personas o entidades DISTINTAS aunque el hueco se llame igual: fíjate en el
+   título de la sección o en palabras como "donante", "cedente", "representante", "apoderado".
+6. Si un hueco no corresponde claramente a ningún dato de la lista, OMÍTELO. Es mejor dejarlo
    fuera que emparejarlo mal: un dato en el hueco equivocado no da ningún error, sale impreso en
    el contrato final y nadie lo ve.
 
