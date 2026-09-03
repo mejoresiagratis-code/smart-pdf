@@ -264,6 +264,30 @@ En `Portabilidad_Fija.pdf`, un campo se llama
 `solicita la PORTABILIDAD a favor de LEAST COST ROUTING TELECOM SL`. Sin impacto funcional,
 pero confirma que **el nombre técnico no es fuente fiable de etiqueta**.
 
+### 6.3 `Contrato_empresas.pdf` — dos nombres de campo duplicados
+
+Verificado con `pypdf` el 2026-09-03: 488 widgets, **481 nombres únicos**. Tres nombres cubren
+más de un widget, y sólo uno es legítimo:
+
+| Nombre | Widgets | ¿Correcto? |
+|---|---|---|
+| `Botón de opción 10` | 6 | ✅ es el grupo de radio de RED INTELIGENTE |
+| `email conectividad` | 2 | ❌ el «Email» de la dirección de instalación (y≈536,8) y el «Email para recibir los informes de Zentinela» (y≈522,8) comparten nombre: rellenar uno rellena el otro |
+| `PDC cuotalta 08` | 2 | ❌ dos filas distintas de la tabla PRODUCTOS CLOUD (y≈181,8 y y≈166,7) |
+
+Además, la numeración de esa tabla está descuadrada: `PDC cantidad` va 01–06, **08**, 09, 10 (sin
+07). Cualquier heurística que empareje celdas por el sufijo del nombre se equivoca de fila; la
+agrupación por geometría del builder no se ve afectada, que es justo lo que se quería.
+
+### 6.4 `Contrato_empresas.pdf` — cuatro pares de casillas superpuestas
+
+Mismo defecto que el 6.1, en la tabla de PORTABILIDAD TELEFONÍA FIJA (pág. 3). En la columna
+CENTRAL VIRTUAL (x = 465,6) hay **dos casillas exactamente encima de la otra** en las cuatro
+últimas filas: `Casilla de verificación 40`/`44`, `41`/`45`, `42`/`46`, `43`/`47`.
+
+Y el orden de los nombres no es el visual: la fila 5 de esa misma tabla va, de izquierda a
+derecha, `26, 25, 24, 23, 22`. Otra confirmación del §6.2.
+
 ---
 
 ## 7. Qué queda por verificar
@@ -286,7 +310,7 @@ Marcado explícitamente para que nadie lo dé por bueno sin comprobarlo:
 | Fase | Qué cambia respecto al plan original |
 |---|---|
 | **2 · Esquema** | `canonical` pasa a ser el canónico transversal del expediente. Añadir origen `PLATAFORMA`. Leer estados de checkbox de `/AP /N` en vez de asumir `/On`–`/Off`. Unidad persistida ya como expediente (lista de 1). |
-| **3 · Etiquetado IA** | Confirmado imprescindible: hay bloques enteros con nombres autogenerados. Pero conviene **aprovechar el nombre real cuando ya es legible** (`Nombre o razón social`, `NIF/CIF/NIE`…) antes de gastar una llamada de visión sobre 481 campos. |
+| **3 · Etiquetado IA** | Confirmado imprescindible: hay bloques enteros con nombres autogenerados (**252 de 488 widgets, un 52%**, medido). Pero conviene **aprovechar el nombre real cuando ya es legible** (`Nombre o razón social`, `NIF/CIF/NIE`…) y, antes que eso, el **texto que rodea al campo**: una pasada geométrica etiqueta el 74% de los campos sueltos sin gastar una sola llamada de visión. Plan en `docs/PLAN_ETIQUETADO_ORGANICO.md`. |
 | **4 · Editor** | Debe permitir editar la etiqueta de un grupo de radio completo, no sólo del campo (el caso `PAGO RECURRENTE` / `PAGO ÚNICO`). |
 | **5 · Relleno** | Tablas con filas dinámicas + selector de catálogo + cálculo de totales. Los checkboxes de fila se resuelven por geometría. |
 | **6 · Firma** | Hay que mirar los campos `/Sig`, no sólo estampar imagen en coordenadas. |

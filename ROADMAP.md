@@ -181,6 +181,27 @@ paso. Build verde y verificación en el móvil antes de seguir.
   únicamente la casilla ALTA NUEVA, desmarcando las otras dos que vienen `/Sí` de fábrica.
   Detalle en `docs/PLAN_FASE_5.md` §6.
 
+- **Tanda 5·4b — etiquetado orgánico** (plan completo en `docs/PLAN_ETIQUETADO_ORGANICO.md`,
+  2026-09-03). La 5·4 consiguió que las secciones salgan del `FormSchema`; ésta consigue que se
+  **llamen como en el papel**. Los títulos salen del texto del PDF (`DATOS DEL CLIENTE`,
+  `AIRE CONNECT`…) en vez de «Página 1» y «Tabla 3»; las 12 casillas que la 5·4 promocionó de
+  radio pasan a ser `FormSection.enablerField`, el interruptor de su banda, y con el activador
+  apagado la sección se pliega — **un alta usa 37 de los 488 widgets del contrato**, así que sin
+  eso la pantalla es una lista de 481 campos; una pasada geométrica etiqueta el **74% de los
+  campos sueltos sin llamar a la IA** (medido), las celdas de tabla heredan la cabecera de su
+  columna, y la visión queda para el residuo (23 campos en vez de 481). Arregla de camino un
+  **fallo de orden que dejó la 5·4**: `flushLooseBefore` sólo vuelca los sueltos de páginas
+  anteriores, así que DATOS DEL CLIENTE, que está arriba del todo, sale detrás de las dos tablas
+  que tiene debajo. Riesgo bajo: no toca `WizardViewModel` ni la clave de los valores.
+
+- **Tanda de normalización y procedencia** (detalle en `CONTINUIDAD.md` §5). Cuatro arreglos
+  pequeños que hoy meten datos equivocados en el PDF final, destapados probando con un juego real
+  de documentación: la inversión «Apellidos, Nombre» parte por la primera coma y con tres campos
+  produce un nombre inventado; `AutoFillPolicy` no trata el documento de identidad como fuente de
+  riesgo (su domicilio es el particular del representante, no el de la empresa, y la validación
+  CP↔provincia no lo detecta); el firmante de un Modelo 036 suele ser la gestoría; y el merge no
+  deduplica por valor antes de declarar conflicto. No tocan el asistente.
+
 
 - ~~**Persistencia de documentos (Fase 2 de robustez)**~~ ✅ *Completado en v0.8.7* — `DocumentStore`
   copia los documentos a `filesDir/docs/` al añadirlos. Texto original:
