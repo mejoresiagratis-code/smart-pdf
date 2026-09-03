@@ -109,7 +109,18 @@ fun fillSectionsFrom(
 ): List<FillSection> {
     val out = mutableListOf<FillSection>()
     for (section in schema.sections) {
-        val names = section.allFields().map { it.name }
+        // Tanda 5·4d (2ª mitad) — dos correcciones respecto a `.map { it.name }` a secas:
+        //
+        //  · `distinct()`: un grupo de radio son VARIAS entradas con el mismo `name` (es un solo
+        //    campo del AcroForm, ver `ValueRouting.kt`). Sin esto, un grupo de 6 opciones pintaba
+        //    6 filas idénticas, todas escribiendo sobre la misma clave.
+        //  · los `/Sig` se descartan: la firma se estampa como imagen en el paso 4 y
+        //    `routeFieldValues()` ya se niega a escribirlos por ninguna de las dos vías, así que
+        //    ofrecer un hueco que no va a ninguna parte sólo puede confundir.
+        val names = section.allFields()
+            .filter { it.kind != com.mejoresiagratis.rellenador.data.model.FieldKind.SIGNATURE }
+            .map { it.name }
+            .distinct()
         if (names.isEmpty()) continue
         val hasDireccion2 = section.allFields().any {
             it.canonical == com.mejoresiagratis.rellenador.data.model.CanonicalKeys.DIRECCION_2

@@ -5,6 +5,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -32,7 +33,10 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import com.mejoresiagratis.rellenador.data.model.BuiltinSchemas
 import com.mejoresiagratis.rellenador.data.model.CanonicalKeys
+import com.mejoresiagratis.rellenador.data.model.ContractFields
+import com.mejoresiagratis.rellenador.data.model.FieldKind
 import com.mejoresiagratis.rellenador.data.model.FieldKeys
+import com.mejoresiagratis.rellenador.data.model.FormField
 import com.mejoresiagratis.rellenador.data.validation.FieldNormalizer
 import com.mejoresiagratis.rellenador.data.validation.FieldValidator
 import com.mejoresiagratis.rellenador.ui.components.ExpressiveButton
@@ -118,6 +122,22 @@ fun FillStep(
     // que puede no estar en `CANON`), sino que la resuelve `FieldKeys`: nombre real -> clave de
     // `CANON` -> etiqueta. Si el campo no está mapeado, se muestra su propio nombre.
     val fechaKeys = remember(keys) { fechaKeysOf(keys) }
+
+    /**
+     * Tanda 5·4d (2ª mitad) — índice `nombre real -> entradas del esquema`, que es lo que permite
+     * a [FieldRow] pintar una casilla como casilla y un radio como radio.
+     *
+     * Va aquí y con `remember` a propósito: son varios cientos de campos (472 en el contrato de
+     * Aire) y resolverlo dentro de cada fila sería recorrer el esquema entero por fila en cada
+     * recomposición. Un grupo de radio son varias entradas con el mismo `name`, así que el valor
+     * del mapa es una lista, no un campo.
+     *
+     * Vacío cuando no hay esquema activo (flujo Orange/CANON): entonces todo se pinta como texto,
+     * que es exactamente el comportamiento anterior a esta tanda.
+     */
+    val fieldsByName = remember(state.activeSchema) {
+        state.activeSchema?.allFields()?.groupBy { it.name }.orEmpty()
+    }
 
     fun isFieldOk(key: String): Boolean {
         val v = state.fieldValues[key]
@@ -371,7 +391,7 @@ fun FillStep(
                             }
                         }
                         section.keys.forEach { key ->
-                            FieldRow(key, keys, state, vm, ::confirm)
+                            FieldRow(key, keys, state, vm, ::confirm, fieldsByName[key].orEmpty())
                         }
                     }
                 }
@@ -450,7 +470,29 @@ private fun FieldRow(
     state: WizardUiState,
     vm: WizardViewModel,
     onConfirm: (String) -> Unit = {},
+    /**
+     * Entradas del esquema que comparten este `name`. Vacío = sin esquema o campo desconocido,
+     * y entonces se pinta como texto (comportamiento previo a la 5·4d).
+     */
+    group: List<FormField> = emptyList(),
 ) {
+    // Tanda 5·4d (2ª mitad) — el CONTROL lo decide el `FieldKind` del esquema, no la pantalla.
+    // El reparto al mapa correcto del PDF lo hace después `routeFieldValues()`; aquí sólo se
+    // elige con qué se rellena. Basta una entrada `/Sig` para no pintar nada: un hueco de firma
+    // no se rellena por ninguna de las dos vías.
+    val kinds = group.map { it.kind }.toSet()
+    when {
+        FieldKind.SIGNATURE in kinds -> return
+        FieldKind.RADIO in kinds -> {
+            RadioGroupRow(key, keys, group, state, vm, onConfirm)
+            return
+        }
+        FieldKind.CHECKBOX in kinds -> {
+            CheckboxRow(key, keys, group.first(), state, vm, onConfirm)
+            return
+        }
+    }
+
     val value = state.fieldValues[key] ?: ""
     // Tanda 5·3 — `key` es el nombre REAL del campo. La etiqueta y la canónica (que gobierna
     // validación y teclado) se resuelven con `FieldKeys`, porque el nombre real de un PDF que no
@@ -722,4 +764,104 @@ private fun keyboardFor(key: String, canonicalHint: String? = null): KeyboardOpt
         else -> KeyboardType.Text
     }
     return KeyboardOptions(keyboardType = type, imeAction = ImeAction.Next)
+}
+
+/**
+ * Casilla suelta — tanda 5·4d (2ª mitad).
+ *
+ * Se guarda el **estado real** del PDF (`onState`, leído del `/AP /N` al construir el esquema) y
+ * no un `"On"` inventado, porque los estados de un PDF ajeno no siguen ninguna convención: en el
+ * contrato de Aire son `/Sí`, `/0`..`/5`, `/Opción1` (ver v0.9.7). Apagado es cadena vacía, nunca
+ * `"0"` — `"0"` es un estado ENCENDIDO válido en Aire, y confundirlos es el fallo que esta tanda
+ * viene a cerrar. `routeFieldValues()` aplica la misma regla al otro lado.
+ */
+@Composable
+private fun CheckboxRow(
+    key: String,
+    keys: FieldKeys,
+    field: FormField,
+    state: WizardUiState,
+    vm: WizardViewModel,
+    onConfirm: (String) -> Unit = {},
+) {
+    val label = field.label.ifBlank { keys.labelOf(key) }
+    val stored = state.fieldValues[key] ?: ""
+    val checked = stored.isNotBlank() &&
+        !stored.equals(ContractFields.CHECKBOX_OFF, ignoreCase = true)
+    val onState = field.onState ?: ContractFields.CHECKBOX_ON
+
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.medium)
+            .clickable {
+                val next = if (checked) "" else onState
+                vm.setFieldValue(key, next)
+                onConfirm("$label: ${if (checked) "sin marcar" else "marcada"}")
+            }
+            .padding(vertical = 4.dp, horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Checkbox(checked = checked, onCheckedChange = null)
+        Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+    }
+}
+
+/**
+ * Grupo de opciones excluyentes — tanda 5·4d (2ª mitad).
+ *
+ * Las entradas comparten el `name` (es UN campo del AcroForm) y se distinguen por `onState`, así
+ * que la selección se guarda como el `onState` de la opción elegida. La etiqueta de cada opción
+ * es su `optionLabel`; si el etiquetado no lo resolvió se cae al propio `onState`, que al menos
+ * es el valor real y no una invención.
+ *
+ * Volver a pulsar la opción marcada la desmarca: un radio del AcroForm admite `/Off`, y sin esto
+ * un grupo mal tocado no tiene vuelta atrás sin reiniciar el asistente.
+ */
+@Composable
+private fun RadioGroupRow(
+    key: String,
+    keys: FieldKeys,
+    group: List<FormField>,
+    state: WizardUiState,
+    vm: WizardViewModel,
+    onConfirm: (String) -> Unit = {},
+) {
+    val title = group.firstOrNull { it.label.isNotBlank() }?.label ?: keys.labelOf(key)
+    val stored = (state.fieldValues[key] ?: "").removePrefix("/")
+
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(
+            title,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 4.dp, bottom = 2.dp),
+        )
+        group.forEach { option ->
+            val optionState = option.onState ?: return@forEach
+            val optionLabel = option.optionLabel?.ifBlank { null } ?: optionState
+            val selected = stored.equals(optionState, ignoreCase = true)
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(MaterialTheme.shapes.medium)
+                    .clickable {
+                        val next = if (selected) "" else optionState
+                        vm.setFieldValue(key, next)
+                        onConfirm("$title: ${if (selected) "sin elegir" else optionLabel}")
+                    }
+                    .padding(vertical = 4.dp, horizontal = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                RadioButton(selected = selected, onClick = null)
+                Text(
+                    optionLabel,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+    }
 }
