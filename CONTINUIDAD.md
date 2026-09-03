@@ -44,13 +44,15 @@ Lo siguiente **no es código**: es probar en el móvil lo que ya está subido. V
 3. `docs/PLAN_FASE_5.md` — plan de la fase 5 partido en tandas, escrito leyendo el código.
    **De lectura obligada antes de tocar el asistente.** Su §6 tiene los requisitos acordados para
    la 5·4 (secciones en el orden del PDF, alcance del alta, casilla de ALTA), ya ejecutados.
-3b. `docs/PLAN_ETIQUETADO_ORGANICO.md` — plan de la **5·4b**, la tanda que viene después de la
-   5·4: que las secciones y los campos se llamen como en el papel. Escrito midiendo sobre el
-   contrato con `pypdf`/`pdfplumber`; incluye el fallo de orden que dejó la 5·4.
-4. `docs/roadmap-multiformulario.html` — el roadmap de las 7 fases con el **estado real** de cada
+4. `docs/PLAN_ETIQUETADO_ORGANICO.md` — **plan de la 5·4b, que es la siguiente tanda**: que las
+   secciones y los campos se llamen como en el papel. Escrito midiendo sobre el contrato con
+   `pypdf`/`pdfplumber`, con los números reproducibles; incluye el fallo de orden que dejó la 5·4
+   y las reglas de higiene (pulsadores y `/Sig` fuera del esquema, valor troceado en N casillas).
+   **Si vas a tocar el esquema o el mapeo, éste es el documento.**
+5. `docs/roadmap-multiformulario.html` — el roadmap de las 7 fases con el **estado real** de cada
    una, qué falta y por qué. Ábrelo en el navegador; la primera pestaña es el resumen.
-5. `CHANGELOG.md`, entradas **0.9.4 a 0.10.9**.
-6. `docs/ESTADO_Y_GUIA_DE_CONTINUIDAD.md` — arquitectura e historia. **Ojo**: su bloque
+6. `CHANGELOG.md`, entradas **0.9.4 a 0.10.12**.
+7. `docs/ESTADO_Y_GUIA_DE_CONTINUIDAD.md` — arquitectura e historia. **Ojo**: su bloque
    «ESTADO ACTUAL» se quedó en `v0.7.10` / versionCode 48 (agosto de 2026), 26 versiones por
    detrás. La parte de arquitectura y la de «archivo histórico» siguen siendo útiles; el estado
    por versión está en el `CHANGELOG.md`, que es la fuente de verdad.
@@ -99,10 +101,26 @@ Desde la 0.10.5 ese mismo editor tiene un botón **«Etiquetar con IA»** que pa
 sobre el esquema entero (`VisionLabelPass`), así que la fase 3 ya está enganchada.
 
 **Enganchado desde la 0.10.10 (5·4)**: subir un PDF por el paso 1 ya inspecciona, calcula la
-huella con el nº de páginas real, construye el `FormSchema` si no estaba y lo persiste. `FillStep`
-y `MappingEditor` se dibujan desde ese esquema, no desde los 21 campos de `CANON`.
+huella con el nº de páginas real, construye el `FormSchema` si no estaba y lo persiste. **`FillStep`**
+se dibuja desde ese esquema, no desde los 21 campos de `CANON`.
 `BuiltinSchemas.recognize(fieldNames)` reconoce Orange y el contrato de Aire por nombres
 característicos.
+
+⚠️ **Corrección a lo que dice el `CHANGELOG` de la 0.10.10**: ahí se afirma que `MappingEditor`
+«se dibuja desde el `FormSchema`», y no es cierto. Lo que la 5·4 le añadió fue **filtrar las
+opciones del desplegable** por `FieldKind` compatible; las **filas siguen siendo las 21 canónicas
+de `ContractFields.CANON`**, o sea las de Orange, cargues el PDF que cargues. Se vio al implementar
+la 0.10.12.
+
+**Enganchado desde la 0.10.12**: «Revisar mapeo» en el paso 1 abre el **mismo panel que Ajustes**
+(`SchemaReviewPanel`, extraído de `LabelEditorScreen` y compartido por los dos), sembrado con el
+contrato ya elegido vía `LabelEditorViewModel.ensureLoaded(uri)`; al confirmar, `WizardViewModel`
+lo adopta con `adoptSchema()`. Y el botón se ofrece **siempre** que haya un PDF propio con campos,
+ya no depende de `needsMapping`.
+
+Con eso, **`MappingEditor` ya no es alcanzable desde el asistente**. No está borrado y no se borra
+(regla de abajo): sigue sirviendo para enlazar canónicas cuando el PDF es un contrato conocido, y
+`TemplateMapper.suggest()` sigue alimentando `fieldMapping` al elegir contrato.
 
 **NO enganchado**: la fase 6 (`/Sig`) y las tablas del Relleno (5·5). Y las secciones que sí se
 dibujan **se siguen llamando «Página 1» y «Tabla 3»** — eso es lo que arregla la 5·4b, ver
@@ -157,8 +175,17 @@ Por orden. La primera no es código.
 - **Tanda 5·5 — tablas en el Relleno**: filas dinámicas, catálogo local (lleva comisiones: no sale
   del dispositivo) y `cuota total = cantidad × cuota unitaria`. No bloquea el alta, porque el alta
   usa páginas 1 y 3 y ahí no hay tablas.
-- **Fase 6 — firma**: manejar los campos `/Sig` del AcroForm (4 en el contrato, 2 en
-  portabilidad), no sólo estampar imagen en coordenadas.
+- **Fase 6 — firma**: manejar los campos `/Sig` del AcroForm (4 en el contrato de empresas, 1 en
+  la página 2 y 3 en la 3; 2 en portabilidad), no sólo estampar imagen en coordenadas.
+  ⚠️ **Esto ya no es sólo «lo siguiente»: hoy está roto para Aire.** Con el contrato de empresas
+  cargado, el paso 1 dice «0 huecos de firma» (visto en una captura de la 0.10.11), porque
+  `SignaturePageDetector` los busca por geometría y no mira el AcroForm. Sin huecos no hay dónde
+  estampar, así que **un alta de Aire hoy no se puede firmar en la app**. Es lo que hay que decidir
+  si adelanta a la 5·5.
+
+- **Deuda menor, para cuando toque**: los siete campos fantasma del esquema (3 pulsadores con
+  `Ff = 65536` y los 4 `/Sig`, que `FormSchemaBuilder` mete como `FieldKind.TEXT`). Van dentro de
+  la 5·4b, §5 de su plan.
 
 ---
 
