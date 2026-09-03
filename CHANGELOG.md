@@ -8,6 +8,74 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.10.21-relleno-usable] — 2026-09-03
+
+Tanda 5·4h: tres cosas del paso de Relleno que salieron al probarlo en el móvil con el contrato
+de Aire (461 campos, 14 rellenos por la IA).
+
+> **Nota de versión.** Esto llegó escrito como «0.10.20-relleno-usable» con `versionCode` 90,
+> dando por hecho que el arreglo del rojo de la 0.10.19 aún no estaba subido. Sí lo estaba:
+> `1948713` (0.10.20-arreglo-compilacion, `versionCode` 90) está en `main` y salió **verde**.
+> Reutilizar el 90 habría dejado dos APK distintos con el mismo `versionCode` y habría borrado
+> del changelog una versión que llegó a verde, así que esto sube a **0.10.21 / `versionCode` 91**
+> y la entrada de la 0.10.20 se queda donde estaba, más abajo.
+
+### El crash al bajar por la lista
+
+`FillStep` usaba `items(sections, key = { it.title })`. **LazyColumn exige claves únicas**, y un
+esquema aprendido puede tener dos secciones con el mismo título, o con el título vacío. Compose
+lanzaba `Key was already used` en cuanto la segunda entraba en composición — o sea, al hacer
+scroll, no al cargar. De ahí que pareciera un problema del etiquetado por IA cuando era de la
+lista.
+
+Arreglo: `itemsIndexed` con clave `"$i:${'$'}{section.title}"`, única aunque los títulos se repitan.
+
+La misma causa tenía una segunda vía: `fillSectionsFrom` deduplicaba nombres **dentro** de cada
+sección pero no entre secciones, y un nombre repetido rompía además `rememberSaveable(key)`. Ahora
+un nombre visto en una sección anterior no se vuelve a pintar — es el mismo campo del AcroForm y
+comparte valor, así que dos filas editaban lo mismo.
+
+### El aviso no decía qué campo
+
+«1 campo necesita tu decisión» contaba pero no nombraba, y con 461 huecos había que bajar
+buscando el triángulo a ojo. Ahora lista las etiquetas (hasta seis, luego «y N más»).
+
+### Los huecos vacíos ya no estorban
+
+447 de 461 campos no tenían nada y estaban intercalados con los que sí. Se apartan a un
+desplegable **plegado** al final, agrupados por su sección de origen para no perder el contexto.
+Un hueco «tiene algo» si hay valor, si hay alternativas entre las que elegir, o si la IA le dejó
+un estado (propuesta, conflicto o dudoso). No se esconden: se pueden abrir y rellenar a mano.
+
+### Lo que NO trae
+
+El arreglo de los tres errores de compilación de la 0.10.19 (`LabelEditor.kt` con
+`onCanonicalChange` antes de la lambda trailing, y `CanonicalMapper.kt` con
+`resp.text?.let { parse(it) }`) **ya venía hecho en la 0.10.20**, que está en `main` y verde.
+Aquí sólo queda un comentario ampliado en `LabelEditor.kt` explicando por qué ese parámetro va
+donde va. Sin cambio de comportamiento.
+
+### Limpieza al integrar
+
+`FillStep.kt` llegaba con `import androidx.compose.foundation.clickable` **repetido** y con
+`import androidx.compose.foundation.lazy.items` ya sin ningún uso (lo sustituyó `itemsIndexed`).
+Los dos fuera.
+
+### Verificación
+
+5 casos en `FillSectionsDedupTest`: nombre repetido entre secciones, sección que se queda vacía
+al deduplicar, grupo de radio como una sola clave, firmas fuera, y que ningún nombre aparezca dos
+veces con títulos de sección repetidos.
+
+Typecheckeados con `kotlinc 2.1.0 -Werror` `FillSections.kt` y sus dependencias del modelo —es
+Kotlin puro— y portados los 5 casos a un ejecutable, más 2 propios (orden de secciones intacto y
+que gane la primera aparición del nombre): **8 pasan, 0 fallan**. `FillStep.kt` y `LabelEditor.kt`
+son Compose y aquí no hay SDK: van con comprobación de balance sintáctico y revisión de que cada
+símbolo nuevo existe (`state.fieldCandidates`, `FieldState.EMPTY`, la firma de `FieldRow`,
+`FillSection.copy(keys = …)`). El juez sigue siendo Actions.
+
+---
+
 ## [0.10.20-arreglo-compilacion] — 2026-09-03
 
 Build rojo de la 0.10.19: tres errores de compilación, dos de ellos con la misma causa.
@@ -30,7 +98,8 @@ sus llamadores, y el compilador lo señala en el llamador y no en la firma, que 
 problema. En Compose, un parámetro nuevo va **antes** de la lambda trailing salvo que sea él
 mismo la lambda principal.
 
-Sin cambios de comportamiento: la 0.10.20 es exactamente la 0.10.19 compilando.
+Sin cambios de comportamiento: la 0.10.20 es exactamente la 0.10.19 compilando. **Verde**
+(run 33724263803).
 
 ---
 
@@ -78,6 +147,11 @@ llama, para que un cambio futuro que meta red dentro de `sanitize` salte en la p
 ---
 
 ## [0.10.18-canonicos] — 2026-09-03
+
+> **No tuvo build propio.** El `versionCode` salta de 87 (0.10.17) a 89 (0.10.19): el 88 no se
+> construyó nunca y este código entró **dentro** del commit de la 0.10.19 (`c898892`). Se
+> documenta aparte porque es una tanda distinta, pero en Actions no hay ninguna 0.10.18 que
+> confirmar.
 
 Tanda 5·4f: **asignar canónicas a mano**. Etiquetar ponía nombres legibles; esto pone el
 enganche. `FormField.canonical` es lo único que conecta un hueco del PDF con un dato transversal

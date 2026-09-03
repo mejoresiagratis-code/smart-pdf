@@ -197,7 +197,8 @@ private fun LabelFieldRow(
     /**
      * Va ANTES de [onLabelChange] a propósito: con la lambda de etiqueta al final, las llamadas
      * que la pasan como lambda suelta (`LabelFieldRow(field) { … }`) siguen funcionando. Al
-     * revés, la lambda enlazaba con este parámetro y el compilador pedía `onLabelChange`.
+     * revés, esa lambda enlazaba con este parámetro y el compilador pedía `onLabelChange` en el
+     * llamador, que es donde NO estaba el problema (0.10.19, build rojo).
      */
     onCanonicalChange: ((String?) -> Unit)? = null,
     onLabelChange: (String) -> Unit,

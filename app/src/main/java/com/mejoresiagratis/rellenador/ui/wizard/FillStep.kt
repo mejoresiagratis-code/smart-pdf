@@ -8,7 +8,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -334,6 +334,18 @@ fun FillStep(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onTertiaryContainer
                             )
+                            // Tanda 5·4h — decir CUÁLES. El aviso contaba los campos pero no los
+                            // nombraba, así que con 461 huecos había que bajar buscando el
+                            // triángulo a ojo. Con más de seis se corta: la lista dejaría de ser
+                            // un aviso y el botón de abajo lleva igualmente al primero.
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                pending.take(6).joinToString(" · ") { keys.labelOf(it) } +
+                                    if (pending.size > 6) " · y ${pending.size - 6} más" else "",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer
+                            )
                         }
                     }
                 }
@@ -341,11 +353,45 @@ fun FillStep(
         }
         HorizontalDivider()
 
+        /**
+         * Tanda 5·4h — ¿este hueco tiene algo que mirar?
+         *
+         * Con el contrato de Aire son **461 campos y 14 rellenos**: dejar los 447 vacíos en medio
+         * de la lista obliga a bajar por todos ellos para encontrar lo que la IA sí trajo. Tiene
+         * algo si hay valor, si la IA dejó un estado (propuesta, conflicto o dudoso) o si hay
+         * alternativas entre las que elegir.
+         */
+        fun hasSomething(key: String): Boolean {
+            val v = state.fieldValues[key]
+            if (!v.isNullOrBlank()) return true
+            if (state.fieldCandidates[key].orEmpty().isNotEmpty()) return true
+            val fs = state.fieldStates[key] ?: FieldState.EMPTY
+            return fs != FieldState.EMPTY
+        }
+
+        // Cada sección se queda con lo que tiene algo; el resto se aparta a un desplegable al
+        // final, agrupado por su sección de origen para no perder el contexto de dónde estaba.
+        val conAlgo = sections
+            .map { it.copy(keys = it.keys.filter(::hasSomething)) }
+            .filter { it.keys.isNotEmpty() }
+        val sinSugerencia = sections
+            .map { it.title to it.keys.filterNot(::hasSomething) }
+            .filter { it.second.isNotEmpty() }
+        val totalSinSugerencia = sinSugerencia.sumOf { it.second.size }
+
         LazyColumn(Modifier.weight(1f).padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
             contentPadding = PaddingValues(vertical = 14.dp)) {
 
-            items(sections, key = { it.title }) { section ->
+            // Tanda 5·4h — la clave era `it.title`, y LazyColumn exige claves ÚNICAS: dos
+            // secciones del esquema aprendido con el mismo título (o con el título vacío) hacían
+            // que Compose lanzara «Key was already used» EN CUANTO LA SEGUNDA ENTRABA EN
+            // COMPOSICIÓN, o sea al bajar por la lista. Con el índice delante la clave es única
+            // aunque los títulos se repitan.
+            itemsIndexed(
+                conAlgo,
+                key = { i, section -> "$i:${section.title}" },
+            ) { _, section ->
                 val sectionComplete = section.keys.all { isFieldOk(it) }
                 Surface(
                     shape = MaterialTheme.shapes.medium,
@@ -420,6 +466,70 @@ fun FillStep(
                             CompactDateField("Día", keys.real("Fecha"), state, vm, Modifier.weight(1f))
                             CompactDateField("Mes", keys.real("de"), state, vm, Modifier.weight(1f))
                             CompactDateField("Año", keys.real("año"), state, vm, Modifier.weight(1f))
+                        }
+                    }
+                }
+            }
+
+            // Tanda 5·4h — los huecos que la IA no tocó, apartados y PLEGADOS. No se esconden
+            // (hay que poder rellenarlos a mano), pero dejan de estorbar: con el contrato de Aire
+            // son 447 de 461. Van al final y agrupados por su sección de origen, que es el único
+            // contexto que dice qué se escribe en cada uno.
+            if (totalSinSugerencia > 0) {
+                item(key = "sin-sugerencia") {
+                    var abierto by rememberSaveable { mutableStateOf(false) }
+                    Surface(
+                        shape = MaterialTheme.shapes.medium,
+                        color = MaterialTheme.colorScheme.surfaceContainerLow,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Column(Modifier.padding(14.dp)) {
+                            Row(
+                                Modifier.fillMaxWidth().clickable { abierto = !abierto },
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        "Sin sugerencias · $totalSinSugerencia",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                    )
+                                    Text(
+                                        "La IA no encontró nada para estos huecos. Los rellenas " +
+                                            "a mano si el contrato los necesita.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                Icon(
+                                    Icons.Filled.KeyboardArrowDown,
+                                    contentDescription = if (abierto) "Plegar" else "Desplegar",
+                                    modifier = Modifier
+                                        .size(22.dp)
+                                        .scale(if (abierto) -1f else 1f),
+                                )
+                            }
+                            AnimatedVisibility(
+                                visible = abierto,
+                                enter = expandVertically(MaterialTheme.motionScheme.defaultSpatialSpec()),
+                                exit = shrinkVertically(MaterialTheme.motionScheme.fastSpatialSpec()),
+                            ) {
+                                Column(
+                                    Modifier.padding(top = 10.dp),
+                                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                                ) {
+                                    sinSugerencia.forEach { (titulo, claves) ->
+                                        Text(
+                                            titulo,
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                        claves.forEach { key ->
+                                            FieldRow(key, keys, state, vm, ::confirm, fieldsByName[key].orEmpty())
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }

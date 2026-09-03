@@ -4,10 +4,12 @@
 > o su contenido; con eso y el repo tiene el contexto completo. **No hace falta reenviar los
 > PDFs de Aire**: su análisis está en `docs/ANALISIS_FORMULARIOS_AIRE.md`.
 >
-> **Actualizado**: 2026-09-03. Último commit de código: **0.10.20-arreglo-compilacion**
-> (versionCode 90). Verdes hasta la **0.10.17**; la **0.10.18** verde; la **0.10.19 salió ROJA**
-> (tres errores de compilación) y la **0.10.20** los arregla, **sin confirmar**. Este documento **caduca**: la primera regla de abajo existe
-> precisamente porque lo que aquí se afirma puede estar viejo.
+> **Actualizado**: 2026-09-03. Último commit de código: **0.10.21-relleno-usable**
+> (versionCode 91). Verdes hasta la **0.10.17**; la **0.10.19 salió ROJA** (tres errores de
+> compilación), la **0.10.20** los arregla y está **verde**, y la **0.10.21** es lo que salió al
+> probar en el móvil: **sin confirmar**. No hubo build de la 0.10.18 (ver §1). Este documento
+> **caduca**: la primera regla de abajo existe precisamente porque lo que aquí se afirma puede
+> estar viejo.
 
 Habla en **español de España**.
 
@@ -23,20 +25,27 @@ git clone https://github.com/mejoresiagratis-code/smart-pdf
 cd smart-pdf && git log --oneline -8
 ```
 
-El último commit **de código** debería ser `0.10.20-arreglo-compilacion` · versionCode 90.
+El último commit **de código** debería ser `0.10.21-relleno-usable` · versionCode 91.
 Por encima puede haber commits solo de documentación, que no suben versión. Si el último código
 no es ése, este documento está desfasado: manda `git log` y la cabecera del `CHANGELOG.md`.
 
 ### Estado del build
 
 De la 0.10.6 a la **0.10.17, todas verdes** (las 0.10.14 a 0.10.17 confirmadas por Pablo). La
-**0.10.18 está pendiente de confirmar**: pregunta el resultado antes de abrir tanda nueva, porque
+**0.10.19 salió ROJA** y la **0.10.20 la arregló y está verde** (run 33724263803, comprobado por
+API). La **0.10.21 está sin confirmar**: pregunta el resultado antes de abrir tanda nueva, porque
 la regla es una tanda, una versión, un build verde antes de la siguiente.
 
-**Despliegue sin tokens** (§7): las tandas de la 0.10.15 a la 0.10.18 se subieron pasando los
-ficheros en un zip que Pablo descomprime en Codespaces y commitea. Dos veces se colaron los zips
-al repo con `git add -A` y hubo que quitarlos con `git rm`; desde entonces hay `*.zip` en
-`.gitignore` y el `add` se hace con **rutas explícitas**, nunca `-A`.
+**La 0.10.18 nunca tuvo build.** El `versionCode` va 87 (0.10.17) → 89 (0.10.19): el 88 no
+existe y el código de la 5·4f entró **dentro** del commit de la 0.10.19 (`c898892`). Si en algún
+sitio lees «la 0.10.18 está pendiente de confirmar», es una pregunta sin respuesta posible: lo
+que se construyó fue 0.10.18 + 0.10.19 juntas, primero en rojo y luego en verde con la 0.10.20.
+
+**Despliegue sin tokens** (§7): las tandas de la 0.10.15 en adelante se han pasado en un zip.
+**Ojo con los zips**: `.gitignore` tiene `*.zip`, pero cuando el zip se sube por la web de GitHub
+(«Add files via upload») el `.gitignore` **no se consulta** y entra igual. Así se colaron cuatro
+—0.10.15, 0.10.17, 0.10.19 y 0.10.20, 376 KB— y se han quitado con `git rm` en la 0.10.21. Si
+vuelves a subir un zip por la web, bórralo después.
 
 La 0.10.12 se subió **sin typecheckear en local** (es todo Compose, y aquí no hay SDK ni Maven) y
 salió verde igual. No lo tomes como precedente: para Kotlin puro el `kotlinc` de las releases de
@@ -44,7 +53,9 @@ JetBrains sí sirve y ha evitado dos builds rojos — ver §6. La 0.10.13 y la 0
 typecheckearon y llevan comprobaciones ejecutables (27 y 21 respectivamente, más las portadas a
 `app/src/test`). La 0.10.16 es Compose y no se typecheckeó; la 0.10.17 y la 0.10.18 son Kotlin
 puro con pruebas en `app/src/test` (5 y 8 casos) pero tampoco se typecheckearon en local — no
-había `kotlinc` instalado en esa sesión.
+había `kotlinc` instalado en esa sesión. La 0.10.21 sí: `FillSections.kt` typecheckeado con
+`kotlinc 2.1.0 -Werror` y sus 5 casos portados a ejecutable, 8/8; `FillStep.kt` es Compose y va
+sólo con balance sintáctico y revisión de símbolos.
 
 Lo siguiente **no es código**: es probar en el móvil lo que ya está subido. Ver sección 5.
 
@@ -110,7 +121,8 @@ con cuatro formularios rellenables propios: contrato de empresas (481 campos), p
 | 0.10.17 | Tanda **5·4e**: `FieldKeys.labelOf` consulta la etiqueta del esquema. La corrección del editor no llegaba a Relleno ✅ |
 | 0.10.18 | Tanda **5·4f**: `SchemaEditing.setCanonical` + `CanonicalCatalog` + selector en el editor. Se pueden **asignar canónicas a mano** ⚠️ sin confirmar |
 | 0.10.19 | Tanda **5·4g**: `CanonicalMapper` — la IA propone los enganches por texto, sin tocar el proxy (`task=extract` admite 0 imágenes). Botón «Asignar mis datos con IA» ❌ build rojo |
-| 0.10.20 | Arreglo de los tres errores de la 0.10.19. Sin cambios de comportamiento ⚠️ sin confirmar |
+| 0.10.20 | Arreglo de los tres errores de la 0.10.19. Sin cambios de comportamiento · verde ✅ |
+| 0.10.21 | Tanda **5·4h**: crash al bajar por la lista de Relleno (clave duplicada en `LazyColumn` + nombre repetido entre secciones), el aviso nombra los campos, y los huecos sin sugerencia van a un desplegable plegado ⚠️ sin confirmar |
 
 ### Qué está enganchado y qué no
 
@@ -162,11 +174,18 @@ el teclado — están escritos y funcionan, sólo les falta el enganche.
 `applyButtonValue()` y con su estado real (`/Sí`, `/0`..`/5`, `/Opción1`) y no con
 `setValue("On")`. Los `/Sig` no se escriben por ninguna vía.
 
-**NO enganchado**: el **pintado** por tipo en la pantalla de relleno (5·4d, 2ª mitad: casilla como
-casilla, grupo de radio como **un solo selector** —hoy `RED INTELIGENTE` enseña seis campos
-llamados igual, `Botón de opción 10`—, y `/Sig` como marcador no rellenable fuera del recuento de
-«faltan N campos»). `FillSections.kt` y `FillStep.kt` aplanan el esquema a nombres y pierden el
-`FieldKind`. Tampoco están la fase 6 (`/Sig`) ni las tablas del Relleno (5·5).
+**Enganchado desde la 0.10.16 (5·4d, 2ª mitad)** — *esto estuvo mal descrito aquí hasta la
+0.10.21, que decía «NO enganchado» cuando llevaba cinco versiones hecho; comprobado en el código*:
+`FillStep.kt` despacha por `FieldKind` (checkbox como casilla, grupo de radio como un solo
+selector, `SIGNATURE` con `return`) y `FillSections.kt` filtra los `/Sig` del recuento de «faltan
+N campos».
+
+**Enganchado desde la 0.10.21 (5·4h)**: la lista de Relleno ya no crashea al bajar —clave de
+`LazyColumn` con índice delante y un nombre no se pinta dos veces aunque aparezca en dos
+secciones—, el aviso de decisiones nombra los campos, y los huecos sin nada se apartan a un
+desplegable plegado al final.
+
+**NO enganchado**: la fase 6 (`/Sig`) y las tablas del Relleno (5·5).
 
 ---
 
@@ -204,16 +223,16 @@ Por orden. La primera no es código.
   **La 5·4c** (agrupar por sección en el orden del papel) salió gratis con el seccionado por
   intervalo: verificado simulando el algoritmo sobre el contrato real.
 
-  **La siguiente es la 2ª mitad de la 5·4d**, y es sólo interfaz. La 1ª mitad (0.10.15) ya dejó
-  el camino del valor correcto. Lo que queda:
-    · pintar una casilla como casilla y un grupo de radio como **un solo selector** — hoy
-      `RED INTELIGENTE` enseña seis campos llamados igual (`Botón de opción 10`), que son las
-      seis opciones del mismo campo del AcroForm;
-    · pintar los `/Sig` como **hueco de firma no rellenable**, fuera del recuento de «faltan N
-      campos»;
-    · toca `FillSections.kt` y `FillStep.kt`, que hoy aplanan el esquema a nombres y pierden el
-      `FieldKind`. Es todo Compose, así que **no se puede typecheckear en local**: extrema el
-      cuidado con la API y no inventes firmas.
+  **La 5·4d está entera** (0.10.15 la 1ª mitad, 0.10.16 la 2ª): el valor se reparte por
+  `FieldKind` al generar y la pantalla pinta casilla como casilla, grupo de radio como un solo
+  selector y `/Sig` fuera del recuento. Este documento afirmó lo contrario hasta la 0.10.21; si
+  vuelves a leer que la 2ª mitad está pendiente, mira `FillStep.kt` antes de reescribirla.
+
+  **Las 5·4e a 5·4h están hechas** (0.10.17 etiquetas en Relleno, 0.10.18 canónicas a mano,
+  0.10.19/0.10.20 canónicas por IA, 0.10.21 la lista usable con 461 campos).
+
+  **La siguiente decisión es de Pablo, no de código**: probar en el móvil de la 0.10.16 a la
+  0.10.21 y decir qué falla. Ver §5.
 
   **El mapeo se conserva**: `MappingEditor` y `TemplateMapper.suggest()` no se retiran.
 
@@ -239,11 +258,19 @@ Por orden. La primera no es código.
 
 ## 5. Pendiente de verificar (no lo des por bueno)
 
-- **La 0.10.20 está sin confirmar en Actions.** Pregunta el resultado antes de abrir tanda nueva.
-- **Nada de la 0.10.16 a la 0.10.18 se ha probado en el móvil.** Lo que hay que mirar con el
-  contrato de Aire: que las casillas y radios salgan como controles y no como cajas de texto
-  (0.10.16), que Relleno muestre la etiqueta corregida y no `Casilla de verificación 59` (0.10.17)
-  que el chip de canónica y su sugerencia aparezcan en los campos de texto del editor (0.10.18) y que «Asignar mis datos con IA» devuelva enganches razonables con el contrato de Aire (0.10.19).
+- **La 0.10.21 está sin confirmar en Actions.** Pregunta el resultado antes de abrir tanda nueva.
+  La 0.10.20 sí está verde (run 33724263803).
+- **Nada de la 0.10.16 a la 0.10.21 se ha probado del todo en el móvil.** Lo que hay que mirar con
+  el contrato de Aire: que las casillas y radios salgan como controles y no como cajas de texto
+  (0.10.16), que Relleno muestre la etiqueta corregida y no `Casilla de verificación 59` (0.10.17),
+  que el chip de canónica y su sugerencia aparezcan en los campos de texto del editor (0.10.18) y
+  que «Asignar mis datos con IA» devuelva enganches razonables (0.10.19).
+- **De la 0.10.21, lo que hay que mirar es exactamente lo que la rompió**: que **bajar por la lista
+  de Relleno ya no crashee** (era `Key was already used`, y saltaba al hacer scroll, no al cargar),
+  que el aviso de decisiones **diga qué campos** son, y que el desplegable «Sin sugerencias» se
+  abra y deje rellenar a mano. Con el contrato de Aire eran 461 huecos y 14 rellenos por la IA.
+  Y una que no se ve pero importa: que ningún campo aparezca **dos veces** en secciones distintas
+  editando el mismo valor.
 - **De la 0.10.14 y la 0.10.15 (histórico).** Pregunta el resultado antes de
   abrir tanda nueva.
 - **De la 0.10.14, en el móvil hay que mirar**: que `CAMBIO TITULAR` tenga **7 campos y no 20**,
@@ -387,11 +414,15 @@ personales); lo que sigue son los patrones, que sí conviene tener escritos.
 ## 6. Reglas de trabajo
 
 
+- **En `LazyColumn`, la clave tiene que ser ÚNICA de verdad.** `key = { it.title }` sobre las
+  secciones de un esquema aprendido crasheaba con `Key was already used` **al hacer scroll**, no
+  al cargar, porque el fallo salta cuando el duplicado entra en composición. Si la clave sale de
+  datos del PDF, mete el índice delante. Lo mismo vale para `rememberSaveable(key)`.
 - **Un parámetro nuevo en un `@Composable` va ANTES de la lambda trailing.** Añadirlo al final
-  rompe en silencio a todos los llamadores que pasan la lambda suelta (`Foo(x) { … }`): esa
-  lambda enlaza con el parámetro nuevo. El compilador lo señala en el llamador, no en la firma,
-  así que se busca el fallo donde no está. Costó el build rojo de la 0.10.19.
-- **`ProxyResponse.text` es `String?`.** Un motor puede responder `ok` sin cuerpo. Todo lo que
+  rompe en silencio a los llamadores que pasan la lambda suelta (`Foo(x) { … }`): esa lambda
+  enlaza con el parámetro nuevo. El compilador señala el llamador, no la firma. Build rojo de la
+  0.10.19.
+- **`ProxyResponse.text` es `String?`.** Un motor puede responder `ok` sin cuerpo; todo lo que
   parsee la respuesta del proxy pasa por `?.let`.
 - **Una tanda, una versión, un build verde** antes de la siguiente. Subir `versionCode` y
   `versionName` siempre, y añadir la entrada al `CHANGELOG.md`. Un hotfix sobre una versión que

@@ -108,6 +108,10 @@ fun fillSectionsFrom(
     schema: com.mejoresiagratis.rellenador.data.model.FormSchema,
 ): List<FillSection> {
     val out = mutableListOf<FillSection>()
+    // Tanda 5·4h — un nombre visto en una sección anterior NO se vuelve a pintar. Es el mismo
+    // campo del AcroForm y comparte valor, así que dos filas editarían lo mismo; y además la
+    // clave repetida rompía `rememberSaveable(key)` y la lista perezosa (ver `FillStep`).
+    val vistos = mutableSetOf<String>()
     for (section in schema.sections) {
         // Tanda 5·4d (2ª mitad) — dos correcciones respecto a `.map { it.name }` a secas:
         //
@@ -121,6 +125,7 @@ fun fillSectionsFrom(
             .filter { it.kind != com.mejoresiagratis.rellenador.data.model.FieldKind.SIGNATURE }
             .map { it.name }
             .distinct()
+            .filter { vistos.add(it) }
         if (names.isEmpty()) continue
         val hasDireccion2 = section.allFields().any {
             it.canonical == com.mejoresiagratis.rellenador.data.model.CanonicalKeys.DIRECCION_2
