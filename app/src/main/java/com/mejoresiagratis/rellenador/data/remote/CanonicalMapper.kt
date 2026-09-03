@@ -99,7 +99,10 @@ class CanonicalMapper @Inject constructor(
                 continue
             }
             if (!resp.ok) continue
-            val limpio = parse(resp.text)?.let { sanitize(it, pendientes.map { f -> f.name }, ocupadas) }
+            // `ProxyResponse.text` es nullable: un motor puede responder ok sin cuerpo.
+            val limpio = resp.text
+                ?.let { parse(it) }
+                ?.let { sanitize(it, pendientes.map { f -> f.name }, ocupadas) }
             if (!limpio.isNullOrEmpty()) return limpio
         }
         return emptyMap()

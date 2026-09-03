@@ -8,6 +8,32 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.10.20-arreglo-compilacion] — 2026-09-03
+
+Build rojo de la 0.10.19: tres errores de compilación, dos de ellos con la misma causa.
+
+- **`LabelEditor.kt:185`** — «No value passed for parameter 'onLabelChange'». La 0.10.18 añadió
+  `onCanonicalChange` **al final** de `LabelFieldRow`, y con eso la llamada de los bloques
+  repetidos (`LabelFieldRow(field) { … }`, con lambda suelta) pasó a enlazar su lambda con el
+  parámetro nuevo. De ahí también el segundo error de la línea 186: `newLabel` se inferían como
+  `String?`, el tipo de `onCanonicalChange`.
+  **Arreglo**: `onCanonicalChange` va ANTES de `onLabelChange`, para que la lambda de etiqueta
+  siga siendo la trailing. Así no hay que tocar ninguna llamada existente — el error estaba en la
+  firma, no en los llamadores.
+- **`CanonicalMapper.kt:102`** — `ProxyResponse.text` es `String?` (un motor puede responder `ok`
+  sin cuerpo) y `parse()` pedía `String`. **Arreglo**: `resp.text?.let { parse(it) }`.
+
+### Lección
+
+Añadir un parámetro al final de un `@Composable` con lambda trailing rompe en silencio a todos
+sus llamadores, y el compilador lo señala en el llamador y no en la firma, que es donde está el
+problema. En Compose, un parámetro nuevo va **antes** de la lambda trailing salvo que sea él
+mismo la lambda principal.
+
+Sin cambios de comportamiento: la 0.10.20 es exactamente la 0.10.19 compilando.
+
+---
+
 ## [0.10.19-canonicas-por-ia] — 2026-09-03
 
 Tanda 5·4g: la IA **propone los enganches**. La 0.10.18 dejó asignar canónicas a mano y sugería
