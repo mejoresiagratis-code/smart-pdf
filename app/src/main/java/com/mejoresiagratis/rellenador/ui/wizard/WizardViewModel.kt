@@ -440,18 +440,26 @@ class WizardViewModel @Inject constructor(
      */
     fun fieldKeys(): com.mejoresiagratis.rellenador.data.model.FieldKeys {
         val schema = _state.value.activeSchema
-        val fromSchema: Map<String, String> = schema?.let {
-            // Recorre `CANON` para preservar el orden canónico habitual: si dos campos del PDF
-            // apuntan a la misma canónica (no debería pasar, pero es defensivo), gana el primero.
-            val byCanonical = it.allFields()
+        // Tanda 5·4i — `byCanonical` ya no coge `fs.first()`: desde que `SchemaEditing.setCanonical`
+        // permite N campos con la misma canónica (afines confirmados por el usuario), hace falta
+        // conservarlos todos para que `fromSchema` pueda apuntar la clave de CANON a cada uno.
+        val byCanonical: Map<String, List<String>> = schema?.let {
+            it.allFields()
                 .filter { f -> f.canonical != null }
                 .groupBy { f -> f.canonical!! }
-                .mapValues { (_, fs) -> fs.first().name }
+                .mapValues { (_, fs) -> fs.map { f -> f.name }.distinct() }
+        } ?: emptyMap()
+        // `FieldKeys.real()` solo puede devolver un nombre por clave de CANON: aquí se queda con
+        // el primero, igual que antes, para no romper `canonKeyOf`/`labelOf`/validación. Los
+        // nombres adicionales (los afines que comparten canónica) los reparte `pushUndo`, más
+        // abajo, vía `CanonicalSiblings.expand` — ese es el que de verdad rellena los huecos
+        // hermanos al escribir un valor.
+        val fromSchema: Map<String, String> = schema?.let {
             com.mejoresiagratis.rellenador.data.model.ContractFields.CANON
                 .mapNotNull { c ->
                     val canonicalKey = com.mejoresiagratis.rellenador.data.model.BuiltinSchemas
                         .canonicalFor(c.key) ?: return@mapNotNull null
-                    val realName = byCanonical[canonicalKey] ?: return@mapNotNull null
+                    val realName = byCanonical[canonicalKey]?.firstOrNull() ?: return@mapNotNull null
                     c.key to realName
                 }.toMap()
         } ?: emptyMap()
@@ -775,15 +783,24 @@ class WizardViewModel @Inject constructor(
      * Aplica un cambio de campos registrando el estado ANTERIOR para poder deshacerlo.
      * Es el único punto que escribe en `fieldValues` desde la UI, así que todo cambio
      * del usuario es reversible.
+     *
+     * Tanda 5·4i — antes de escribir, [delta] se amplía con `CanonicalSiblings.expand`: si el
+     * campo que se está tecleando comparte canónica con otros (porque el usuario los enganchó a
+     * la misma con `SchemaEditing.setCanonical`, a mano o confirmando un afín en Relleno), el
+     * mismo valor se reparte también a esos hermanos VACÍOS. Sigue siendo UNA sola acción
+     * deshacible. Es la identidad en Orange (`CANON_TO_CANONICAL` no repite ninguna clave).
      */
     private fun pushUndo(label: String, delta: Map<String, String>, newState: FieldState) {
         val s = _state.value
-        val prevValues = delta.keys.associateWith { s.fieldValues[it] }
-        val prevStates = delta.keys.associateWith { s.fieldStates[it] }
-        val prevOrigins = delta.keys.associateWith { s.fieldOrigins[it] }
+        val expanded = com.mejoresiagratis.rellenador.data.model.CanonicalSiblings.expand(
+            s.activeSchema, s.fieldValues, delta,
+        )
+        val prevValues = expanded.keys.associateWith { s.fieldValues[it] }
+        val prevStates = expanded.keys.associateWith { s.fieldStates[it] }
+        val prevOrigins = expanded.keys.associateWith { s.fieldOrigins[it] }
         val values = s.fieldValues.toMutableMap()
         val states = s.fieldStates.toMutableMap()
-        delta.forEach { (k, v) ->
+        expanded.forEach { (k, v) ->
             if (v.isBlank()) { values.remove(k); states[k] = FieldState.EMPTY }
             else { values[k] = v; states[k] = newState }
         }

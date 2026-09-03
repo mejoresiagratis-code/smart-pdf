@@ -60,10 +60,13 @@ object SchemaEditing {
      * Etiquetar **no** asignaba canónicas: `SchemaLabeling`/`FieldLabeler` sólo escriben
      * [FormField.label], y el editor de la fase 4 no tenía por dónde tocar esto.
      *
-     * Una canónica no se reparte entre dos campos: si [canonical] ya estaba puesta en otro
-     * nombre, se le quita a aquél. Dos huecos apuntando al mismo dato harían que
-     * `FieldKeys.canonKeyOf` eligiera uno arbitrariamente (`fs.first()`), y el usuario vería
-     * autorrellenarse un campo y no el otro sin saber por qué.
+     * Hasta la tanda 5·4i una canónica no se repartía entre dos campos: asignarla a uno se la
+     * quitaba al que la tuviera antes. Eso hacía imposible lo que pide 5·4i — que un mismo dato
+     * (el nombre del cliente, su dirección) pueda vivir en varios huecos AFINES del PDF cuando el
+     * usuario así lo confirma (ver `AffinityGroup`, que propone los candidatos, nunca los aplica
+     * solo). Ahora [canonical] simplemente se escribe en [name]: si otro campo ya la tenía, la
+     * sigue teniendo, y ambos comparten dato. `WizardViewModel.pushUndo()` sabe repartir el valor
+     * a todos los campos con la misma canónica al escribirlo (ver `CanonicalSiblings.expand`).
      *
      * Se marca [LabelSource.USUARIO] por el mismo motivo que [setFieldLabel]: es una decisión
      * manual y ningún reetiquetado posterior debe pisarla.
@@ -71,14 +74,9 @@ object SchemaEditing {
     fun setCanonical(schema: FormSchema, name: String, canonical: String?): FormSchema {
         val target = canonical?.trim()?.takeIf { it.isNotEmpty() }
 
-        fun remap(field: FormField): FormField = when {
-            field.name == name ->
-                field.copy(canonical = target, labelSource = LabelSource.USUARIO)
-            // Exclusividad: el mismo dato transversal no puede estar en dos campos.
-            target != null && field.canonical == target ->
-                field.copy(canonical = null)
-            else -> field
-        }
+        fun remap(field: FormField): FormField =
+            if (field.name == name) field.copy(canonical = target, labelSource = LabelSource.USUARIO)
+            else field
 
         return schema.copy(
             sections = schema.sections.map { section ->

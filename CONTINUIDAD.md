@@ -4,12 +4,11 @@
 > o su contenido; con eso y el repo tiene el contexto completo. **No hace falta reenviar los
 > PDFs de Aire**: su análisis está en `docs/ANALISIS_FORMULARIOS_AIRE.md`.
 >
-> **Actualizado**: 2026-09-03. Último commit de código: **0.10.21-relleno-usable**
-> (versionCode 91). Verdes hasta la **0.10.17**; la **0.10.19 salió ROJA** (tres errores de
-> compilación), la **0.10.20** los arregla y está **verde**, y la **0.10.21** es lo que salió al
-> probar en el móvil: **sin confirmar**. No hubo build de la 0.10.18 (ver §1). Este documento
-> **caduca**: la primera regla de abajo existe precisamente porque lo que aquí se afirma puede
-> estar viejo.
+> **Actualizado**: 2026-09-04. Último commit de código: **0.10.22-mitad-1-afines**
+> (versionCode 92). Verdes hasta la **0.10.17**; la **0.10.19 salió ROJA** (tres errores de
+> compilación), la **0.10.20** los arregla y está **verde**, y la **0.10.21** y la **0.10.22**
+> están **sin confirmar**. No hubo build de la 0.10.18 (ver §1). Este documento **caduca**: la
+> primera regla de abajo existe precisamente porque lo que aquí se afirma puede estar viejo.
 
 Habla en **español de España**.
 
@@ -25,7 +24,7 @@ git clone https://github.com/mejoresiagratis-code/smart-pdf
 cd smart-pdf && git log --oneline -8
 ```
 
-El último commit **de código** debería ser `0.10.21-relleno-usable` · versionCode 91.
+El último commit **de código** debería ser `0.10.22-mitad-1-afines` · versionCode 92.
 Por encima puede haber commits solo de documentación, que no suben versión. Si el último código
 no es ése, este documento está desfasado: manda `git log` y la cabecera del `CHANGELOG.md`.
 
@@ -33,8 +32,8 @@ no es ése, este documento está desfasado: manda `git log` y la cabecera del `C
 
 De la 0.10.6 a la **0.10.17, todas verdes** (las 0.10.14 a 0.10.17 confirmadas por Pablo). La
 **0.10.19 salió ROJA** y la **0.10.20 la arregló y está verde** (run 33724263803, comprobado por
-API). La **0.10.21 está sin confirmar**: pregunta el resultado antes de abrir tanda nueva, porque
-la regla es una tanda, una versión, un build verde antes de la siguiente.
+API). La **0.10.21 y la 0.10.22 están sin confirmar**: pregunta el resultado antes de abrir tanda
+nueva, porque la regla es una tanda, una versión, un build verde antes de la siguiente.
 
 **La 0.10.18 nunca tuvo build.** El `versionCode` va 87 (0.10.17) → 89 (0.10.19): el 88 no
 existe y el código de la 5·4f entró **dentro** del commit de la 0.10.19 (`c898892`). Si en algún
@@ -55,7 +54,12 @@ typecheckearon y llevan comprobaciones ejecutables (27 y 21 respectivamente, má
 puro con pruebas en `app/src/test` (5 y 8 casos) pero tampoco se typecheckearon en local — no
 había `kotlinc` instalado en esa sesión. La 0.10.21 sí: `FillSections.kt` typecheckeado con
 `kotlinc 2.1.0 -Werror` y sus 5 casos portados a ejecutable, 8/8; `FillStep.kt` es Compose y va
-sólo con balance sintáctico y revisión de símbolos.
+sólo con balance sintáctico y revisión de símbolos. La 0.10.22 **no se typecheckeó**: la sesión
+sólo tenía red hacia `archive.ubuntu.com` y el `kotlinc` de apt es la 1.3.31, que no soporta las
+comas finales (`trailing commas`) que usa todo el proyecto — falla con `error: expecting an
+argument` en ficheros ni siquiera tocados. Se revisó a mano (símbolos existentes, paréntesis y
+llaves balanceados, sin comas finales en los ficheros nuevos) y queda en manos de Actions, como
+con el Compose.
 
 Lo siguiente **no es código**: es probar en el móvil lo que ya está subido. Ver sección 5.
 
@@ -123,6 +127,7 @@ con cuatro formularios rellenables propios: contrato de empresas (481 campos), p
 | 0.10.19 | Tanda **5·4g**: `CanonicalMapper` — la IA propone los enganches por texto, sin tocar el proxy (`task=extract` admite 0 imágenes). Botón «Asignar mis datos con IA» ❌ build rojo |
 | 0.10.20 | Arreglo de los tres errores de la 0.10.19. Sin cambios de comportamiento · verde ✅ |
 | 0.10.21 | Tanda **5·4h**: crash al bajar por la lista de Relleno (clave duplicada en `LazyColumn` + nombre repetido entre secciones), el aviso nombra los campos, y los huecos sin sugerencia van a un desplegable plegado ⚠️ sin confirmar |
+| 0.10.22 | Tanda **5·4i, mitad 1** (lógica, Kotlin puro): `setCanonical` deja de ser exclusivo, `CanonicalSiblings` reparte un valor a los hermanos vacíos que comparten canónica, `AffinityGroup` detecta candidatos por etiqueta idéntica o canónica ya compartida (respeta `thirdParty`). `CanonicalMapper` se deja sin tocar a propósito (sigue 1:1). La mitad 2 (Compose, lista con casilla en Relleno) va en tanda aparte ⚠️ sin confirmar, sin typecheck local (no había `kotlinc` moderno disponible en la sesión — usa trailing commas, y el `kotlinc` 1.3.31 de apt no las soporta) |
 
 ### Qué está enganchado y qué no
 
@@ -185,7 +190,21 @@ N campos».
 secciones—, el aviso de decisiones nombra los campos, y los huecos sin nada se apartan a un
 desplegable plegado al final.
 
-**NO enganchado**: la fase 6 (`/Sig`) y las tablas del Relleno (5·5).
+**Enganchado desde la 0.10.22 (5·4i, mitad 1)**: `setCanonical` permite N campos por canónica,
+`CanonicalSiblings` reparte el valor a los hermanos vacíos al escribir en Relleno (vía
+`pushUndo`), y `AffinityGroup` existe pero **nada llama todavía a `AffinityGroup.candidatesFor`**
+— sin la mitad 2 (Compose), la detección de candidatos no tiene por dónde salir a la interfaz.
+
+Ojo, esto SÍ es alcanzable ya sin tocar nada más: `LabelEditor.kt` → `CanonicalPicker` deja elegir
+CUALQUIER entrada de `CanonicalCatalog.ALL` en cada campo, sin excluir las ya usadas por otro —
+antes esto era inofensivo porque `setCanonical` deshacía la del campo anterior en cuanto elegías
+la misma en uno nuevo; ahora que no lo hace, **abrir el editor de etiquetas y asignar la misma
+canónica a mano en dos campos ya funciona hoy**, sin esperar a la mitad 2. Lo que falta de mitad 2
+es que la app lo *sugiera* sola (vía `AffinityGroup`) en vez de que el usuario tenga que ir campo
+a campo con el mismo `CanonicalPicker`.
+
+**NO enganchado**: la fase 6 (`/Sig`), las tablas del Relleno (5·5), y la mitad 2 de 5·4i (la
+interfaz que ofrece los afines detectados por `AffinityGroup`).
 
 ---
 

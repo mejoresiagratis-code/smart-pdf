@@ -8,6 +8,69 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.10.22-mitad-1-afines] — 2026-09-04
+
+Tanda 5·4i, mitad 1 (lógica, Kotlin puro). Origen: probando el contrato de Aire en el móvil,
+campos afines entre páginas (nombre fiscal, nombre titular, nombre cliente, direcciones…) no se
+sugerían en el mapeo porque el sistema tenía la exclusividad «un dato → un solo campo» clavada en
+cuatro sitios. Esta mitad afloja tres; la cuarta (`CanonicalMapper`, la propuesta automática de la
+IA para campos vacíos) se deja conservadora a propósito — sigue proponiendo 1:1.
+
+Decisión de alcance: opción B, con confirmación por campo (lista con casilla, no propagación
+automática ni botón único "copiar a todos") — la mitad 2 (Compose) va en tanda aparte porque aquí
+no hay SDK para typecheckearla.
+
+### `SchemaEditing.setCanonical` ya no es exclusivo
+
+Antes, asignar una canónica a un campo se la quitaba al que la tuviera antes — imposible que dos
+huecos compartieran dato. Ahora se limita a escribir la canónica en el campo pedido; si otro ya la
+tenía, la conserva. Compartir una canónica es ahora la forma en que el usuario declara "esto es el
+mismo dato".
+
+### `WizardViewModel.fieldKeys()` ya no pierde los hermanos
+
+`byCanonical` hacía `groupBy { canonical }.mapValues { fs.first().name }` — de N campos con la
+misma canónica, se quedaba con uno. Ahora conserva la lista completa (la traducción CANON → nombre
+real de `FieldKeys.real()` sigue devolviendo uno solo, por compatibilidad; el reparto real a los
+hermanos vive en `CanonicalSiblings`, más abajo).
+
+### `CanonicalSiblings` (nuevo) — el reparto de verdad
+
+`pushUndo` es el único punto que escribe en `fieldValues` desde la UI. A partir de esta tanda,
+antes de escribir, `CanonicalSiblings.expand()` reparte el valor a los campos que comparten
+canónica con el que se acaba de teclear y que siguen **vacíos** — a un hermano que ya tenga otro
+valor no se le toca. Sigue siendo una sola acción deshacible. Es la identidad en Orange:
+`CANON_TO_CANONICAL` no repite ninguna clave, así que ahí no cambia nada.
+
+### `AffinityGroup` (nuevo) — los candidatos para la mitad 2
+
+Dado un campo ya relleno, propone qué otros huecos vacíos podrían compartir su valor: misma
+canónica ya asignada, o etiqueta impresa **idéntica** tras normalizar (mayúsculas, acentos,
+espacios). Deliberadamente NO por parecido de `name` ni de etiqueta aproximada: el propio contrato
+de Orange tiene `Dirección`/`Dirección_2` y `CP`/`CP_2` con el mismo `name` base y significado
+distinto (fiscal vs. instalación), y sólo el rótulo impreso — lo único que ve el usuario del PDF —
+es una señal fiable. También respeta `FormField.thirdParty`: un campo del titular donante no sale
+como afín de uno del titular principal aunque el rótulo coincida.
+
+No decide ni escribe nada — sólo propone. Aplicar un afín (mitad 2) será marcar su casilla.
+
+### Ya se puede probar en el móvil, sin esperar a la mitad 2
+
+`LabelEditor.kt` → `CanonicalPicker` ya dejaba elegir cualquier canónica del catálogo en cada
+campo, sin excluir las ya usadas por otro — antes era inofensivo porque `setCanonical` deshacía la
+del campo anterior en cuanto asignabas la misma a uno nuevo. Ahora que no lo hace, **abrir el
+editor de etiquetas y poner la misma canónica a mano en dos o tres campos ya reparte el valor
+entre ellos en Relleno**, sin esperar a la interfaz de afines automáticos.
+
+### Tests
+
+`CanonicalAssignmentTest` — el test que verificaba la exclusividad vieja se sustituye por dos que
+verifican lo contrario (compartir canónica, y que quitarla de un campo no afecta al que la
+comparte). Nuevos `CanonicalSiblingsTest` (reparto) y `AffinityGroupTest` (detección, incluyendo
+explícitamente el caso Dirección/Dirección_2 y el de tercero).
+
+---
+
 ## [0.10.21-relleno-usable] — 2026-09-03
 
 Tanda 5·4h: tres cosas del paso de Relleno que salieron al probarlo en el móvil con el contrato

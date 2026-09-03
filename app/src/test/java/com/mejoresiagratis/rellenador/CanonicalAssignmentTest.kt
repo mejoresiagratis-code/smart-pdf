@@ -42,13 +42,24 @@ class CanonicalAssignmentTest {
     }
 
     @Test
-    fun `una canonica no puede quedar en dos campos a la vez`() {
-        // El caso real: la IA engancha «CP:» y luego el usuario decide que el bueno es el otro.
+    fun `desde la 5:4i una canonica SI puede quedar en dos campos a la vez`() {
+        // El caso que motiva 5·4i: nombre fiscal y nombre cliente son el mismo dato en tres
+        // páginas, y el usuario confirma que comparten canónica.
         val s = SchemaEditing.setCanonical(
             schema(f("A", canonical = CanonicalKeys.CP), f("B")), "B", CanonicalKeys.CP,
         )
         assertEquals(CanonicalKeys.CP, s.field("B").canonical)
+        assertEquals(CanonicalKeys.CP, s.field("A").canonical)
+    }
+
+    @Test
+    fun `quitar la canonica de un campo no afecta a los que la comparten`() {
+        val compartida = SchemaEditing.setCanonical(
+            schema(f("A", canonical = CanonicalKeys.CP), f("B")), "B", CanonicalKeys.CP,
+        )
+        val s = SchemaEditing.setCanonical(compartida, "A", null)
         assertNull(s.field("A").canonical)
+        assertEquals(CanonicalKeys.CP, s.field("B").canonical)
     }
 
     @Test
