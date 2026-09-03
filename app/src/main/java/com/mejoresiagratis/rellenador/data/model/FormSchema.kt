@@ -311,6 +311,21 @@ data class FormSection(
 
     /** Bloques repetidos, cuando [kind] es REPEATED_BLOCK. */
     val blocks: List<List<FormField>> = emptyList(),
+
+    /**
+     * Nombre real del campo CHECKBOX que activa esta sección, o null si la sección no tiene
+     * interruptor propio (por ejemplo DATOS DEL CLIENTE, que siempre aplica).
+     *
+     * Tanda 5·4b — sale de las 8 «casillas disfrazadas de radio» de `Contrato_empresas.pdf`
+     * que la 5·4 ya promocionaba a CHECKBOX por grupo (ver `FormSchemaBuilder`): no era un flag
+     * mal puesto, es el interruptor de la banda entera (`docs/PLAN_ETIQUETADO_ORGANICO.md` §2.1
+     * y §4). Con el interruptor apagado, la interfaz pliega la sección — un alta usa 37 de los
+     * 488 widgets del contrato, así que sin plegado la pantalla es una lista plana de 481 campos.
+     *
+     * Opcional a propósito, por lo mismo que [FieldRect]: no toca `SCHEMA_VERSION`. Un esquema
+     * `BUILTIN` (Orange) nunca lo declara.
+     */
+    val enablerField: String? = null,
 ) {
     /** Todos los campos de la sección, sea cual sea su forma. */
     fun allFields(): List<FormField> = when (kind) {
@@ -353,6 +368,25 @@ data class FormSchema(
      * después (la lección de la 0.8.0 con el índice de paso).
      */
     val schemaVersion: Int = SCHEMA_VERSION,
+
+    /**
+     * Con qué versión del **algoritmo de construcción** se generó este esquema. No es lo mismo
+     * que [schemaVersion]: aquél versiona el *formato* de los datos (y obliga a migrar), éste
+     * versiona la *calidad* de lo deducido del PDF, que mejora tanda a tanda.
+     *
+     * Existe porque el esquema se persiste por huella y **gana quien lo construya primero**:
+     * sin esto, un contrato de Aire abierto por el paso 1 (que aún no pasa `layoutWords`) se
+     * guardaba con secciones «Página 1», y el editor de etiquetas lo encontraba guardado y no
+     * lo reconstruía nunca — el mismo PDF daba un resultado u otro según la puerta de entrada,
+     * y para siempre. Tanda 5·4b.
+     *
+     * `0` es el valor de los esquemas anteriores a la 5·4b y de los que salen del camino de
+     * respaldo (sin texto de layout). Quien sepa construir mejor puede comparar contra
+     * [BUILDER_VERSION] y regenerar — **sólo si el usuario no ha editado nada a mano**, ver
+     * [hasUserLabels]. Esa condición es la que mantiene la regla del proyecto: la migración es
+     * perezosa y jamás destructiva.
+     */
+    val builderVersion: Int = 0,
 ) {
     fun allFields(): List<FormField> = sections.flatMap { it.allFields() }
 
@@ -360,8 +394,31 @@ data class FormSchema(
     fun canonicalFields(): Map<String, List<FormField>> =
         allFields().filter { it.canonical != null }.groupBy { it.canonical!! }
 
+    /**
+     * `true` si alguna etiqueta la puso el usuario a mano. Regenerar un esquema así perdería
+     * su trabajo, así que es la guarda de cualquier reconstrucción automática.
+     */
+    fun hasUserLabels(): Boolean = allFields().any { it.labelSource == LabelSource.USUARIO }
+
+    /**
+     * `true` si este esquema lo construyó una versión anterior del algoritmo **y** puede
+     * regenerarse sin pisar trabajo manual. Lo consulta quien tenga a mano el PDF original para
+     * volver a construirlo (hoy `LabelEditorViewModel`).
+     */
+    fun isStaleBuild(): Boolean = builderVersion < BUILDER_VERSION && !hasUserLabels()
+
     companion object {
         const val SCHEMA_VERSION = 1
+
+        /**
+         * Versión actual del algoritmo de `FormSchemaBuilder`. Se sube cuando el constructor
+         * aprende a deducir algo que antes no deducía, para que los esquemas ya guardados por
+         * la versión anterior se regeneren solos al pasar por un camino que sepa hacerlo mejor.
+         *
+         * 1 — tanda 5·4b: secciones por ancla de texto (títulos del papel), `enablerField`,
+         *     etiqueta geométrica, pulsadores fuera y `/Sig` como `SIGNATURE`.
+         */
+        const val BUILDER_VERSION = 1
     }
 }
 

@@ -5,6 +5,7 @@ import com.tom_roush.pdfbox.pdmodel.PDDocument
 import com.tom_roush.pdfbox.pdmodel.interactive.annotation.PDAnnotationWidget
 import com.tom_roush.pdfbox.pdmodel.interactive.form.PDButton
 import com.tom_roush.pdfbox.pdmodel.interactive.form.PDCheckBox
+import com.tom_roush.pdfbox.pdmodel.interactive.form.PDSignatureField
 import java.io.InputStream
 import javax.inject.Inject
 
@@ -48,6 +49,15 @@ class PdfFieldInspector @Inject constructor() {
          */
         val isRadio: Boolean = false,
         /**
+         * `true` si el campo es `/Sig` del AcroForm — un hueco de firma electrónica, no un
+         * campo de texto. Tanda 5·4b (`docs/PLAN_ETIQUETADO_ORGANICO.md` §5, regla 2):
+         * `FormSchemaBuilder.toField()` los mapeaba a `FieldKind.TEXT` por el `else` de su
+         * `when`, y el usuario podía escribir dentro de un hueco de firma. Verificado con
+         * `PDSignatureField` en el fuente real: hereda de `PDTerminalField`, igual que
+         * `PDButton`/`PDCheckBox`, así que se detecta con el mismo `is` en `fieldTree`.
+         */
+        val isSignature: Boolean = false,
+        /**
          * Valor de activación de ESTE widget concreto (no del campo entero): la clave de
          * `/AP /N` que no es `Off`. Para un grupo de opción, cada casilla física tiene un
          * `onState` distinto (`PAGO_UNICO`, `FINANCIADO`…) aunque compartan [name]. Nulo para
@@ -88,6 +98,16 @@ class PdfFieldInspector @Inject constructor() {
                 val isRadioField = !isCb && (field as? PDButton)?.let { btn ->
                     runCatching { btn.isRadioButton }.getOrDefault(false)
                 } == true
+                // Tanda 5·4b — regla de higiene 1 del plan: los pulsadores (`Ff` bit 17, los
+                // enlaces «descargar aquí») no tienen valor y se excluyen del esquema entero,
+                // no sólo se marcan. Verificado contra `PDButton.isPushButton()` en el fuente
+                // real de pdfbox-android 2.0.27.0 (`FLAG_PUSHBUTTON = 1 shl 16`, o sea el
+                // bit 17 en numeración de 1). `Botón 2/3/4` de `Contrato_empresas.pdf`.
+                val isPushbutton = !isCb && !isRadioField && (field as? PDButton)?.let { btn ->
+                    runCatching { btn.isPushButton }.getOrDefault(false)
+                } == true
+                if (isPushbutton) continue
+                val isSignatureField = field is PDSignatureField
                 val name = field.fullyQualifiedName ?: continue
                 for (widget in field.widgets) {
                     val rect = widget.rectangle ?: continue
@@ -103,6 +123,7 @@ class PdfFieldInspector @Inject constructor() {
                         height = rect.height,
                         isCheckbox = isCb,
                         isRadio = isRadioField,
+                        isSignature = isSignatureField,
                         onState = if (isCb || isRadioField) widgetOnState(widget) else null,
                     )
                 }

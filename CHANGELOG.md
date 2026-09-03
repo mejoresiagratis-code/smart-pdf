@@ -8,6 +8,140 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.10.13-etiquetado-organico] — 2026-09-03
+
+**Tanda 5·4b** del `docs/PLAN_ETIQUETADO_ORGANICO.md`: que las secciones y los campos del PDF
+subido **se llamen como en el papel**, y que las bandas que no se usan se puedan plegar. Es lo
+que hace utilizable una pantalla de 481 campos. No toca `WizardViewModel` ni la clave de los
+valores (que fijó la 5·3), y con el contrato de Orange no cambia nada: su esquema es `BUILTIN`
+y no pasa por el constructor.
+
+### Añadido — `LayoutTextExtractor`, el texto del PDF con posiciones
+
+Pieza nueva. `PDFTextStripper` sobrescribiendo `writeString(String, List<TextPosition>)`, que se
+invoca una vez por palabra, así que da directamente la granularidad que hace falta para acotar
+una etiqueta por el borde de un campo. **Verificado en el fuente real de `pdfbox-android`
+2.0.27.0 antes de escribir nada**, por la regla de `CONTINUIDAD.md` §6.
+
+Dos cosas que salieron de esa verificación y que habrían sido fallos silenciosos:
+
+- `TextPosition.getX()`/`getY()` son **origen arriba-izquierda**, no coordenadas PDF. Es la
+  misma convención que ya usa `PdfFieldInspector.Field`, así que una palabra y un campo se
+  comparan sin convertir nada — pero de haberlo asumido al revés, todas las etiquetas habrían
+  salido emparejadas con el campo equivocado sin que nada fallara ruidosamente.
+- `getDir()` da la rotación del glifo. El pie legal vertical de las páginas 2 y 3 se filtra
+  dentro del extractor, no en quien lo consuma, para que ningún llamador tenga que acordarse.
+  Es la regla 4 del §5 del plan, y se comprobó en vivo: sin el filtro, ese texto se cuela en la
+  agrupación por fila y contamina líneas que no tienen nada que ver.
+
+### Cambiado — las secciones salen del texto del PDF, no de «Página N» y «Tabla N»
+
+Una línea es **ancla de sección** si mide 8 pt o más, arranca en el margen izquierdo (x < 150) y
+va en mayúsculas. Sobre `Contrato_empresas.pdf` eso da las anclas buenas: `DATOS DEL CLIENTE`,
+`PRODUCTOS Y SERVICIOS CONTRATADOS`, `TELEFONÍA FIJA SERVICIOS DE VOZ`, `CENTRALITA VIRTUAL`,
+`AIRE CONNECT`, `CAPTURA DE FIBRA CON CAMBIO DE TITULARIDAD`, `PRODUCTOS CLOUD`,
+`RED INTELIGENTE`, `PORTABILIDAD TELEFONÍA FIJA` y `CAMBIO TITULAR`.
+
+Se excluyen la etiqueta `DOCUMENTACIÓN` (se repite una vez por página) y la cabecera de página,
+ésta **por posición y no por texto literal** — cualquier línea a menos de 30 pt del borde
+superior — para que la regla generalice a los otros tres PDFs de Aire sin listar sus rótulos.
+
+`Resumen de todos los servicios contratados` **no** es ancla: va en mayúscula/minúscula mixta y
+no tiene casilla al lado, así que ninguna de las dos reglas la coge. Decidido dejarlo así: sus
+campos no están en el alcance del alta y caen en la sección anterior sin romper nada. Añadir una
+tercera regla por estilo de banner era más superficie de la que valía.
+
+### Cambiado — la sección se define por el intervalo entre anclas, y eso arregla el orden
+
+El fallo de orden que dejó la 5·4 desaparece **de camino**, sin tocarlo: `flushLooseBefore` sólo
+volcaba los sueltos de páginas *anteriores*, así que los de la página en curso salían siempre
+detrás de sus tablas y `DATOS DEL CLIENTE`, que está arriba del todo, aparecía en tercera
+posición. Definiendo la sección por el intervalo entre dos anclas ya no hay «sueltos de la
+página» que reservar para el final: cada fila entra en el hueco de su ancla al procesarla.
+
+### Añadido — `FormSection.enablerField`: las 8 casillas de banda son el interruptor
+
+Las casillas que la 5·4 promocionó de radio a checkbox no eran un flag mal puesto: son el
+interruptor de su bloque. Ahora se emparejan con su ancla por geometría (hueco horizontal menor
+de 25 pt, centros verticales a menos de 12 pt) y pasan a `enablerField`, desapareciendo de la
+lista de campos de su propia sección. **Un alta usa 37 de los 488 widgets del contrato**, así que
+esto no es estética: sin plegado, la pantalla es una lista de 481 campos.
+
+### Añadido — etiqueta geométrica antes que IA
+
+Para los campos sueltos, el texto a la izquierda acotado por el borde derecho del widget anterior
+de la fila; ese acotado es lo que evita que `Localidad` se lleve el «CP:» del campo de al lado.
+Si no hay nada a la izquierda, la línea de encima que solape en X. Las celdas de tabla **no se
+etiquetan una a una**: heredan la cabecera de su columna, que es el texto encima de la primera
+celda — el mismo `rect` representativo que `tableSection()` ya calculaba y que hasta ahora sólo
+usaba la visión. Siete lecturas para 398 celdas.
+
+### Añadido — `FormSchema.builderVersion`, para que esto pueda escalar
+
+Es la pieza que evita un problema que no se veía hasta cablearlo. El esquema se persiste por
+huella y **gana quien lo construya primero**: un contrato abierto por el paso 1 (que todavía no
+pasa texto de layout) se guardaba con secciones «Página 1», y el editor de etiquetas lo
+encontraba guardado y no lo reconstruía nunca. El mismo PDF daba un resultado u otro según la
+puerta de entrada, y para siempre.
+
+`builderVersion` versiona la **calidad de lo deducido**, no el formato de los datos (eso sigue
+siendo `schemaVersion`). El camino de respaldo se queda en 0 a propósito; sólo se declara la
+versión nueva cuando se ha construido de verdad con anclas. `isStaleBuild()` permite regenerar
+un esquema viejo, y **sólo devuelve `true` si nadie ha editado etiquetas a mano** — misma regla
+no destructiva que la migración v1→v2 de la 5·3. Por eso un esquema migrado desde un mapeo
+antiguo, que llega con `LabelSource.USUARIO` en todos sus campos, nunca se regenera.
+
+### Cambiado — higiene: pulsadores fuera, `/Sig` con su propio tipo
+
+Los 3 pulsadores (`Botón 2`/`3`/`4`, `Ff` bit 17, los enlaces «descargar aquí») se excluyen del
+esquema entero en `PdfFieldInspector`, verificado contra `PDButton.isPushButton()` en el fuente
+real. Los 4 campos `/Sig` pasan a `FieldKind.SIGNATURE` en vez de caer en el `else -> TEXT`, que
+es lo que permitía escribir texto dentro de un hueco de firma.
+
+Nota: el plan (§5, regla 2) pide para `/Sig` un tipo propio y **no** excluirlos, precisamente
+para dejar el terreno hecho a la fase 6, que hoy está rota para Aire porque
+`SignaturePageDetector` busca por geometría y no mira el AcroForm. Se ha seguido el plan.
+
+### Cableado — el editor de etiquetas ya usa todo esto
+
+`LabelEditorViewModel` pasa el texto de layout al constructor y regenera el esquema si el
+guardado es de una versión anterior y no tiene ediciones manuales. Se cablea aquí y no en el
+paso 1 a propósito: es la ruta beta de Ajustes, aislada del flujo del alta, y es el único sitio
+donde `LayoutTextExtractor` se **ejecuta** de verdad. Subirlo sin cablear habría dejado la única
+pieza no verificable en local sin ejecutar nunca, y su primer fallo aparecería en la tanda
+siguiente mezclado con el cableado.
+
+### Verificación
+
+`kotlinc` 2.1.0 con `-Werror` sobre `FormSchemaBuilder` y `FormSchema` reales, con stubs de una
+línea para lo que depende de Android y pdfbox. **27 comprobaciones de comportamiento ejecutables,
+todas en verde**, sobre una miniatura con coordenadas fieles a las medidas con `pypdf`/
+`pdfplumber`: títulos, orden, `enablerField`, tabla dentro de la banda, etiqueta geométrica,
+camino de respaldo intacto y las dos direcciones de `isStaleBuild()`.
+
+Esas comprobaciones destaparon **dos fallos reales antes de subir**, ninguno de los dos visible
+a ojo:
+
+1. La casilla-interruptor quedaba fuera del intervalo de su propia banda por un margen de un
+   punto, porque su borde superior está por encima del texto del título (se centran el uno con
+   el otro). Se usa el más alto de los dos como frontera.
+2. Dentro de una misma banda, los sueltos acumulados antes de que empezara una tabla no se
+   volcaban hasta el cierre, así que salían **detrás** de la tabla: el mismo bug de orden de la
+   5·4, reproducido dentro de la banda en vez de entre páginas.
+
+Los números del plan se reverificaron contra el PDF real: 488 widgets, 481 nombres únicos, el
+desglose por página y tipo, los 3 pulsadores, los 4 `/Sig` y los 13 campos con flag de radio
+(12 disfrazados + `Botón de opción 10`, el único de verdad).
+
+Hallazgo nuevo: de esos 12 disfrazados, el §2.1 del plan sólo explica 8. Los otros cuatro son
+`Botón de opción 1`/`2`/`3` — el selector «Tipo de Central Virtual», tres campos sueltos en la
+misma fila (y entre 251 y 259) para lo que semánticamente es un grupo excluyente — y
+`Botón de opción 13`, la casilla «Marcar para solicitar portabilidad de toda la numeración».
+Ninguno bloquea el alta y ninguno necesita lógica nueva: quedan como casillas sueltas de su
+sección.
+
+---
+
 ## [0.10.12-revision-en-el-paso-1] — 2026-09-03
 
 **Tres cosas del paso 1 que se ven en cuanto se sube un contrato de Aire**, pedidas con la

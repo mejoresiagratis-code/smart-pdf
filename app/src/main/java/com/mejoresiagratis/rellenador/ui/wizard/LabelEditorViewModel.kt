@@ -10,6 +10,7 @@ import com.mejoresiagratis.rellenador.data.model.FormSchema
 import com.mejoresiagratis.rellenador.data.model.TemplateFingerprint
 import com.mejoresiagratis.rellenador.data.pdf.AcroFormFiller
 import com.mejoresiagratis.rellenador.data.pdf.FormSchemaBuilder
+import com.mejoresiagratis.rellenador.data.pdf.LayoutTextExtractor
 import com.mejoresiagratis.rellenador.data.pdf.PdfFieldInspector
 import com.mejoresiagratis.rellenador.data.remote.ProxyApi
 import com.mejoresiagratis.rellenador.data.remote.VisionLabelPass
@@ -42,6 +43,7 @@ class LabelEditorViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val inspector: PdfFieldInspector,
     private val schemaBuilder: FormSchemaBuilder,
+    private val layoutText: LayoutTextExtractor,
     private val filler: AcroFormFiller,
     private val prefs: PrefsRepository,
     private val api: ProxyApi,
@@ -119,18 +121,33 @@ class LabelEditorViewModel @Inject constructor(
 
                     val name = displayName(uri)
 
+                    // Texto del PDF con posición: es lo que permite a `FormSchemaBuilder`
+                    // titular las secciones como el papel (DATOS DEL CLIENTE, AIRE CONNECT…),
+                    // detectar la casilla que activa cada banda y etiquetar los campos sueltos
+                    // por geometría antes de gastar una llamada de visión. Tanda 5·4b.
+                    val words = resolver.openInputStream(uri)!!.use { layoutText.extract(it) }
+
+                    fun buildFresh(): FormSchema = schemaBuilder.build(
+                        fields = fields,
+                        fingerprint = fingerprint,
+                        pageCount = pageCount,
+                        // El nombre del fichero como título de partida: es lo único que
+                        // identifica el formulario para quien lo sube ("SEPA_Aire.pdf" dice
+                        // mucho más que "Formulario"), y es editable después.
+                        title = name ?: "Formulario",
+                        layoutWords = words,
+                    )
+
                     val existing = prefs.findOrMigrateSchema(fingerprint, pageCount)
-                    val schema = existing
-                        ?: schemaBuilder.build(
-                            fields = fields,
-                            fingerprint = fingerprint,
-                            pageCount = pageCount,
-                            // El nombre del fichero como título de partida: es lo único que
-                            // identifica el formulario para quien lo sube ("SEPA_Aire.pdf" dice
-                            // mucho más que "Formulario"), y es editable después.
-                            title = name ?: "Formulario",
-                        )
-                    Triple(schema, existing != null, name)
+                    // Regeneración perezosa y NO destructiva: un esquema guardado por una
+                    // versión anterior del constructor (p.ej. el que deja el paso 1, que aún no
+                    // pasa `layoutWords` y produce secciones «Página 1») se reconstruye aquí,
+                    // que es el camino que sí sabe hacerlo mejor. `isStaleBuild()` sólo dice que
+                    // sí cuando NADIE ha editado etiquetas a mano, así que nunca se pisa trabajo
+                    // del usuario — misma regla que la migración v1→v2 de la 5·3.
+                    val stale = existing?.isStaleBuild() == true
+                    val schema = if (existing == null || stale) buildFresh() else existing
+                    Triple(schema, existing != null && !stale, name)
                 }
             }
             _state.value = result.fold(

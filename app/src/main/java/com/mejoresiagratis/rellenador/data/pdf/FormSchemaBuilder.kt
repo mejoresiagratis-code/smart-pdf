@@ -54,6 +54,26 @@ import javax.inject.Inject
  * algoritmo: es el defecto conocido de ese PDF, donde las filas 07 y 08 están superpuestas en
  * la misma coordenada (ver `docs/ANALISIS_FORMULARIOS_AIRE.md`). El constructor lo refleja en
  * vez de taparlo, que es lo que se quiere para poder avisar.
+ *
+ * ── Tanda 5·4b — títulos y plegado por ancla (`docs/PLAN_ETIQUETADO_ORGANICO.md`) ──
+ * La 5·4 conseguía que las secciones salieran del `FormSchema`, pero se llamaban «Página 1» y
+ * «Tabla 3», y un `flushLooseBefore` que sólo vuelca los sueltos de páginas *anteriores* dejaba
+ * los de la página en curso siempre detrás de sus tablas (DATOS DEL CLIENTE, arriba del todo,
+ * salía en tercera posición). Esta tanda:
+ *  · añade [LayoutTextExtractor] como fuente de texto real del PDF;
+ *  · detecta anclas de sección (títulos en mayúscula, o casillas de banda) con [detectAnchors];
+ *  · define la sección por el **intervalo entre dos anclas** ([buildSectionsByAnchor]), lo que
+ *    hace desaparecer el bug de orden de camino: ya no hay "sueltos de la página" que volcar al
+ *    final, porque cada fila cae directamente en el hueco de su ancla;
+ *  · dentro de esa banda, promueve la casilla que la encabeza a [FormSection.enablerField];
+ *  · etiqueta los campos sueltos por geometría ([geometricLabel]) y las columnas de tabla por
+ *    la cabecera de su columna ([columnHeaderLabel]), antes de recurrir a la IA.
+ *
+ * **Compatibilidad**: si no se pasa `layoutWords` (o el PDF no tiene texto de capa, sólo
+ * campos), [detectAnchors] devuelve la lista vacía y [build] usa [buildSectionsByPage], que es
+ * el algoritmo **literal** de la 5·4, sin tocar una línea — es el único llamador (`WizardViewModel`,
+ * fuera del alcance de esta tanda) que no pasa `layoutWords` todavía, y su comportamiento no
+ * puede cambiar por esto.
  */
 class FormSchemaBuilder @Inject constructor() {
 
@@ -62,6 +82,11 @@ class FormSchemaBuilder @Inject constructor() {
         fingerprint: String,
         pageCount: Int,
         title: String = "Formulario",
+        /**
+         * Texto del PDF con posición, de [LayoutTextExtractor]. Vacío por compatibilidad: sin
+         * él, [build] se comporta exactamente como antes de la 5·4b (ver [buildSectionsByPage]).
+         */
+        layoutWords: List<LayoutTextExtractor.Word> = emptyList(),
     ): FormSchema {
         if (fields.isEmpty()) {
             return FormSchema(
@@ -98,69 +123,17 @@ class FormSchemaBuilder @Inject constructor() {
                 f.copy(isRadio = false, isCheckbox = true)
             } else f
 
-        val rows = groupIntoRows(fields.map(::promoted))
+        val promotedFields = fields.map(::promoted)
+        val rows = groupIntoRows(promotedFields)
         val columnXs = detectColumnXs(rows)
-        val sections = mutableListOf<FormSection>()
+        val anchors = detectAnchors(layoutWords, promotedFields)
+        val usedAnchors = anchors.isNotEmpty()
 
-        var pending = mutableListOf<List<PdfFieldInspector.Field>>()   // filas de tabla en curso
-        // Sueltos por página: 5·4 — el objetivo declarado es visual (que el usuario sepa en qué
-        // parte del formulario está mientras rellena), y con un contrato de 3 páginas metiéndolo
-        // todo en una única sección "Campos" al principio se pierde por completo esa referencia.
-        // Se emite una sección simple por página con sus sueltos, intercalada con las tablas en
-        // el orden real de aparición.
-        val loosePerPage = linkedMapOf<Int, MutableList<PdfFieldInspector.Field>>()
-
-        fun addLoose(row: List<PdfFieldInspector.Field>) {
-            if (row.isEmpty()) return
-            val bucket = loosePerPage.getOrPut(row.first().page) { mutableListOf() }
-            bucket += row
+        val sections = if (!usedAnchors) {
+            buildSectionsByPage(rows, columnXs)
+        } else {
+            buildSectionsByAnchor(rows, columnXs, anchors, layoutWords)
         }
-
-        // Antes de flush(): materializa el bloque de sueltos que quede pendiente **de páginas ya
-        // completadas**. La sección simple de una página se emite en cuanto empieza una tabla o
-        // una fila de otra página, para que las tablas caigan intercaladas y no siempre al final.
-        fun flushLooseBefore(pageOfNext: Int?) {
-            val closed = loosePerPage.keys.filter { pageOfNext == null || it < pageOfNext }
-            for (page in closed) {
-                val loose = loosePerPage.remove(page) ?: continue
-                if (loose.isEmpty()) continue
-                sections += FormSection(
-                    id = "pag_${page}",
-                    title = "Página ${page + 1}",
-                    kind = SectionKind.SIMPLE,
-                    fields = loose.sortedWith(compareBy({ it.y }, { it.x }))
-                        .mapIndexed { i, f -> toField(f, i) },
-                )
-            }
-        }
-
-        fun flushTable() {
-            if (pending.size >= MIN_ROWS_FOR_TABLE) {
-                // Antes de cerrar la tabla, cierra los sueltos de páginas anteriores a la que
-                // arranca la tabla, para conservar el orden PDF.
-                flushLooseBefore(pending.first().first().page)
-                sections += tableSection(pending, columnXs, sections.size)
-            } else {
-                // Una fila suelta no hace tabla: sus campos vuelven a la sección simple.
-                pending.forEach { addLoose(it) }
-            }
-            pending = mutableListOf()
-        }
-
-        for (row in rows) {
-            val isTableRow = row.count { xKey(it.x) in columnXs } >= MIN_COLS_FOR_ROW
-            if (!isTableRow) {
-                flushTable()
-                addLoose(row)
-            } else if (pending.isEmpty() || sharesColumns(pending.last(), row, columnXs)) {
-                pending += row
-            } else {
-                flushTable()
-                pending += row
-            }
-        }
-        flushTable()
-        flushLooseBefore(pageOfNext = null)
 
         return FormSchema(
             id = "learned:$fingerprint",
@@ -169,6 +142,11 @@ class FormSchemaBuilder @Inject constructor() {
             fingerprint = fingerprint,
             pageCount = pageCount,
             sections = sections,
+            // Sólo se declara la versión nueva si se ha construido DE VERDAD con anclas. El
+            // camino de respaldo produce la estructura vieja, así que se queda en 0 y podrá
+            // regenerarse más adelante desde un camino que sí pase `layoutWords` (ver
+            // `FormSchema.isStaleBuild`). Marcarlo como 1 aquí lo dejaría congelado para siempre.
+            builderVersion = if (usedAnchors) FormSchema.BUILDER_VERSION else 0,
         )
     }
 
@@ -228,17 +206,394 @@ class FormSchemaBuilder @Inject constructor() {
         return ka.intersect(kb).size >= MIN_COLS_FOR_ROW
     }
 
+    private fun isTableRow(row: List<PdfFieldInspector.Field>, columnXs: Set<Int>): Boolean =
+        row.count { xKey(it.x) in columnXs } >= MIN_COLS_FOR_ROW
+
+    // ── Camino de respaldo: algoritmo literal de la 5·4 (sin `layoutWords`) ────
+
+    /**
+     * El algoritmo de la 0.10.10, sin cambios. Se conserva para el único llamador que hoy no
+     * pasa `layoutWords` (`WizardViewModel`, fuera del alcance de la 5·4b): su comportamiento
+     * no puede depender de esta tanda. Lleva el bug de orden documentado en
+     * `docs/PLAN_ETIQUETADO_ORGANICO.md` §1 — a propósito, porque arreglarlo aquí sería
+     * cambiarle el comportamiento a ese llamador sin haberlo tocado.
+     */
+    private fun buildSectionsByPage(
+        rows: List<List<PdfFieldInspector.Field>>,
+        columnXs: Set<Int>,
+    ): List<FormSection> {
+        val sections = mutableListOf<FormSection>()
+        var pending = mutableListOf<List<PdfFieldInspector.Field>>()
+        val loosePerPage = linkedMapOf<Int, MutableList<PdfFieldInspector.Field>>()
+
+        fun addLoose(row: List<PdfFieldInspector.Field>) {
+            if (row.isEmpty()) return
+            val bucket = loosePerPage.getOrPut(row.first().page) { mutableListOf() }
+            bucket += row
+        }
+
+        fun flushLooseBefore(pageOfNext: Int?) {
+            val closed = loosePerPage.keys.filter { pageOfNext == null || it < pageOfNext }
+            for (page in closed) {
+                val loose = loosePerPage.remove(page) ?: continue
+                if (loose.isEmpty()) continue
+                sections += FormSection(
+                    id = "pag_${page}",
+                    title = "Página ${page + 1}",
+                    kind = SectionKind.SIMPLE,
+                    fields = loose.sortedWith(compareBy({ it.y }, { it.x }))
+                        .mapIndexed { i, f -> toField(f, i) },
+                )
+            }
+        }
+
+        fun flushTable() {
+            if (pending.size >= MIN_ROWS_FOR_TABLE) {
+                flushLooseBefore(pending.first().first().page)
+                sections += tableSection(pending, columnXs, sections.size)
+            } else {
+                pending.forEach { addLoose(it) }
+            }
+            pending = mutableListOf()
+        }
+
+        for (row in rows) {
+            if (!isTableRow(row, columnXs)) {
+                flushTable()
+                addLoose(row)
+            } else if (pending.isEmpty() || sharesColumns(pending.last(), row, columnXs)) {
+                pending += row
+            } else {
+                flushTable()
+                pending += row
+            }
+        }
+        flushTable()
+        flushLooseBefore(pageOfNext = null)
+
+        return sections
+    }
+
+    // ── Camino nuevo: por ancla de sección (tanda 5·4b) ────────────────────────
+
+    /** Una ancla de sección: dónde empieza, cómo se llama y qué casilla la activa (si tiene). */
+    private data class Anchor(
+        val page: Int,
+        val y: Float,
+        val title: String,
+        val enablerField: String?,
+    )
+
+    /** Una línea de texto reconstruida a partir de las palabras de [LayoutTextExtractor]. */
+    private data class TextLine(
+        val page: Int,
+        val y: Float,
+        val fontSize: Float,
+        val x0: Float,
+        val text: String,
+    )
+
+    /**
+     * Reconstruye líneas agrupando palabras por página, `y` y tamaño de fuente — **no** sólo
+     * por `y`: un título de banda y la frase descriptiva que lo acompaña en la misma fila
+     * (`CENTRALITA VIRTUAL Aire Suite, Waicom Cloud…`) comparten `y` pero no tamaño, y sin
+     * separar por tamaño la mayúscula del título se ensucia con la minúscula de la frase.
+     * Medido al preparar esta tanda contra `Contrato_empresas.pdf` con `pdfplumber`.
+     */
+    private fun buildLines(words: List<LayoutTextExtractor.Word>): List<TextLine> {
+        data class Key(val page: Int, val yBucket: Int, val sizeBucket: Int)
+        return words
+            .groupBy { Key(it.page, Math.round(it.y), Math.round(it.fontSize * 10)) }
+            .map { (_, ws) ->
+                val sorted = ws.sortedBy { it.x }
+                TextLine(
+                    page = sorted.first().page,
+                    y = sorted.first().y,
+                    fontSize = sorted.first().fontSize,
+                    x0 = sorted.first().x,
+                    text = sorted.joinToString(" ") { it.text }.trim(),
+                )
+            }
+    }
+
+    private fun isAllUpper(text: String): Boolean {
+        val letters = text.filter { it.isLetter() }
+        return letters.isNotEmpty() && letters.all { it.isUpperCase() }
+    }
+
+    /**
+     * Detecta las anclas de sección: líneas de ≥ [ANCHOR_MIN_FONT_SIZE] pt, que arrancan en el
+     * margen izquierdo (`x0 < `[ANCHOR_MAX_X]) y van en mayúsculas. Verificado con `pdfplumber`
+     * sobre `Contrato_empresas.pdf`: de 11 anclas buenas, la regla detecta 10 tal cual; la
+     * undécima (`Resumen de todos los servicios contratados`, mayúscula/minúscula mixta, sin
+     * casilla al lado) queda **fuera a propósito** — decidido con Pablo: sus campos no están en
+     * el alcance del alta y caen en la sección anterior sin romper nada.
+     *
+     * Se excluyen dos cosas que no son banda:
+     *  · [ANCHOR_BLACKLIST] — la etiqueta `DOCUMENTACIÓN`, que se repite una vez por página.
+     *  · la cabecera de página (logo + franja superior): cualquier línea a menos de
+     *    [MASTHEAD_MARGIN] pt del borde superior. Es una regla de posición, no de texto
+     *    literal, para que generalice a los otros PDFs de Aire sin tener que listar sus
+     *    literales («CONTRATO EMPRESAS», «CONTRATO DE SERVICIOS»…).
+     *
+     * Para cada ancla, busca una casilla CHECKBOX pegada a su izquierda (hueco horizontal <
+     * [ANCHOR_CHECKBOX_GAP_MAX] pt, centros verticales a menos de
+     * [ANCHOR_CHECKBOX_Y_TOLERANCE] pt): si la encuentra, esa ancla lleva `enablerField`. Las 8
+     * bandas de `Contrato_empresas.pdf` (§2.1 y §4 del plan) salen así, sin listar sus nombres
+     * de campo a mano.
+     */
+    private fun detectAnchors(
+        words: List<LayoutTextExtractor.Word>,
+        fields: List<PdfFieldInspector.Field>,
+    ): List<Anchor> {
+        if (words.isEmpty()) return emptyList()
+
+        val candidates = buildLines(words).filter { line ->
+            line.fontSize >= ANCHOR_MIN_FONT_SIZE &&
+                line.x0 < ANCHOR_MAX_X &&
+                line.y >= MASTHEAD_MARGIN &&
+                line.text.length > 3 &&
+                isAllUpper(line.text) &&
+                line.text !in ANCHOR_BLACKLIST
+        }
+
+        return candidates
+            .sortedWith(compareBy({ it.page }, { it.y }))
+            .map { line ->
+                val enabler = fields.firstOrNull { f ->
+                    f.isCheckbox &&
+                        f.page == line.page &&
+                        Math.abs((f.y + f.height / 2f) - line.y) < ANCHOR_CHECKBOX_Y_TOLERANCE &&
+                        (line.x0 - (f.x + f.width)) in 0f..ANCHOR_CHECKBOX_GAP_MAX
+                }
+                // El borde superior de la casilla suele quedar un poco por ENCIMA del texto del
+                // título (se centran verticalmente el uno con el otro), así que el propio widget
+                // podía caer fuera del intervalo de su banda por un margen de un dígito. Se usa
+                // el más alto de los dos como frontera real de la sección, para que la casilla
+                // quede dentro de su propia banda y no en la anterior. Detectado con una prueba
+                // de comportamiento, no a ojo: sin este ajuste, la casilla-interruptor se colaba
+                // como campo suelto de la sección de arriba Y como `enablerField` de la de abajo.
+                val y = if (enabler != null) minOf(line.y, enabler.y) else line.y
+                Anchor(page = line.page, y = y, title = line.text, enablerField = enabler?.name)
+            }
+    }
+
+    /**
+     * Índice del ancla vigente para una posición `(page, y)`, o `-1` si es anterior a la
+     * primera ancla del documento (la cabecera del contrato: casillas CLIENTE, DISTRIBUIDOR,
+     * TEKI — todo lo que hay antes de `DATOS DEL CLIENTE`, ver §4 del plan). Asume [anchors]
+     * ordenadas por `(page, y)` ascendente, que es como las devuelve [detectAnchors].
+     */
+    private fun anchorIndexFor(anchors: List<Anchor>, page: Int, y: Float): Int {
+        var idx = -1
+        for ((i, a) in anchors.withIndex()) {
+            if (a.page < page || (a.page == page && a.y <= y)) idx = i else break
+        }
+        return idx
+    }
+
+    /**
+     * Construye las secciones por el **intervalo entre anclas**: una fila pertenece a la
+     * sección de la última ancla que quede en o antes de su `(page, y)`. Esto es lo que hace
+     * desaparecer el bug de orden de la 5·4 (§1 del plan) sin tocarlo directamente — ya no hay
+     * "sueltos de la página en curso" que reservar para el final, porque cada fila entra
+     * directamente en el hueco de su ancla en el momento en que se procesa.
+     *
+     * Dentro de cada intervalo se reutiliza la MISMA clasificación tabla/suelto que
+     * [buildSectionsByPage] (por columnas globales), así que una banda puede producir más de
+     * una `FormSection` (p.ej. TELEFONÍA FIJA: la casilla "Sólo tráfico nacional" suelta + la
+     * tabla de tarifa). Las dos comparten título; el `enablerField` sólo lo lleva la primera
+     * que se emite para esa ancla, para no repetirlo.
+     */
+    private fun buildSectionsByAnchor(
+        rows: List<List<PdfFieldInspector.Field>>,
+        columnXs: Set<Int>,
+        anchors: List<Anchor>,
+        words: List<LayoutTextExtractor.Word>,
+    ): List<FormSection> {
+        val sections = mutableListOf<FormSection>()
+        var sectionCounter = 0
+
+        var pending = mutableListOf<List<PdfFieldInspector.Field>>()
+        var loose = mutableListOf<PdfFieldInspector.Field>()
+        var currentAnchorIdx = -2   // centinela: fuerza el primer cambio de banda
+        var enablerUsedForBucket = false
+
+        fun titleFor(idx: Int) = if (idx < 0) "Cabecera" else anchors[idx].title
+        fun enablerFor(idx: Int) = if (idx < 0) null else anchors[idx].enablerField
+
+        fun flushSimple() {
+            val enabler = if (!enablerUsedForBucket) enablerFor(currentAnchorIdx) else null
+            // La casilla que activa la banda no es un campo suelto más de su propia sección:
+            // pasa a `enablerField` y desaparece de la lista de campos (§2.1 del plan).
+            val filtered = loose.filter { it.name != enabler }
+            if (filtered.isEmpty() && enabler == null) {
+                loose = mutableListOf()
+                return
+            }
+            sections += FormSection(
+                id = "sec_${sectionCounter++}",
+                title = titleFor(currentAnchorIdx),
+                kind = SectionKind.SIMPLE,
+                fields = filtered.mapIndexed { i, f ->
+                    toField(f, i, rowOf(rows, f), words)
+                },
+                enablerField = enabler,
+            )
+            if (enabler != null) enablerUsedForBucket = true
+            loose = mutableListOf()
+        }
+
+        fun flushTableBucket() {
+            if (pending.size >= MIN_ROWS_FOR_TABLE) {
+                val enabler = if (!enablerUsedForBucket) enablerFor(currentAnchorIdx) else null
+                sections += tableSection(pending, columnXs, sectionCounter++, words).copy(
+                    title = titleFor(currentAnchorIdx),
+                    enablerField = enabler,
+                )
+                if (enabler != null) enablerUsedForBucket = true
+            } else {
+                pending.forEach { row -> loose += row }
+            }
+            pending = mutableListOf()
+        }
+
+        for (row in rows) {
+            val repField = row.first()
+            val idx = anchorIndexFor(anchors, repField.page, repField.y)
+            if (idx != currentAnchorIdx) {
+                flushTableBucket()
+                flushSimple()
+                currentAnchorIdx = idx
+                enablerUsedForBucket = false
+            }
+
+            if (!isTableRow(row, columnXs)) {
+                flushTableBucket()   // una fila suelta corta cualquier tabla en marcha
+                loose += row
+            } else if (pending.isEmpty()) {
+                // Arranca una tabla nueva: si había sueltos acumulados desde que empezó la
+                // banda (p.ej. la propia casilla-interruptor), se vuelcan AHORA, en su sitio
+                // cronológico. Sin esto, `loose` se queda esperando al cierre de banda y la
+                // tabla sale publicada antes que sus sueltos — el mismo bug de orden de la 5·4,
+                // reproducido dentro de la banda en vez de entre páginas. Detectado con una
+                // prueba de comportamiento, no a ojo.
+                flushSimple()
+                pending += row
+            } else if (sharesColumns(pending.last(), row, columnXs)) {
+                pending += row
+            } else {
+                flushTableBucket()
+                pending += row
+            }
+        }
+        flushTableBucket()
+        flushSimple()
+
+        return sections
+    }
+
+    /** La fila (ordenada por x) a la que pertenece [field], o lista vacía si no se encuentra. */
+    private fun rowOf(
+        rows: List<List<PdfFieldInspector.Field>>,
+        field: PdfFieldInspector.Field,
+    ): List<PdfFieldInspector.Field> =
+        rows.firstOrNull { row -> row.any { it.name == field.name && it.x == field.x && it.y == field.y } }
+            ?: emptyList()
+
+    /**
+     * Etiqueta geométrica de un campo suelto (§3.2 del plan): el grupo de palabras a la
+     * izquierda del campo, acotado por el borde derecho del widget anterior de la misma fila
+     * — ese acotado es lo que evita que `Localidad` se lleve el «CP:» del campo de al lado. Si
+     * no hay nada a la izquierda, la línea de encima que solape en X. Null si ninguna de las
+     * dos encuentra nada (el campo sigue con su nombre real como respaldo).
+     *
+     * Medido: 67 de los 90 campos sueltos de `Contrato_empresas.pdf` (74%) quedan bien
+     * etiquetados así, sin llamar a la IA.
+     */
+    private fun geometricLabel(
+        field: PdfFieldInspector.Field,
+        row: List<PdfFieldInspector.Field>,
+        words: List<LayoutTextExtractor.Word>,
+    ): String? {
+        if (words.isEmpty()) return null
+
+        val idxInRow = row.indexOfFirst { it.name == field.name && it.x == field.x && it.y == field.y }
+        val leftBoundary = if (idxInRow > 0) {
+            val prev = row[idxInRow - 1]
+            prev.x + prev.width
+        } else 0f
+
+        val sameRow = words.filter { w ->
+            w.page == field.page &&
+                Math.abs(w.y - field.y) <= LABEL_ROW_TOLERANCE &&
+                w.endX <= field.x &&
+                w.x >= leftBoundary
+        }.sortedBy { it.x }
+        if (sameRow.isNotEmpty()) {
+            return sameRow.joinToString(" ") { it.text }.trim().trimEnd(':').ifBlank { null }
+        }
+
+        val above = words.filter { w ->
+            w.page == field.page &&
+                (field.y - w.y) in 0f..LABEL_ABOVE_MAX_GAP &&
+                w.x < field.x + field.width &&
+                w.endX > field.x
+        }.sortedBy { it.x }
+        if (above.isNotEmpty()) {
+            return above.joinToString(" ") { it.text }.trim().ifBlank { null }
+        }
+        return null
+    }
+
+    /**
+     * Etiqueta de columna de tabla (§3.3 del plan): la línea de texto justo encima de la celda
+     * más alta de la columna ([anchor], ver [tableSection]), acotada al ancho de la columna. Es
+     * la misma región que ya usa la visión para recortar, sólo que ahora se lee con texto en
+     * vez de mandarla a un modelo. Null si no hay texto encima (columnas sin cabecera propia,
+     * poco frecuente).
+     */
+    private fun columnHeaderLabel(
+        page: Int,
+        x: Float,
+        width: Float,
+        y: Float,
+        words: List<LayoutTextExtractor.Word>,
+    ): String? {
+        if (words.isEmpty()) return null
+        val above = words.filter { w ->
+            w.page == page &&
+                (y - w.y) in 0f..TABLE_HEADER_MAX_GAP &&
+                w.x < x + width &&
+                w.endX > x
+        }
+        if (above.isEmpty()) return null
+        val closestY = above.maxOf { it.y }   // la línea más cercana a la celda (más abajo)
+        return above.filter { Math.abs(it.y - closestY) <= LABEL_ROW_TOLERANCE }
+            .sortedBy { it.x }
+            .joinToString(" ") { it.text }
+            .trim()
+            .ifBlank { null }
+    }
+
     // ── Construcción ─────────────────────────────────────────────────────────
 
-    private fun toField(f: PdfFieldInspector.Field, order: Int) = FormField(
+    private fun toField(
+        f: PdfFieldInspector.Field,
+        order: Int,
+        row: List<PdfFieldInspector.Field> = emptyList(),
+        words: List<LayoutTextExtractor.Word> = emptyList(),
+    ) = FormField(
         name = f.name,
-        // El nombre real como etiqueta provisional. Cuando sea autogenerado
-        // (`Campo de texto 116`) lo sustituirá el etiquetado por visión de la fase 3; por eso
-        // queda marcado como NOMBRE_REAL y no como USUARIO.
-        label = f.name,
+        // Etiqueta geométrica si la hay (5·4b); si no, el nombre real como antes, a la espera
+        // de la fase 3 (etiquetado por visión) o de que el usuario la corrija a mano.
+        label = geometricLabel(f, row, words) ?: f.name,
         kind = when {
             f.isCheckbox -> FieldKind.CHECKBOX
             f.isRadio -> FieldKind.RADIO
+            // Tanda 5·4b, regla de higiene 2 del plan: un `/Sig` es un hueco de firma, no
+            // texto — antes caía en este mismo `else` como FieldKind.TEXT.
+            f.isSignature -> FieldKind.SIGNATURE
             else -> FieldKind.TEXT
         },
         origin = ValueOrigin.DOCUMENTO,
@@ -258,6 +613,7 @@ class FormSchemaBuilder @Inject constructor() {
         rows: List<List<PdfFieldInspector.Field>>,
         columnXs: Set<Int>,
         index: Int,
+        words: List<LayoutTextExtractor.Word> = emptyList(),
     ): FormSection {
         // Columnas: las x de columna presentes en esta tabla, de izquierda a derecha.
         val xs = rows.flatMap { row -> row.map { it.x } }
@@ -280,10 +636,15 @@ class FormSchemaBuilder @Inject constructor() {
             // Se ordena por (página, y) porque una tabla PUEDE abarcar varias páginas: las filas
             // se acumulan mientras compartan columnas, y `groupIntoRows` va página a página.
             val anchor = cellsInColumn.minWithOrNull(compareBy({ it.page }, { it.y }))
+            val colWidth = if (cellsInColumn.isEmpty()) 0f else cellsInColumn.maxOf { it.width }
 
             TableColumn(
                 id = "c$key",
-                label = "Columna ${i + 1}",   // la etiqueta real la pone la fase 3
+                // Tanda 5·4b §3.3 — la celda no se etiqueta sola, hereda la cabecera de su
+                // columna (el texto encima de la primera celda). Si no hay texto ahí, se queda
+                // con el número de columna de siempre a la espera de la fase 3.
+                label = anchor?.let { columnHeaderLabel(it.page, x, colWidth, it.y, words) }
+                    ?: "Columna ${i + 1}",
                 x = x,
                 kind = when {
                     cellsInColumn.isEmpty() -> FieldKind.TEXT
@@ -297,12 +658,7 @@ class FormSchemaBuilder @Inject constructor() {
                 origin = ValueOrigin.CATALOGO,
                 page = anchor?.page ?: 0,
                 rect = anchor?.let {
-                    FieldRect(
-                        x = it.x,
-                        y = it.y,
-                        width = cellsInColumn.maxOf { c -> c.width },
-                        height = it.height,
-                    )
+                    FieldRect(x = it.x, y = it.y, width = colWidth, height = it.height)
                 },
             )
         }
@@ -320,7 +676,7 @@ class FormSchemaBuilder @Inject constructor() {
 
         return FormSection(
             id = "tabla_$index",
-            title = "Tabla ${index + 1}",
+            title = "Tabla ${index + 1}",   // sobrescrito por el título de la banda en la 5·4b
             kind = SectionKind.TABLE,
             columns = columns,
             rows = tableRows,
@@ -344,5 +700,39 @@ class FormSchemaBuilder @Inject constructor() {
         const val MIN_ROWS_FOR_TABLE = 2
 
         const val TOTAL_SUFFIX = "TOTAL"
+
+        // ── Tanda 5·4b ──
+
+        /** Tamaño mínimo de letra para que una línea cuente como ancla de sección. */
+        const val ANCHOR_MIN_FONT_SIZE = 8f
+
+        /** Margen izquierdo máximo para que una línea cuente como ancla de sección. */
+        const val ANCHOR_MAX_X = 150f
+
+        /**
+         * Franja superior de página (logo + banda de cabecera) que nunca es una ancla de
+         * sección, aunque cumpla mayúscula+margen+tamaño. Medido sobre las tres páginas de
+         * `Contrato_empresas.pdf`: la cabecera está a 13–16 pt del borde superior y la primera
+         * ancla real (`DATOS DEL CLIENTE`) a 94 pt — de sobra de margen para el corte.
+         */
+        const val MASTHEAD_MARGIN = 30f
+
+        /** Textos que jamás son ancla de sección aunque cumplan la regla geométrica. */
+        val ANCHOR_BLACKLIST = setOf("DOCUMENTACIÓN")
+
+        /** Hueco horizontal máximo entre una casilla y el texto de su ancla. */
+        const val ANCHOR_CHECKBOX_GAP_MAX = 25f
+
+        /** Tolerancia vertical (centro del widget vs. línea de texto) para emparejar casilla y ancla. */
+        const val ANCHOR_CHECKBOX_Y_TOLERANCE = 12f
+
+        /** Tolerancia vertical para considerar dos palabras en la misma fila al etiquetar. */
+        const val LABEL_ROW_TOLERANCE = 6f
+
+        /** Hueco vertical máximo para que una línea "de encima" sirva de etiqueta. */
+        const val LABEL_ABOVE_MAX_GAP = 20f
+
+        /** Hueco vertical máximo entre una celda de tabla y la cabecera de su columna. */
+        const val TABLE_HEADER_MAX_GAP = 30f
     }
 }
