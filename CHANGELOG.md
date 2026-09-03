@@ -8,6 +8,40 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.10.24-afines-extraccion] — 2026-09-04
+
+Tanda 5·4i, arreglo tras probar 0.10.22/0.10.23 en el móvil (confirmadas verdes las dos). Reporte
+de Pablo: un campo enganchado a mano en «Revisar mapeo» a la misma canónica que otro campo, al
+subir documentación, no se rellenaba por la IA — llegaba a Relleno vacío y aparecía en el
+desplegable de «sin sugerencias», pese a que el usuario ya había dicho expresamente que era el
+mismo dato.
+
+### La causa
+
+`FieldResolver.resolve` (la extracción con IA) indexa sus candidatos por `keys.real(canonKey)`,
+que sólo puede devolver **un** nombre real por canónica (`FieldKeys.real()`, sin cambiar desde la
+mitad 1 a propósito — es una API muy usada). Si dos campos comparten canónica, el segundo nunca
+entraba en `candidates` ni en `resolved.autoValues`: ni se autorrellenaba, ni se marcaba con
+ningún estado.
+
+La mitad 1 y la mitad 2 ya resolvían esto para la escritura MANUAL en Relleno (`pushUndo` vía
+`CanonicalSiblings.expand`) y para la casilla de afines (`confirmAffinity`), pero la vía de
+extracción por IA quedó fuera del alcance original — es la misma `CanonicalSiblings` la que hacía
+falta enchufar aquí también.
+
+### El arreglo
+
+Tras `FieldResolver.resolve`, `CanonicalSiblings.expand(schema, prefill, resolved.autoValues)`
+reparte el valor decidido por la IA a los hermanos que comparten canónica y siguen vacíos — mismo
+criterio que ya usa la escritura manual: no pisa un hermano con otro valor. Y como el valor solo
+no basta (se quedaría con `FieldState.EMPTY` pese a tenerlo, cayendo igual al desplegable de
+"sin sugerencias"), los hermanos nuevos heredan el `FieldState` y la `FieldOrigin` del campo que
+la IA sí decidió.
+
+No toca `FieldResolver.kt` ni `FieldKeys.real()` — el reparto vive fuera, igual que en Relleno.
+
+---
+
 ## [0.10.23-afines-relleno] — 2026-09-04
 
 Tanda 5·4i, mitad 2 (Compose, sin typecheck local — mismo motivo que la mitad 1: el `kotlinc`

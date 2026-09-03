@@ -744,13 +744,45 @@ class WizardViewModel @Inject constructor(
             )
             prefill.putAll(resolved.autoValues)
 
+            // Tanda 5·4i — un campo enganchado a MANO (en «Revisar mapeo») a la misma canónica
+            // que otro que la IA sí decidió rellenar se quedaba sin nada: `FieldResolver` indexa
+            // por `keys.real(canonKey)`, que sólo devuelve UN nombre real por canónica (ver
+            // `WizardViewModel.fieldKeys()`), así que el hermano nunca entraba en `candidates` ni
+            // en `resolved.autoValues`. Antes de esta tanda, ese hermano llegaba a Relleno sin
+            // valor y sin estado — al desplegable de «sin sugerencias», aunque el usuario ya
+            // hubiera dicho expresamente que era el mismo dato.
+            //
+            // `CanonicalSiblings.expand` reparte el valor con el mismo criterio que usa la
+            // escritura manual en Relleno (`pushUndo`): sólo a hermanos que sigan vacíos.
+            val schema = _state.value.activeSchema
+            val siblingAuto = com.mejoresiagratis.rellenador.data.model.CanonicalSiblings.expand(
+                schema, prefill, resolved.autoValues,
+            )
+            prefill.putAll(siblingAuto)
+
+            // El valor ya está (arriba); falta que no se quede en FieldState.EMPTY pese a
+            // tenerlo — heredan el estado y la procedencia del campo que la IA sí decidió,
+            // para que Relleno los pinte como autorrellenados y no como «sin sugerencias».
+            val canonicalOfName: Map<String, String> = schema?.allFields()
+                ?.mapNotNull { f -> f.canonical?.let { c -> f.name to c } }
+                ?.toMap().orEmpty()
+            val extraStates = LinkedHashMap<String, FieldState>()
+            val extraOrigins = LinkedHashMap<String, FieldOrigin>()
+            (siblingAuto.keys - resolved.autoValues.keys).forEach { siblingName ->
+                val canonical = canonicalOfName[siblingName] ?: return@forEach
+                val sourceName = resolved.autoValues.keys
+                    .firstOrNull { canonicalOfName[it] == canonical } ?: return@forEach
+                extraStates[siblingName] = resolved.states[sourceName] ?: FieldState.AI
+                resolved.origins[sourceName]?.let { extraOrigins[siblingName] = it }
+            }
+
             _state.value = _state.value.copy(
                 busy = false, step = Step.RELLENO,
                 proposals = result.proposals, packages = result.packages,
                 tipoIdentificacion = result.tipoIdentificacion, enginesOk = result.enginesOk,
                 fieldValues = prefill,
-                fieldStates = resolved.states,
-                fieldOrigins = resolved.origins,
+                fieldStates = resolved.states + extraStates,
+                fieldOrigins = resolved.origins + extraOrigins,
                 fieldCandidates = resolved.candidates,
                 undoStack = emptyList(),
                 // NO se rellena `error` aquí a propósito: los fallos por motor ya se
