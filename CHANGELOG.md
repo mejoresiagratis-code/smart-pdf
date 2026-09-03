@@ -8,6 +8,72 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.10.15-valores-por-tipo] — 2026-09-03
+
+Tanda 5·4d, primera mitad: **los valores del asistente se reparten por `FieldKind` antes de
+llegar al PDF**. Es la opción (a) de la bifurcación que quedó abierta al final de la 0.10.14:
+tocar `WizardViewModel` en vez de pintar casillas encima del camino equivocado.
+
+### El problema
+
+`AcroFormFiller.generate()` tiene dos mapas y no son intercambiables:
+
+- `values` se aplica con `field.setValue(String)`;
+- `checkboxes` se aplica con `applyButtonValue()`, que es el único que sabe de `check()` /
+  `unCheck()` y de los **estados de activación reales** del campo.
+
+Hasta aquí, todo lo que el usuario escribía en el paso de relleno se guardaba con
+`setFieldValue()` y viajaba por el mapa de texto. Mientras la pantalla sólo pintaba campos de
+texto eso era correcto. En cuanto pinte una casilla como casilla —que es la segunda mitad de
+esta tanda— deja de serlo, y con Aire no de forma visible: sus estados son `/Sí`, `/0`..`/5`,
+`/Opción1`, sin ninguna convención (ver v0.9.7). Un `setValue("On")` sobre un radio de Aire no
+lanza excepción: escribe un estado que no existe y **no se nota hasta abrir el PDF generado**.
+
+El único sitio que rellenaba botones era `WizardViewModel.altaCheckboxes()`, y va fijo (marca
+ALTA NUEVA y desmarca las otras dos). No había ninguna vía para que el usuario marcase una
+casilla desde la pantalla.
+
+### Qué se ha hecho
+
+Pieza nueva `data/model/ValueRouting.kt`, función pura sobre `FormSchema`:
+
+- `routeFieldValues(values, schema)` devuelve `RoutedValues(text, buttons, skippedSignatures)`.
+- Un `FieldKind.TEXT` sale por `text`; `CHECKBOX` y `RADIO` por `buttons`; `SIGNATURE` **no sale
+  por ninguno** y se registra como descartado — la app estampa una imagen de firma, así que
+  escribir texto dentro de un hueco de firma nunca es correcto.
+- Para un botón, el estado que se escribe es el `onState` que el esquema leyó del `/AP /N` del
+  propio PDF. Se resuelve primero por coincidencia con un `onState` real, luego por
+  `optionLabel` (que es lo que un selector tiene a mano), y sólo si el nombre tiene una única
+  entrada —casilla suelta— se interpreta «marcada» y se usa su estado.
+- Un grupo de radio son varias entradas con el **mismo `name`** (es un solo campo del AcroForm),
+  así que la unidad de decisión es el nombre y no el campo.
+- Apagado es cadena vacía o literalmente `Off`. `"0"` **no** es apagado: es un estado real de
+  Aire, y confundirlo era justo el fallo que este fichero existe para evitar.
+
+`WizardViewModel` llama a `routeValues()` en los dos puntos de generación (`generatePdf` y
+`rebuildPreviewNow`) y pasa `routed.text` como `values`. Los mapas fijos se aplican **después** y
+ganan: `checkboxStateFor()` y `altaCheckboxes()` son política de la app, no dato del usuario.
+
+### Por qué no rompe Orange
+
+Su esquema es `BUILTIN` y declara todos sus campos como `TEXT`, así que el reparto devuelve el
+mapa de texto intacto (mismo contenido y mismo orden) y el de botones vacío. Sin esquema activo,
+tampoco se clasifica nada. Hay comprobación explícita de las dos cosas.
+
+### Verificación
+
+`kotlinc 2.0.21` con `-Werror` sobre `FormSchema.kt` + `ValueRouting.kt` + `Extraction.kt`, en
+verde. **21 comprobaciones de comportamiento ejecutadas en local, todas en verde**, portadas a
+`app/src/test/.../ValueRoutingTest.kt` (12 casos JUnit) para que Actions las corra. No se compila
+Android en local: el juez sigue siendo el workflow.
+
+### Fuera del alcance
+
+El pintado de casillas, selectores y huecos de firma en `FillSections.kt` y `FillStep.kt` —hoy
+aplanan el esquema a nombres y pierden el `FieldKind`— es la segunda mitad de la 5·4d y va en la
+versión siguiente. Este commit deja el camino del valor correcto para que aquélla sea sólo
+interfaz.
+
 ## [0.10.14-secciones-correctas] — 2026-09-03
 
 **Corrección de la 0.10.13**, salida de simular su propio algoritmo sobre `Contrato_empresas.pdf`

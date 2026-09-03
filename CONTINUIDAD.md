@@ -4,9 +4,11 @@
 > o su contenido; con eso y el repo tiene el contexto completo. **No hace falta reenviar los
 > PDFs de Aire**: su análisis está en `docs/ANALISIS_FORMULARIOS_AIRE.md`.
 >
-> **Actualizado**: 2026-09-03. La **0.10.12 salió verde**; es el último commit de código.
-> Por encima hay commits sólo de documentación, que no suben versión. Este documento **caduca**: la primera regla de abajo
-> existe precisamente porque lo que aquí se afirma puede estar viejo.
+> **Actualizado**: 2026-09-03. Último commit de código: **0.10.15-valores-por-tipo**
+> (versionCode 85). La **0.10.13 salió verde** confirmada por Pablo; la **0.10.14** se empujó
+> después y su resultado en Actions **no está confirmado en este documento**; la **0.10.15** es
+> esta tanda. Este documento **caduca**: la primera regla de abajo existe precisamente porque lo
+> que aquí se afirma puede estar viejo.
 
 Habla en **español de España**.
 
@@ -22,17 +24,21 @@ git clone https://github.com/mejoresiagratis-code/smart-pdf
 cd smart-pdf && git log --oneline -8
 ```
 
-El último commit **de código** debería ser `0.10.12-revision-en-el-paso-1` · versionCode 82.
+El último commit **de código** debería ser `0.10.15-valores-por-tipo` · versionCode 85.
 Por encima puede haber commits solo de documentación, que no suben versión. Si el último código
 no es ése, este documento está desfasado: manda `git log` y la cabecera del `CHANGELOG.md`.
 
 ### Estado del build
 
-De la 0.10.6 a la **0.10.12, todas verdes**. No hay nada pendiente en Actions.
+De la 0.10.6 a la **0.10.13, todas verdes**. La **0.10.14 y la 0.10.15 están pendientes de
+confirmar**: pregunta a Pablo el resultado antes de abrir tanda nueva, porque la regla es una
+tanda, una versión, un build verde antes de la siguiente.
 
 La 0.10.12 se subió **sin typecheckear en local** (es todo Compose, y aquí no hay SDK ni Maven) y
 salió verde igual. No lo tomes como precedente: para Kotlin puro el `kotlinc` de las releases de
-JetBrains sí sirve y ha evitado dos builds rojos — ver §6.
+JetBrains sí sirve y ha evitado dos builds rojos — ver §6. La 0.10.13 y la 0.10.15 sí se
+typecheckearon y llevan comprobaciones ejecutables (27 y 21 respectivamente, más las portadas a
+`app/src/test`).
 
 Lo siguiente **no es código**: es probar en el móvil lo que ya está subido. Ver sección 5.
 
@@ -46,14 +52,14 @@ Lo siguiente **no es código**: es probar en el móvil lo que ya está subido. V
 3. `docs/PLAN_FASE_5.md` — plan de la fase 5 partido en tandas, escrito leyendo el código.
    **De lectura obligada antes de tocar el asistente.** Su §6 tiene los requisitos acordados para
    la 5·4 (secciones en el orden del PDF, alcance del alta, casilla de ALTA), ya ejecutados.
-4. `docs/PLAN_ETIQUETADO_ORGANICO.md` — **plan de la 5·4b, que es la siguiente tanda**: que las
-   secciones y los campos se llamen como en el papel. Escrito midiendo sobre el contrato con
+4. `docs/PLAN_ETIQUETADO_ORGANICO.md` — plan de la 5·4b, **ya ejecutada** (0.10.13 y 0.10.14):
+   que las secciones y los campos se llamen como en el papel. Escrito midiendo sobre el contrato con
    `pypdf`/`pdfplumber`, con los números reproducibles; incluye el fallo de orden que dejó la 5·4
    y las reglas de higiene (pulsadores y `/Sig` fuera del esquema, valor troceado en N casillas).
    **Si vas a tocar el esquema o el mapeo, éste es el documento.**
 5. `docs/roadmap-multiformulario.html` — el roadmap de las 7 fases con el **estado real** de cada
    una, qué falta y por qué. Ábrelo en el navegador; la primera pestaña es el resumen.
-6. `CHANGELOG.md`, entradas **0.9.4 a 0.10.12**.
+6. `CHANGELOG.md`, entradas **0.9.4 a 0.10.15**.
 7. `docs/ESTADO_Y_GUIA_DE_CONTINUIDAD.md` — arquitectura e historia. **Ojo**: su bloque
    «ESTADO ACTUAL» se quedó en `v0.7.10` / versionCode 48 (agosto de 2026), 26 versiones por
    detrás. La parte de arquitectura y la de «archivo histórico» siguen siendo útiles; el estado
@@ -91,6 +97,9 @@ con cuatro formularios rellenables propios: contrato de empresas (481 campos), p
 | 0.10.10 | Fase 5, tanda **5·4**: `FillStep` y `MappingEditor` se dibujan desde el `FormSchema` del PDF; `BuiltinSchemas.recognize()`; casillas de cabecera de Aire · verde ✅ |
 | 0.10.11 | Procedencia y nombre: inversión «Apellidos, Nombre» por la última coma; el domicilio de un documento de identidad deja de autorrellenarse · verde ✅ |
 | 0.10.12 | Paso 1: nombre del fichero en la tarjeta, «Revisar mapeo» abre el panel del editor de etiquetas, y se puede revisar siempre · verde ✅ |
+| 0.10.13 | Fase 5, tanda **5·4b**: etiquetado orgánico — `LayoutTextExtractor`, títulos de sección del texto del PDF, secciones por intervalo entre anclas, `enablerField`, etiqueta geométrica, cabecera de columna heredada, pulsadores fuera y `/Sig` con `FieldKind.SIGNATURE` · verde ✅ |
+| 0.10.14 | Corrección de la 5·4b: el ancla ya no exige mayúsculas y se acota a 50 caracteres, no se emiten secciones vacías y se fusionan títulos repetidos seguidos. `CAMBIO TITULAR` baja de 20 campos a 7 y las 19 secciones quedan en 16 ⚠️ sin confirmar |
+| 0.10.15 | Fase 5, tanda **5·4d** (1ª mitad): `ValueRouting.kt` — los valores se reparten entre el mapa de texto y el de botones según `FieldKind`, con el `onState` real del PDF ⚠️ sin confirmar |
 
 ### Qué está enganchado y qué no
 
@@ -124,9 +133,22 @@ Con eso, **`MappingEditor` ya no es alcanzable desde el asistente**. No está bo
 (regla de abajo): sigue sirviendo para enlazar canónicas cuando el PDF es un contrato conocido, y
 `TemplateMapper.suggest()` sigue alimentando `fieldMapping` al elegir contrato.
 
-**NO enganchado**: la fase 6 (`/Sig`) y las tablas del Relleno (5·5). Y las secciones que sí se
-dibujan **se siguen llamando «Página 1» y «Tabla 3»** — eso es lo que arregla la 5·4b, ver
-`docs/PLAN_ETIQUETADO_ORGANICO.md`.
+**Enganchado desde la 0.10.13/0.10.14 (5·4b)**: las secciones se llaman como en el papel
+(`DATOS DEL CLIENTE`, `AIRE CONNECT`…) porque salen del texto del PDF vía `LayoutTextExtractor`,
+y se delimitan **por intervalo entre anclas**, lo que además hizo desaparecer el fallo de orden
+de la 5·4. Las casillas de banda son `FormSection.enablerField`. Los 3 pulsadores quedan fuera
+del esquema y los 4 `/Sig` entran con `FieldKind.SIGNATURE`.
+
+**Enganchado desde la 0.10.15 (5·4d, 1ª mitad)**: `WizardViewModel` reparte los valores por
+`FieldKind` antes de generar (`routeFieldValues`), así que un botón se escribe con
+`applyButtonValue()` y con su estado real (`/Sí`, `/0`..`/5`, `/Opción1`) y no con
+`setValue("On")`. Los `/Sig` no se escriben por ninguna vía.
+
+**NO enganchado**: el **pintado** por tipo en la pantalla de relleno (5·4d, 2ª mitad: casilla como
+casilla, grupo de radio como **un solo selector** —hoy `RED INTELIGENTE` enseña seis campos
+llamados igual, `Botón de opción 10`—, y `/Sig` como marcador no rellenable fuera del recuento de
+«faltan N campos»). `FillSections.kt` y `FillStep.kt` aplanan el esquema a nombres y pierden el
+`FieldKind`. Tampoco están la fase 6 (`/Sig`) ni las tablas del Relleno (5·5).
 
 ---
 
@@ -155,22 +177,25 @@ Por orden. La primera no es código.
   `docs/PLAN_FASE_5.md`.** Hechas: 5·0 y 5·1 (0.10.6), 5·2 (0.10.7), 5·2b (0.10.8), **5·3
   (0.10.9), la de riesgo alto**, y **5·4 (0.10.10)**.
 
-  **La siguiente es la 5·4b — etiquetado orgánico**, plan completo en
-  `docs/PLAN_ETIQUETADO_ORGANICO.md`. La 5·4 consiguió que las secciones salgan del `FormSchema`;
-  la 5·4b consigue que **se llamen como en el papel**, que es lo que hace usable el mapeo con 481
-  campos delante. En corto:
-    · los títulos de sección salen del texto del PDF (`DATOS DEL CLIENTE`, `AIRE CONNECT`,
-      `PORTABILIDAD TELEFONÍA FIJA`…) en vez de «Página 1» y «Tabla 3»;
-    · las 12 casillas que la 5·4 promocionó de radio no son un flag mal puesto: son **el
-      interruptor de cada banda**, y pasan a ser `FormSection.enablerField`. Con el activador
-      apagado, la sección se pliega — y **un alta usa 37 de los 488 widgets**, así que sin eso la
-      pantalla es una lista de 481 campos;
-    · etiqueta geométrica (texto a la izquierda, acotado por el widget anterior de la fila) antes
-      que la IA: **74% de los campos sueltos** resueltos con cero llamadas, medido;
-    · las celdas de tabla no se etiquetan una a una, heredan la cabecera de su columna;
-    · arregla de camino un **fallo de orden que dejó la 5·4**: `flushLooseBefore` sólo vuelca los
-      sueltos de páginas anteriores, así que los de la página en curso salen siempre detrás de sus
-      tablas — DATOS DEL CLIENTE, que está arriba del todo, aparece en tercera posición.
+  **La 5·4b está hecha** (0.10.13 y 0.10.14): títulos de sección del texto del PDF, secciones
+  por intervalo entre anclas —lo que además hizo desaparecer el fallo de orden que dejó la 5·4—,
+  `enablerField` por banda, etiqueta geométrica antes que la IA (74% de los sueltos con cero
+  llamadas, medido), cabecera de columna heredada por las celdas, pulsadores fuera del esquema y
+  `/Sig` con tipo propio. Plan en `docs/PLAN_ETIQUETADO_ORGANICO.md`.
+
+  **La 5·4c** (agrupar por sección en el orden del papel) salió gratis con el seccionado por
+  intervalo: verificado simulando el algoritmo sobre el contrato real.
+
+  **La siguiente es la 2ª mitad de la 5·4d**, y es sólo interfaz. La 1ª mitad (0.10.15) ya dejó
+  el camino del valor correcto. Lo que queda:
+    · pintar una casilla como casilla y un grupo de radio como **un solo selector** — hoy
+      `RED INTELIGENTE` enseña seis campos llamados igual (`Botón de opción 10`), que son las
+      seis opciones del mismo campo del AcroForm;
+    · pintar los `/Sig` como **hueco de firma no rellenable**, fuera del recuento de «faltan N
+      campos»;
+    · toca `FillSections.kt` y `FillStep.kt`, que hoy aplanan el esquema a nombres y pierden el
+      `FieldKind`. Es todo Compose, así que **no se puede typecheckear en local**: extrema el
+      cuidado con la API y no inventes firmas.
 
   **El mapeo se conserva**: `MappingEditor` y `TemplateMapper.suggest()` no se retiran.
 
@@ -185,14 +210,25 @@ Por orden. La primera no es código.
   estampar, así que **un alta de Aire hoy no se puede firmar en la app**. Es lo que hay que decidir
   si adelanta a la 5·5.
 
-- **Deuda menor, para cuando toque**: los siete campos fantasma del esquema (3 pulsadores con
-  `Ff = 65536` y los 4 `/Sig`, que `FormSchemaBuilder` mete como `FieldKind.TEXT`). Van dentro de
-  la 5·4b, §5 de su plan.
+- ~~**Deuda menor**: los siete campos fantasma del esquema~~ ✅ *hecha en la 0.10.13*: los 3
+  pulsadores (`Ff = 65536`) quedan fuera del esquema y los 4 `/Sig` entran con
+  `FieldKind.SIGNATURE`. **Decisión tomada y razonada**: no se sacan del esquema, porque hoy es
+  el único sitio donde esos cuatro campos existen —`SignaturePageDetector` no mira el AcroForm—
+  y sacarlos le quitaría a la fase 6 exactamente lo que necesita. Con tipo propio se resuelven
+  las dos cosas: la fase 6 los encuentra y el usuario no puede escribir dentro.
 
 ---
 
 ## 5. Pendiente de verificar (no lo des por bueno)
 
+- **La 0.10.14 y la 0.10.15 están sin confirmar en Actions.** Pregunta el resultado antes de
+  abrir tanda nueva.
+- **De la 0.10.14, en el móvil hay que mirar**: que `CAMBIO TITULAR` tenga **7 campos y no 20**,
+  que aparezca una sección aparte con la fecha y las dos firmas (los 9 campos del alta de la
+  página 3), y que no salga **ninguna cabecera vacía** ni `AIRE CONNECT` **dos veces seguidas**.
+- **De la 0.10.15 no se ve nada en pantalla todavía** —el reparto por tipo sólo se nota al
+  generar—, y no se notará hasta la 2ª mitad, que es la que pinta casillas. Lo que sí se puede
+  comprobar ya: que **el contrato de Orange genera exactamente el mismo PDF** que antes.
 - **La 0.10.12 está verde pero no se pudo typecheckear**, por ser Compose. Hay dos cosas suyas que
   sólo se ven en el móvil: que el panel de revisión del paso 1 sale con las secciones del PDF (y no con las
   21 canónicas de Orange), y que «Etiquetar con IA» funciona ahí igual que en Ajustes.
@@ -361,6 +397,15 @@ personales); lo que sigue son los patrones, que sí conviene tener escritos.
   título del run, zip del artefacto y APK. Cuerpo corto (qué y por qué), sin acentos; el
   razonamiento largo va al `CHANGELOG.md`.
 - **Nunca asumir el estado del repo.** Clonar y mirar `git log`.
+- **`AcroFormFiller.generate()` tiene dos mapas y no son intercambiables.** `values` se aplica
+  con `field.setValue(String)`; `checkboxes` con `applyButtonValue()`, que es el único que sabe de
+  `check()`/`unCheck()` y de los estados de activación reales. Cualquier casilla o radio va por el
+  segundo, y con el `onState` que el esquema leyó del `/AP /N` — nunca con `"On"`. Aire usa `/Sí`,
+  `/0`..`/5` y `/Opción1`, sin convención: escribir el estado equivocado **no lanza excepción**, se
+  ve al abrir el PDF generado. El reparto está centralizado en `data/model/ValueRouting.kt`
+  (0.10.15); si añades un `FieldKind`, ése es el sitio.
+- **`"0"` no es «apagado».** Es un estado real de una banda del contrato de Aire. Apagado es
+  cadena vacía o literalmente `Off`.
 - Los nombres de campo del AcroForm son **exactos**: dobles espacios (`Nombre  Razón Social`),
   sufijos `_2`, y una casilla llamada literalmente `undefined`. No se normalizan nunca.
 - **No borrar el camino del contrato de Orange.** Oculto en la interfaz

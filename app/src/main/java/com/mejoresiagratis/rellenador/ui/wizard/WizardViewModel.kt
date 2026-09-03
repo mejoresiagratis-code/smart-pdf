@@ -409,6 +409,18 @@ class WizardViewModel @Inject constructor(
     }
 
     /**
+     * Tanda 5·4d — reparte `fieldValues` entre el mapa de texto y el de botones según el
+     * `FieldKind` del esquema activo (ver `ValueRouting.kt`).
+     *
+     * Los mapas fijos se aplican DESPUÉS y ganan: `checkboxStateFor()` (tipo de identificación)
+     * y `altaCheckboxes()` (cabecera ALTA NUEVA) son política de la app, no dato del usuario.
+     * Sin esquema activo o con un esquema `BUILTIN` todo `TEXT` (Orange), el resultado es
+     * idéntico al de la 5·4c.
+     */
+    private fun routeValues(s: WizardUiState) =
+        com.mejoresiagratis.rellenador.data.model.routeFieldValues(s.fieldValues, s.activeSchema)
+
+    /**
      * Traductor `clave de CANON -> nombre real` del PDF que se está rellenando.
      *
      * Tanda 5·4 — la fuente es ahora el `FormSchema` activo cuando existe: cada
@@ -1178,13 +1190,18 @@ class WizardViewModel @Inject constructor(
     /** Genera el PDF final (relleno + firmado) a fichero interno. */
     fun generatePdf(onReady: (java.io.File) -> Unit = {}) {
         val s = _state.value
+        val routed = routeValues(s)
         viewModelScope.launch {
             _state.value = s.copy(busy = true, busyMsg = "Generando PDF final…", error = null)
             val file = runCatching {
                 withContext(Dispatchers.IO) {
                     exporter.generateToFile(
                         userContractUri = s.userContractUri,
-                        values = s.fieldValues,
+                        // Tanda 5·4d — el reparto entre el mapa de texto y el de botones lo
+                        // decide el `FieldKind` del esquema, no la pantalla. Ver
+                        // `ValueRouting.kt`: un radio de Aire con `setValue("On")` escribe un
+                        // estado que no existe y no se ve hasta abrir el PDF generado.
+                        values = routed.text,
                         signature = s.signature,
                         stamps = s.stamps,
                         // Tanda 5·3 — las casillas también van por nombre real, y `fieldMapping`
@@ -1194,7 +1211,7 @@ class WizardViewModel @Inject constructor(
                         // Tanda 5·4 §6.3 — a las casillas de tipo de identificación se suman las
                         // de cabecera del contrato reconocido (ALTA NUEVA en el contrato de Aire,
                         // con MODIFICACIÓN y PORTABILIDAD desmarcadas de propina).
-                        checkboxes = fieldKeys().reindex(
+                        checkboxes = routed.buttons + fieldKeys().reindex(
                             com.mejoresiagratis.rellenador.data.model.ContractFields
                                 .checkboxStateFor(s.tipoIdentificacion)
                         ) + altaCheckboxes()
@@ -1228,18 +1245,20 @@ class WizardViewModel @Inject constructor(
      */
     suspend fun rebuildPreviewNow() {
         val s = _state.value
+        val routed = routeValues(s)
         _state.value = s.copy(busy = true, busyMsg = "Preparando previsualización…", error = null)
         val result = runCatching {
             withContext(Dispatchers.IO) {
                 val file = exporter.generatePreview(
                     userContractUri = s.userContractUri,
-                    values = s.fieldValues,
+                    // Tanda 5·4d — ver la nota de `generatePdf`.
+                    values = routed.text,
                     signature = s.signature,
                     stamps = s.stamps,
                     // Tanda 5·3 — ver la nota de `generatePdf`.
                     // Tanda 5·4 §6.3 — igual que en `generatePdf`, con las casillas de cabecera
                     // del contrato reconocido (ALTA NUEVA en el contrato de Aire).
-                    checkboxes = fieldKeys().reindex(
+                    checkboxes = routed.buttons + fieldKeys().reindex(
                         com.mejoresiagratis.rellenador.data.model.ContractFields
                             .checkboxStateFor(s.tipoIdentificacion)
                     ) + altaCheckboxes()
