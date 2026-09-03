@@ -4,7 +4,7 @@
 > o su contenido; con eso y el repo tiene el contexto completo. **No hace falta reenviar los
 > PDFs de Aire**: su análisis está en `docs/ANALISIS_FORMULARIOS_AIRE.md`.
 >
-> **Actualizado**: 2026-09-03. La **0.10.11** es el último commit de código (⚠️ pendiente de verde).
+> **Actualizado**: 2026-09-03. La **0.10.12** es el último commit de código (⚠️ pendiente de verde).
 > Por encima hay commits sólo de documentación, que no suben versión. Este documento **caduca**: la primera regla de abajo
 > existe precisamente porque lo que aquí se afirma puede estar viejo.
 
@@ -22,14 +22,15 @@ git clone https://github.com/mejoresiagratis-code/smart-pdf
 cd smart-pdf && git log --oneline -8
 ```
 
-El último commit **de código** debería ser `0.10.11-procedencia-y-nombre` · versionCode 81.
+El último commit **de código** debería ser `0.10.12-revision-en-el-paso-1` · versionCode 82.
 Por encima puede haber commits solo de documentación, que no suben versión. Si el último código
 no es ése, este documento está desfasado: manda `git log` y la cabecera del `CHANGELOG.md`.
 
 ### Estado del build
 
-De la 0.10.6 a la **0.10.10, todas verdes**. La **0.10.11 está pendiente de verde**: se subió
-verificada con `kotlinc -Werror` y 31 comprobaciones de comportamiento, pero el juez es Actions.
+De la 0.10.6 a la **0.10.11, todas verdes**. La **0.10.12 está pendiente de verde y es la que más
+lo necesita**: es todo Compose, y eso aquí **no se puede typecheckear** (no hay SDK ni Maven), así
+que sólo se ha comprobado el balance sintáctico y los imports. El juez es Actions.
 
 Lo siguiente **no es código**: es probar en el móvil lo que ya está subido. Ver sección 5.
 
@@ -84,7 +85,8 @@ con cuatro formularios rellenables propios: contrato de empresas (481 campos), p
 | 0.10.8 | Fase 5, tanda **5·2b**: `normVal`, `DateAutofill`, copia fiscal, teclado y cobertura, por canónica · verde ✅ |
 | 0.10.9 | Fase 5, tanda **5·3**: la clave pasa a ser el nombre real del campo; `FieldKeys`; migración v1→v2 · verde ✅ |
 | 0.10.10 | Fase 5, tanda **5·4**: `FillStep` y `MappingEditor` se dibujan desde el `FormSchema` del PDF; `BuiltinSchemas.recognize()`; casillas de cabecera de Aire · verde ✅ |
-| 0.10.11 | Procedencia y nombre: inversión «Apellidos, Nombre» por la última coma; el domicilio de un documento de identidad deja de autorrellenarse ⚠️ sin verde |
+| 0.10.11 | Procedencia y nombre: inversión «Apellidos, Nombre» por la última coma; el domicilio de un documento de identidad deja de autorrellenarse · verde ✅ |
+| 0.10.12 | Paso 1: nombre del fichero en la tarjeta, «Revisar mapeo» abre el panel del editor de etiquetas, y se puede revisar siempre ⚠️ sin verde |
 
 ### Qué está enganchado y qué no
 
@@ -162,6 +164,12 @@ Por orden. La primera no es código.
 
 ## 5. Pendiente de verificar (no lo des por bueno)
 
+- **La 0.10.12 no se ha podido typecheckear**, por ser Compose. Y hay dos cosas suyas que sólo se
+  ven en el móvil: que el panel de revisión del paso 1 sale con las secciones del PDF (y no con las
+  21 canónicas de Orange), y que «Etiquetar con IA» funciona ahí igual que en Ajustes.
+- **«0 huecos de firma» con el contrato de Aire**, visto en una captura de la 0.10.11.
+  `SignaturePageDetector` busca huecos por geometría y no mira los campos `/Sig` del AcroForm, que
+  en ese contrato son cuatro. Es la fase 6; queda anotado para que no se diagnostique dos veces.
 - **La 0.10.10 (tanda 5·4) está verde pero sin probar en dispositivo.** Tres cosas: que con el
   contrato de Orange salga **exactamente lo mismo** que antes (regla del roadmap HTML); que el
   contrato de Aire abra desde el paso 1 sin haber pasado antes por Ajustes › «Analizar y

@@ -8,6 +8,69 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.10.12-revision-en-el-paso-1] — 2026-09-03
+
+**Tres cosas del paso 1 que se ven en cuanto se sube un contrato de Aire**, pedidas con la
+pantalla delante. Ninguna toca el relleno ni el esquema: son la tarjeta del contrato, qué se
+muestra al pulsar «Revisar mapeo» y cuándo se ofrece ese botón.
+
+### Cambiado — la tarjeta enseña el nombre del fichero, no el id del URI
+
+Decía `document:27726`. Con SAF, el `lastPathSegment` de un URI es un id opaco del proveedor: no
+identifica nada y encima cambia entre aperturas del mismo fichero. El nombre visible sale de
+`OpenableColumns.DISPLAY_NAME`, que es lo que ya hacían `DocumentStore`, `WizardViewModel` (para
+los documentos del paso 2) y `LabelEditorViewModel` — el paso 1 era el único sitio que no lo
+usaba. `WizardUiState` gana `userContractName`, y `PersistedWizardState` también, con valor por
+defecto: una sesión guardada por una versión anterior se restaura sin tocar `SCHEMA_VERSION`.
+
+De propina, ese nombre pasa a ser el **título del `FormSchema`** que construye el asistente, que
+hasta ahora nacía como `"Formulario"` mientras el editor de Ajustes ya usaba el del fichero para
+lo mismo.
+
+### Cambiado — «Revisar mapeo» abre el panel del editor de etiquetas
+
+Abría `MappingEditor`, que recorre `ContractFields.CANON`: las **21 canónicas de Orange**
+(«Razón social», «Nombre comercial», «CIF/NIF/NIE de la empresa»…) sea cual sea el PDF cargado.
+Con el contrato de Aire eso es una lista plana de 21 destinos ajenos delante de 481 campos
+propios. La 5·4 cambió `FillStep` para que se dibujara desde el `FormSchema`, pero esta pantalla
+se quedó atrás.
+
+Ahora muestra **el mismo panel que Ajustes › Herramientas › «Analizar y etiquetar un PDF»**: las
+secciones y los campos del PDF subido, el botón «Etiquetar con IA» y la corrección a mano. Va
+sembrado con el contrato ya elegido, así que no vuelve a pedir el fichero.
+
+Implementación: el contenido de esa pantalla se extrae a `SchemaReviewPanel`, que usan los dos
+sitios — duplicarlo sería garantizar que se separan. El paso 1 monta el propio
+`LabelEditorViewModel` (que es quien sabe inspeccionar, calcular la huella, reencontrar el esquema
+guardado, llamar a visión y persistir) en vez de copiar esa lógica a `WizardViewModel`, que sólo
+gana un `adoptSchema()` para quedarse con el resultado. `LabelEditorViewModel.ensureLoaded(uri)`
+evita releer el PDF y perder las correcciones a medias si el panel se abre y se cierra.
+
+`MappingEditor` **no se retira**: sigue en el repo y sigue sirviendo para enlazar canónicas cuando
+el PDF es un contrato conocido, como fija `CONTINUIDAD.md` §4. Lo que se quita es que sea la única
+puerta del paso 1.
+
+### Corregido — se puede revisar siempre, también al recargar el mismo PDF
+
+El botón dependía de `needsMapping`, que se apaga en cuanto hay una plantilla guardada para esa
+huella (`saved == null` en `chooseUserContract`). Efecto: la segunda vez que subías un PDF ya
+conocido —incluido el mismo de antes— el botón pasaba a «Continuar» y **no había forma de llegar a
+la revisión**, ni para corregir una etiqueta ni para comprobar que se había reutilizado lo
+correcto. Ahora se ofrece siempre que haya un PDF propio con campos.
+
+### Verificación
+
+⚠️ **Sin verificar en local**: es todo Compose y aquí no hay SDK de Android ni acceso a Maven, así
+que el `kotlinc` suelto no sirve para esto (sí sirvió para la 0.10.11, que era Kotlin puro). Lo
+único que se ha comprobado sin CI es el balance sintáctico de los ficheros tocados y que cada
+símbolo nuevo está importado o cualificado. **El juez es Actions.**
+
+Y una cosa que se ve en la captura y NO arregla esta versión: «0 huecos de firma» con el contrato
+de Aire, que tiene cuatro campos `/Sig`. `SignaturePageDetector` busca huecos por geometría y no
+mira los campos de firma del AcroForm; es la fase 6.
+
+---
+
 ## [0.10.11-procedencia-y-nombre] — 2026-09-03
 
 **Dos arreglos pequeños de los que meten un dato equivocado en el PDF final, destapados probando

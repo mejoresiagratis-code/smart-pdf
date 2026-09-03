@@ -82,6 +82,12 @@ data class WizardUiState(
     val step: Step = Step.CONTRATO,
     val contractSource: ContractSource? = null,
     val userContractUri: Uri? = null,
+    /**
+     * Nombre visible del PDF aportado (0.10.12). Con SAF el `lastPathSegment` del URI es un id
+     * opaco (`document:27726`), que es lo que se estaba enseñando en la tarjeta del paso 1: no
+     * dice nada y encima cambia entre aperturas del mismo fichero.
+     */
+    val userContractName: String? = null,
     // Mapeo de plantilla (cuando el PDF es del usuario)
     val userFieldNames: List<String> = emptyList(),      // nombres reales del PDF del usuario
     val fieldMapping: Map<String, String> = emptyMap(),  // canónica -> real

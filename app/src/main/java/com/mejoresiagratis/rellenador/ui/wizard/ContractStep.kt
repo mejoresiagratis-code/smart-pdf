@@ -42,9 +42,16 @@ private const val SHOW_LEGACY_DEFAULT_CONTRACT = false
 @Composable
 fun ContractStep(state: WizardUiState, vm: WizardViewModel) {
     var showMapping by remember { mutableStateOf(false) }
-    
-    // Evaluamos el estado de forma limpia
-    val isMappingState = showMapping && state.needsMapping && state.userFieldNames.isNotEmpty()
+
+    // 0.10.12 — la revisión ya NO depende de `needsMapping`. Ese flag se apaga en cuanto hay una
+    // plantilla guardada para la huella, así que al volver a subir el mismo PDF (o uno ya
+    // conocido) el botón decía «Continuar» y no había forma de llegar a la revisión. Ahora se
+    // ofrece siempre que haya un PDF propio con campos: revisar es barato y el usuario puede
+    // querer corregir una etiqueta, o comprobar que se reutilizó lo correcto.
+    val canReview = state.contractSource == ContractSource.USER &&
+        state.userContractUri != null &&
+        state.userFieldNames.isNotEmpty()
+    val isMappingState = showMapping && canReview
 
     // 1. Transición Fluida: Evitamos el "return" abrupto que rompe el ciclo de vida de Compose
     AnimatedContent(
@@ -52,20 +59,35 @@ fun ContractStep(state: WizardUiState, vm: WizardViewModel) {
         transitionSpec = { fadeIn() togetherWith fadeOut() },
         label = "ContractStepTransition"
     ) { isMapping ->
-        if (isMapping) {
-            MappingEditor(
-                state = state,
-                vm = vm,
-                onDone = {
+        // El URI se lee dentro del contenido y no se fuerza con `!!`: durante la animación, el
+        // fotograma saliente sigue componiéndose con el `isMapping` viejo pero con el `state`
+        // nuevo, así que si el usuario cambia de contrato justo ahí, `userContractUri` puede ser
+        // nulo aunque `isMappingState` fuera cierto al arrancar la transición.
+        val reviewUri = state.userContractUri
+        if (isMapping && reviewUri != null) {
+            // 0.10.12 — aquí se mostraba `MappingEditor`, que preguntaba por las 21 canónicas de
+            // Orange («Razón social», «Nombre comercial»…) sea cual sea el PDF: con el contrato de
+            // Aire cargado, una lista plana de 21 destinos ajenos delante de 481 campos propios.
+            // Ahora se muestra el MISMO panel que Ajustes › «Analizar y etiquetar un PDF»: las
+            // secciones y los campos del PDF subido, con su etiquetado por IA y la corrección a
+            // mano. `MappingEditor` NO se retira — sigue en el repo y sigue sirviendo para enlazar
+            // canónicas cuando el PDF es un contrato conocido; lo que se quita es que sea la única
+            // puerta del paso 1.
+            ContractSchemaReview(
+                uri = reviewUri,
+                onDone = { schema ->
+                    vm.adoptSchema(schema)
                     vm.rememberTemplateMapping()
                     showMapping = false
                     vm.next()
-                }
+                },
+                onCancel = { showMapping = false },
             )
         } else {
             ContractSelectionContent(
                 state = state,
                 vm = vm,
+                canReview = canReview,
                 onReviewMapping = { showMapping = true }
             )
         }
@@ -77,6 +99,7 @@ fun ContractStep(state: WizardUiState, vm: WizardViewModel) {
 private fun ContractSelectionContent(
     state: WizardUiState,
     vm: WizardViewModel,
+    canReview: Boolean,
     onReviewMapping: () -> Unit
 ) {
     val picker = rememberLauncherForActivityResult(
@@ -95,7 +118,11 @@ private fun ContractSelectionContent(
         // "Unresolved reference 'isDefault'/'isUser'" que rompió el build de v0.7.7.
         val isDefault = state.contractSource == ContractSource.DEFAULT
         val isUser = state.contractSource == ContractSource.USER
-        val fileName = state.userContractUri?.lastPathSegment?.substringAfterLast('/')
+        // 0.10.12 — el nombre real del fichero. El `lastPathSegment` de un URI de SAF es un id
+        // opaco (`document:27726`) que no dice nada y cambia entre aperturas; el nombre visible
+        // sale de `OpenableColumns.DISPLAY_NAME` y lo resuelve el ViewModel al elegir el PDF.
+        val fileName = state.userContractName
+            ?: state.userContractUri?.lastPathSegment?.substringAfterLast('/')
             ?: "Seleccionar un PDF del dispositivo"
 
         Column(
@@ -194,15 +221,9 @@ private fun ContractSelectionContent(
             Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp)) {
                 // Usamos nuestro botón global estandarizado
                 ExpressiveButton(
-                    onClick = {
-                        if (state.contractSource == ContractSource.USER && state.needsMapping) {
-                            onReviewMapping()
-                        } else {
-                            vm.next()
-                        }
-                    },
+                    onClick = { if (canReview) onReviewMapping() else vm.next() },
                     enabled = state.canAdvanceFromContrato,
-                    text = if (state.contractSource == ContractSource.USER && state.needsMapping) "Revisar mapeo" else "Continuar",
+                    text = if (canReview) "Revisar mapeo" else "Continuar",
                     trailingIcon = Icons.AutoMirrored.Filled.ArrowForward
                 )
             }
@@ -274,5 +295,66 @@ private fun ContractOptionCard(
                 )
             }
         }
+    }
+}
+
+/**
+ * La revisión del paso 1: exactamente el mismo panel que Ajustes › Herramientas › «Analizar y
+ * etiquetar un PDF», pero sembrado con el contrato que el usuario ya ha elegido, sin volver a
+ * pedirle el fichero (0.10.12).
+ *
+ * Usa [LabelEditorViewModel] a propósito en vez de duplicar su lógica en `WizardViewModel`: es
+ * quien sabe inspeccionar, calcular la huella, reencontrar el esquema guardado, llamar al
+ * etiquetado por visión y persistir. Al confirmar guarda y devuelve el esquema hacia arriba para
+ * que el asistente lo adopte.
+ */
+@Composable
+private fun ContractSchemaReview(
+    uri: android.net.Uri,
+    onDone: (com.mejoresiagratis.rellenador.data.model.FormSchema) -> Unit,
+    onCancel: () -> Unit,
+) {
+    val vm: LabelEditorViewModel = androidx.hilt.navigation.compose.hiltViewModel()
+    val state by vm.state.collectAsState()
+
+    // Sembrar una sola vez por URI: `ensureLoaded` no hace nada si ya está cargado ese mismo PDF,
+    // así que abrir y cerrar el panel no vuelve a leer el documento ni pierde las correcciones a
+    // medias.
+    LaunchedEffect(uri) { vm.ensureLoaded(uri) }
+
+    when {
+        state.loading || state.schema == null -> Box(
+            Modifier.fillMaxSize(), contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                if (state.error == null) {
+                    CircularProgressIndicator()
+                    Text("Leyendo los campos del PDF…", style = MaterialTheme.typography.bodySmall)
+                } else {
+                    Text(
+                        state.error!!,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(horizontal = 24.dp),
+                    )
+                    OutlinedButton(onClick = onCancel) { Text("Volver") }
+                }
+            }
+        }
+
+        else -> SchemaReviewPanel(
+            vm = vm,
+            state = state,
+            onDone = {
+                vm.save()
+                state.schema?.let(onDone)
+            },
+            doneLabel = "Confirmar y continuar",
+            onSecondary = onCancel,
+            secondaryLabel = "Volver",
+        )
     }
 }

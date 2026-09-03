@@ -278,7 +278,14 @@ class WizardViewModel @Inject constructor(
         detectSignaturePages()
     }
     fun chooseUserContract(uri: Uri) {
-        _state.value = _state.value.copy(contractSource = ContractSource.USER, userContractUri = uri)
+        _state.value = _state.value.copy(
+            contractSource = ContractSource.USER,
+            userContractUri = uri,
+            // El nombre del fichero, no el id opaco del URI. Se resuelve aquí y no en la UI
+            // porque hace falta el `ContentResolver` y porque el mismo nombre sirve de título
+            // del `FormSchema` que se construye abajo.
+            userContractName = runCatching { resolveDisplayName(uri) }.getOrNull(),
+        )
         // Leer los nombres reales de campo del PDF del usuario y auto-mapear.
         viewModelScope.launch {
             // Tanda 5·4 — el asistente construye su propio `FormSchema` para cualquier PDF, sin
@@ -336,7 +343,13 @@ class WizardViewModel @Inject constructor(
                 else -> {
                     val existing = runCatching { prefs.findSchema(fp) }.getOrNull()
                     val built = existing
-                        ?: schemaBuilder.build(insp.inspected, fp, insp.pageCount, title = "Formulario")
+                        ?: schemaBuilder.build(
+                            insp.inspected, fp, insp.pageCount,
+                            // El nombre del fichero como título de partida, igual que hace el
+                            // editor de Ajustes: "Contrato_empresas.pdf" identifica el formulario
+                            // mucho mejor que "Formulario", y es editable después.
+                            title = _state.value.userContractName ?: "Formulario",
+                        )
                     if (existing == null) {
                         runCatching { prefs.saveSchema(built) }
                     }
@@ -353,6 +366,20 @@ class WizardViewModel @Inject constructor(
             )
             detectSignaturePages()
         }
+    }
+
+    /**
+     * El usuario ha revisado las etiquetas del PDF en el paso 1 (0.10.12) y confirma.
+     *
+     * El panel de revisión es el mismo de Ajustes y lo mueve [LabelEditorViewModel], que es quien
+     * guarda el esquema por huella. Aquí sólo se **adopta** el resultado para que `FillStep` y el
+     * mapeo dibujen lo que el usuario acaba de confirmar, sin esperar a releerlo de disco.
+     *
+     * `needsMapping` se apaga porque ya se ha revisado, pero eso ya no decide si el botón del paso
+     * 1 ofrece revisar: desde la 0.10.12 se ofrece siempre que haya un PDF propio con campos.
+     */
+    fun adoptSchema(schema: com.mejoresiagratis.rellenador.data.model.FormSchema) {
+        _state.value = _state.value.copy(activeSchema = schema, needsMapping = false)
     }
 
     /**

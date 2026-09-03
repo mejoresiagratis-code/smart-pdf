@@ -45,6 +45,12 @@ data class PersistedWizardState(
     val step: Int = 0,
     val contractSource: String? = null,        // "DEFAULT" | "USER" | null
     val userContractUri: String? = null,
+    /**
+     * Nombre visible del PDF aportado (0.10.12). Campo nuevo con valor por defecto, así que una
+     * sesión guardada por una versión anterior se deserializa sin tocar `SCHEMA_VERSION`: sale
+     * nulo y la tarjeta del paso 1 cae al comportamiento de antes hasta que se vuelva a elegir.
+     */
+    val userContractName: String? = null,
     val userFieldNames: List<String> = emptyList(),
     val fieldMapping: Map<String, String> = emptyMap(),
     val needsMapping: Boolean = false,
@@ -103,6 +109,7 @@ fun WizardUiState.toPersisted(): PersistedWizardState {
         fieldCandidates = fieldCandidates,
         contractSource = contractSource?.name,
         userContractUri = userContractUri?.toString(),
+        userContractName = userContractName,
         userFieldNames = userFieldNames,
         fieldMapping = fieldMapping,
         needsMapping = needsMapping,
@@ -159,6 +166,7 @@ fun PersistedWizardState.applyTo(base: WizardUiState): WizardUiState {
         undoStack = emptyList(),
         contractSource = contractSource?.let { runCatching { ContractSource.valueOf(it) }.getOrNull() },
         userContractUri = userContractUri?.let { android.net.Uri.parse(it) },
+        userContractName = userContractName,
         userFieldNames = userFieldNames,
         fieldMapping = fieldMapping,
         needsMapping = needsMapping,

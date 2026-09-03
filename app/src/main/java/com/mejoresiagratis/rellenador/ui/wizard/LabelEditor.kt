@@ -45,6 +45,12 @@ fun LabelEditor(
      * hacen cosas distintas (salir de la pantalla / volver al selector de PDF) es una trampa.
      */
     backLabel: String = "Atrás",
+    /**
+     * Texto del botón de confirmación. Mismo motivo que [backLabel] (0.10.12): dentro del
+     * asistente, «Confirmar etiquetas» no describe lo que hace ese botón, que además avanza al
+     * paso siguiente.
+     */
+    doneLabel: String = "Confirmar etiquetas",
 ) {
     val totalFields = schema.allFields().size
     Column(Modifier.fillMaxSize()) {
@@ -74,7 +80,7 @@ fun LabelEditor(
         HorizontalDivider()
         Row(Modifier.padding(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = onBack) { Text(backLabel) }
-            Button(onClick = onDone, modifier = Modifier.weight(1f)) { Text("Confirmar etiquetas") }
+            Button(onClick = onDone, modifier = Modifier.weight(1f)) { Text(doneLabel) }
         }
     }
 }

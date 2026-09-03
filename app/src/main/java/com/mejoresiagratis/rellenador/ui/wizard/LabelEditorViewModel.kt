@@ -72,6 +72,18 @@ class LabelEditorViewModel @Inject constructor(
      */
     private var pickedUri: Uri? = null
 
+    /**
+     * Carga [uri] sólo si no está ya cargado (0.10.12).
+     *
+     * Lo usa el paso 1 del asistente, que siembra este ViewModel con el contrato ya elegido en vez
+     * de pedir el fichero otra vez. Sin la guarda, cada recomposición que reevaluara el
+     * `LaunchedEffect` volvería a leer el PDF y tiraría las correcciones a medias.
+     */
+    fun ensureLoaded(uri: Uri) {
+        if (pickedUri == uri && (_state.value.schema != null || _state.value.loading)) return
+        pickPdf(uri)
+    }
+
     /** El usuario ha elegido un PDF (picker SAF): inspecciona, calcula huella y busca o construye. */
     fun pickPdf(uri: Uri) {
         pickedUri = uri
