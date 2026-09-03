@@ -643,6 +643,24 @@ private fun FieldRow(
         disabledContainerColor = container,
     )
 
+    // Tanda 5·4i, mitad 2 — candidatos a compartir este valor, entre los que siguen vacíos.
+    // `remember` con estas claves porque cambia cuando el propio valor cambia o cuando OTRO
+    // campo se rellena/vacía (deja de/empieza a estar vacío y entra o sale de la lista).
+    val schema = state.activeSchema
+    val affinityCandidates = remember(key, value, schema, state.fieldValues) {
+        val filled = schema?.allFields()?.firstOrNull { it.name == key }
+        if (schema == null || filled == null || value.isBlank()) {
+            emptyList()
+        } else {
+            val emptyNames = schema.allFields()
+                .map { it.name }
+                .filter { name -> state.fieldValues[name].isNullOrBlank() }
+                .toSet()
+            com.mejoresiagratis.rellenador.data.model.AffinityGroup
+                .candidatesFor(schema, filled, emptyNames)
+        }
+    }
+
     Column(Modifier.fillMaxWidth()) {
         OutlinedTextField(
             value = value,
@@ -718,6 +736,47 @@ private fun FieldRow(
                         style = MaterialTheme.typography.labelSmall,
                         color = scheme.onSurfaceVariant
                     )
+                }
+            }
+        }
+
+        // Tanda 5·4i, mitad 2 — afines: huecos vacíos que podrían llevar este mismo dato.
+        // Se OFRECEN, nunca se aplican solos (ver `AffinityGroup`); marcar la casilla es lo
+        // que de verdad copia el valor (`vm.confirmAffinity`). Al confirmarse deja de estar
+        // vacío y desaparece de la lista en la siguiente recomposición — no hace falta
+        // "desmarcarlo": no hay vuelta atrás salvo deshacer (Icons.Filled.Refresh, arriba) o
+        // vaciar el campo a mano.
+        if (affinityCandidates.isNotEmpty()) {
+            var showAffinity by rememberSaveable(key) { mutableStateOf(false) }
+            Column(Modifier.padding(start = 10.dp, top = 6.dp, end = 12.dp)) {
+                TextButton(onClick = { showAffinity = !showAffinity }) {
+                    Icon(
+                        Icons.Filled.ContentCopy, contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        "Este dato aparece en otros ${affinityCandidates.size} " +
+                            if (affinityCandidates.size == 1) "campo" else "campos",
+                        style = MaterialTheme.typography.labelMedium,
+                    )
+                }
+                if (showAffinity) {
+                    affinityCandidates.forEach { candidate ->
+                        val candidateLabel = candidate.label.ifBlank { candidate.name }
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable { vm.confirmAffinity(key, candidate.name) },
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Checkbox(
+                                checked = false,
+                                onCheckedChange = { vm.confirmAffinity(key, candidate.name) },
+                            )
+                            Text(candidateLabel, style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
                 }
             }
         }

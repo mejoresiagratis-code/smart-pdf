@@ -909,6 +909,32 @@ class WizardViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Tanda 5·4i, mitad 2 — el usuario marca la casilla de un afín que `AffinityGroup` propuso
+     * en Relleno: confirma que [targetName] lleva el mismo dato que [sourceKey].
+     *
+     * Si el campo de origen ya tiene canónica, se la asigna también a [targetName]
+     * (`SchemaEditing.setCanonical` — desde 5·4i, mitad 1, ya no se la quita a nadie): a partir
+     * de ahí quedan enganchados de verdad y `CanonicalSiblings.expand` los mantiene
+     * sincronizados en cambios futuros. Si [sourceKey] no tiene canónica (el candidato salió
+     * sólo por etiqueta idéntica), esto es una copia puntual del valor actual — no queda enlace,
+     * y si el usuario cambia uno después el otro no se entera. Escribe con `setFieldValue`, así
+     * que es una acción deshacible más.
+     */
+    fun confirmAffinity(sourceKey: String, targetName: String) {
+        val s = _state.value
+        val value = s.fieldValues[sourceKey]?.takeIf { it.isNotBlank() } ?: return
+        val schema = s.activeSchema
+        val sourceCanonical = schema?.allFields()?.firstOrNull { it.name == sourceKey }?.canonical
+        if (schema != null && sourceCanonical != null) {
+            val updated = com.mejoresiagratis.rellenador.data.model.SchemaEditing.setCanonical(
+                schema, targetName, sourceCanonical,
+            )
+            _state.value = _state.value.copy(activeSchema = updated)
+        }
+        setFieldValue(targetName, value)
+    }
+
     /** Aplica un paquete en bloque (dirección/empresa/persona/banco).
      *  Para direcciones, targetBlock2=true lo manda al bloque de comercio (_2). */
 

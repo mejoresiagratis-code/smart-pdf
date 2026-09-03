@@ -8,6 +8,34 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.10.23-afines-relleno] — 2026-09-04
+
+Tanda 5·4i, mitad 2 (Compose, sin typecheck local — mismo motivo que la mitad 1: el `kotlinc`
+disponible en la sesión es la 1.3.31 y no soporta `trailing commas`; verificado a mano: balance de
+paréntesis/llaves/corchetes exacto en `FillStep.kt`, y cada símbolo nuevo existe de verdad).
+
+### La lista con casilla, en Relleno
+
+Cuando un campo de texto tiene valor y `AffinityGroup` encuentra huecos vacíos candidatos, debajo
+del campo aparece un botón plegable «Este dato aparece en otros N campos». Al desplegarlo, una
+fila con casilla por candidato — exactamente lo pedido: «asignar mismo campo o editar a mano si
+distinto». Marcar la casilla llama a `WizardViewModel.confirmAffinity()`:
+
+- Si el campo de origen ya tiene canónica, se la asigna también al candidato
+  (`SchemaEditing.setCanonical`) — quedan enganchados de verdad y `CanonicalSiblings.expand` los
+  mantiene sincronizados en cambios futuros.
+- Si no tiene canónica (candidato por etiqueta idéntica, sin canónica compartida), es una copia
+  puntual del valor — no queda enlace.
+
+En ambos casos escribe con `setFieldValue`, así que es una acción deshacible más (el botón de
+deshacer de arriba la cubre). El campo confirmado deja de estar vacío y desaparece de la lista de
+afines en la siguiente recomposición — no hace falta "desmarcar"; para deshacerlo, deshacer o
+vaciar el campo a mano.
+
+No se ha tocado nada de la mitad 1 ni de `CanonicalMapper`.
+
+---
+
 ## [0.10.22-mitad-1-afines] — 2026-09-04
 
 Tanda 5·4i, mitad 1 (lógica, Kotlin puro). Origen: probando el contrato de Aire en el móvil,
