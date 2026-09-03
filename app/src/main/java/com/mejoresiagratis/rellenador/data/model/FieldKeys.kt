@@ -38,6 +38,20 @@ package com.mejoresiagratis.rellenador.data.model
 class FieldKeys(
     /** `canónica de CANON -> nombre real`. Vacío para el contrato de Orange. */
     private val mapping: Map<String, String> = emptyMap(),
+    /**
+     * `nombre real -> etiqueta del esquema activo`. Tanda 5·4e.
+     *
+     * Existe porque [labelOf] sólo sabía resolver la etiqueta por la vía canónica
+     * (`nombre real -> clave de CANON -> ContractFields.labelFor`), y en un PDF ajeno `canonical`
+     * es `null`, así que caía al nombre real. El efecto era desconcertante: corregías «Sólo
+     * tráfico nacional» en el editor de etiquetas, se guardaba bien en el `FormSchema`, y el paso
+     * de Relleno seguía mostrando `Casilla de verificación 59`. El dato estaba; nadie lo leía.
+     *
+     * Vacío para Orange, y aun así inocuo si se rellena: allí la etiqueta del esquema **es**
+     * `ContractFields.labelFor(name)` (ver `BuiltinSchemas.orangeDistribution`), o sea el mismo
+     * texto que devolvía la vía canónica.
+     */
+    private val labels: Map<String, String> = emptyMap(),
 ) {
 
     /** Índice inverso `nombre real -> canónica de CANON`, construido una vez. */
@@ -89,9 +103,19 @@ class FieldKeys(
     fun canonicalOf(realName: String): String? =
         canonKeyOf(realName)?.let { BuiltinSchemas.canonicalFor(it) }
 
-    /** Etiqueta legible de un campo por su nombre real; el propio nombre si no se conoce. */
+    /**
+     * Etiqueta legible de un campo por su nombre real; el propio nombre si no se conoce.
+     *
+     * Tanda 5·4e — el orden es deliberado: **primero la etiqueta del esquema**, porque es la que
+     * el usuario puede haber corregido a mano (`LabelSource.USUARIO`) y esa corrección manda sobre
+     * cualquier automatismo; después la vía canónica, que es la que cubre Orange y los campos
+     * enganchados; y sólo al final el nombre real, que es un último recurso legible a medias
+     * (`Campo de texto 116`) y no una etiqueta.
+     */
     fun labelOf(realName: String): String =
-        canonKeyOf(realName)?.let { ContractFields.labelFor(it) } ?: realName
+        labels[realName]?.takeIf { it.isNotBlank() }
+            ?: canonKeyOf(realName)?.let { ContractFields.labelFor(it) }
+            ?: realName
 
     /**
      * Reindexa un mapa que esté en claves de `CANON` para que lo esté en nombres reales.

@@ -458,7 +458,15 @@ class WizardViewModel @Inject constructor(
         // El `fieldMapping` clásico gana sobre lo derivado del esquema — el usuario puede haber
         // corregido a mano en `MappingEditor` un enganche que el esquema no tenía.
         val merged = fromSchema + _state.value.fieldMapping
-        return com.mejoresiagratis.rellenador.data.model.FieldKeys(merged)
+        // Tanda 5·4e — las etiquetas del esquema viajan con el mapeo. Un grupo de radio son varias
+        // entradas con el mismo `name`: gana la primera que tenga etiqueta no vacía, que es la del
+        // campo (las opciones llevan su texto en `optionLabel`, no en `label`).
+        val schemaLabels: Map<String, String> = schema?.allFields()
+            ?.filter { it.label.isNotBlank() }
+            ?.groupBy { it.name }
+            ?.mapValues { (_, fs) -> fs.first().label }
+            .orEmpty()
+        return com.mejoresiagratis.rellenador.data.model.FieldKeys(merged, schemaLabels)
     }
 
     /** Persiste el mapeo actual bajo la huella de la plantilla, para reaplicarlo la próxima vez. */
