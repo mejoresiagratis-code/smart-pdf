@@ -195,4 +195,47 @@ class FormSchemaBuilderAnchorTest {
         assertTrue(touched.hasUserLabels())
         assertFalse("con trabajo manual no se regenera nunca", touched.isStaleBuild())
     }
+
+    @Test fun noEmptySectionsAndNoConsecutiveDuplicateTitles() {
+        val schema = buildWithAnchors()
+        assertFalse(
+            "no se emite una seccion SIMPLE sin campos",
+            schema.sections.any { it.kind == SectionKind.SIMPLE && it.fields.isEmpty() },
+        )
+        assertFalse(
+            "no hay dos secciones SIMPLE seguidas con el mismo titulo",
+            schema.sections.zipWithNext().any { (a, b) ->
+                a.kind == SectionKind.SIMPLE && b.kind == SectionKind.SIMPLE && a.title == b.title
+            },
+        )
+    }
+
+    /**
+     * Página 3 del contrato: «Resumen de todos los servicios contratados» va en mayúscula y
+     * minúscula y sí es título; «Marcar para solicitar portabilidad…» pasa de 100 caracteres y
+     * es la etiqueta de una casilla, no una sección. Y un rótulo de columna a la misma altura y
+     * el mismo tamaño no puede colarse dentro del título.
+     */
+    @Test fun mixedCaseHeadingIsAnchorButLongCheckboxLabelIsNot() {
+        val f = listOf(
+            field("Casilla larga", x = 30f, y = 96f, width = 12f, height = 12f, isCheckbox = true),
+            field("RESUMEN CUOTA TOTAL DE ALTA", x = 300f, y = 150f),
+            field("RESUMEN CUOTA MENSUAL", x = 450f, y = 150f),
+        )
+        val w = listOf(
+            word("Marcar", x = 58f, y = 96f, endX = 90f, fontSize = 8f),
+            word("para solicitar portabilidad de toda la numeracion que", x = 92f, y = 96f, endX = 300f, fontSize = 8f),
+            word("cuelgue del numero de cabecera indicado en LINEA", x = 302f, y = 96f, endX = 520f, fontSize = 8f),
+            word("Resumen", x = 49f, y = 120f, endX = 100f, fontSize = 12f),
+            word("de todos los servicios contratados", x = 102f, y = 120f, endX = 300f, fontSize = 12f),
+            word("Cuota de alta", x = 400f, y = 120f, endX = 470f, fontSize = 12f),
+        )
+        val titles = FormSchemaBuilder()
+            .build(fields = f, fingerprint = "mixed", pageCount = 1, title = "x", layoutWords = w)
+            .sections.map { it.title }
+
+        assertTrue(titles.contains("Resumen de todos los servicios contratados"))
+        assertFalse("el titulo no arrastra el rotulo de al lado", titles.any { it.contains("Cuota de alta") })
+        assertFalse("una etiqueta larga de casilla no es titulo", titles.any { it.startsWith("Marcar") })
+    }
 }

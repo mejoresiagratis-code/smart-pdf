@@ -8,6 +8,91 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.10.14-secciones-correctas] — 2026-09-03
+
+**Corrección de la 0.10.13**, salida de simular su propio algoritmo sobre `Contrato_empresas.pdf`
+en vez de esperar a verlo en el móvil. Cada sección enseña **sólo los campos que le tocan en el
+papel**, en orden de lectura, y desaparecen las secciones fantasma.
+
+### Corregido — `CAMBIO TITULAR` se tragaba 20 campos en vez de 7
+
+Es el fallo de fondo, y viene de una decisión mía mal razonada en la 0.10.13. Ahí se dejó
+`Resumen de todos los servicios contratados` fuera de las anclas porque la regla exigía
+mayúsculas, con el argumento de que sus campos no están en el alcance del alta y no rompía nada.
+Sí rompía: **sin ancla detrás, todo lo que sigue en la página 3 cae en la banda anterior.**
+`CAMBIO TITULAR` acababa conteniendo los totales del resumen, la fecha, las dos firmas y el
+nombre y DNI de cliente y comercial.
+
+Y no es cosmético. `CAMBIO TITULAR` es una banda **con interruptor**, que en un alta va apagada:
+al plegarla se escondían la fecha y las firmas, que son 9 de los 37 campos del alta (§4 del plan).
+El plegado, que era la razón de ser de la tanda anterior, tapaba justo lo que hacía falta.
+
+Resultado sobre el PDF real, antes y después:
+
+| Sección | 0.10.13 | 0.10.14 |
+|---|---|---|
+| `CAMBIO TITULAR` | 20 campos | **7** |
+| `Resumen de todos los servicios contratados` | no existía | 4 (los totales) |
+| bloque de fecha y firmas | dentro de `CAMBIO TITULAR` | **sección propia, 9 campos** |
+
+Esos 9 son exactamente los que el §4 del plan cuenta para la página 3.
+
+### Cambiado — la regla de ancla ya no exige mayúsculas, y sí acota la longitud
+
+El requisito de mayúscula no aportaba nada que no cubriera mejor un tope de longitud, y dejaba
+fuera títulos legítimos en mixta. Ahora una línea es ancla si mide 8 pt o más, arranca en el
+margen izquierdo y **no pasa de 50 caracteres**.
+
+Ese tope es lo que separa un título de banda de la etiqueta larga de una casilla. Medido sobre
+el contrato: el título más largo es `CAPTURA DE FIBRA CON CAMBIO DE TITULARIDAD` (42 caracteres)
+y lo que había que descartar, `Marcar para solicitar portabilidad de toda la numeración que
+cuelgue del número de cabecera indicado en “LÍNEA”`, pasa de 100. Con la regla nueva salen 12
+anclas y son las buenas.
+
+### Cambiado — el título es el primer bloque de la línea, no la línea entera
+
+Mismo tamaño de letra y misma altura no significa mismo rótulo. En la página 3,
+`Resumen de todos los servicios contratados`, `Cuota de alta` y `Cuota mensual` van los tres a
+12 pt en la misma fila, separados por el ancho de sus columnas. El título se queda con las
+palabras seguidas hasta el primer hueco horizontal mayor de 25 pt, así que no se lleva pegados
+los rótulos de las columnas de al lado.
+
+### Corregido — cuatro secciones vacías y un título repetido
+
+- **Vacías**: la casilla que abre una banda va sola en su fila y su tabla viene después, así que
+  se emitía una sección SIMPLE de **cero campos** que sólo llevaba el interruptor, con la tabla
+  suelta al lado. Cuatro de ésas en el contrato, y el plegado envolvía la nada en vez de la
+  tabla. Ahora el interruptor queda **pendiente** hasta que hay una sección de verdad a la que
+  colgarlo, que normalmente es su tabla.
+- **Repetido**: cuando entre dos grupos de campos de una banda se cuela una fila que parecía de
+  tabla y no llegó a serlo, la banda se partía en dos secciones seguidas con el mismo título —
+  `AIRE CONNECT` salía dos veces, con 2 y con 8 campos. Dos secciones SIMPLE consecutivas del
+  mismo título se funden.
+
+En total, el contrato pasa de 19 secciones a 16, y ninguna vacía ni duplicada.
+
+### Verificación
+
+Simulación del algoritmo real (mismas constantes) sobre `Contrato_empresas.pdf` con
+`pypdf`/`pdfplumber`, comparando sección a sección antes y después: es lo que destapó los tres
+fallos, ninguno de los cuales se habría visto sin ejecutarlo contra el PDF de verdad.
+
+`kotlinc` 2.1.0 con `-Werror`, y **32 comprobaciones de comportamiento en verde** (5 nuevas):
+sin secciones vacías, sin títulos duplicados consecutivos, ancla en mixta aceptada, etiqueta
+larga de casilla rechazada, y el título sin arrastrar el rótulo de la columna contigua.
+
+**Riesgo conocido**: la regla nueva se ha medido sobre el contrato de empresas, que es el único
+de los cuatro PDFs de Aire disponible en esta sesión. En portabilidad, conectividad y SEPA puede
+aparecer algún título de más o de menos; los títulos de sección son editables a mano en el editor
+de etiquetas, así que el peor caso es cosmético y corregible sin tocar código.
+
+**Nota sobre un título**: el bloque de fecha y firmas de la página 3 no tiene ningún rótulo
+propio a la izquierda, así que hereda el de la línea que lo precede,
+`Tabla de precios y permanencias`, que es un enlace y no un encabezado. Separa bien —que es lo
+que importa— pero el nombre no describe el contenido. Renombrable desde el editor.
+
+---
+
 ## [0.10.13-etiquetado-organico] — 2026-09-03
 
 **Tanda 5·4b** del `docs/PLAN_ETIQUETADO_ORGANICO.md`: que las secciones y los campos del PDF

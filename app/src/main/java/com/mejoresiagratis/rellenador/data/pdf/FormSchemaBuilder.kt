@@ -299,6 +299,13 @@ class FormSchemaBuilder @Inject constructor() {
      * (`CENTRALITA VIRTUAL Aire Suite, Waicom Cloud…`) comparten `y` pero no tamaño, y sin
      * separar por tamaño la mayúscula del título se ensucia con la minúscula de la frase.
      * Medido al preparar esta tanda contra `Contrato_empresas.pdf` con `pdfplumber`.
+     *
+     * De cada línea se queda con su **primer bloque**: las palabras seguidas hasta el primer
+     * hueco horizontal mayor que [RUN_GAP]. Mismo tamaño de letra no significa mismo rótulo —
+     * en la página 3, `Resumen de todos los servicios contratados`, `Cuota de alta` y
+     * `Cuota mensual` son tres rótulos distintos a 12 pt y a la misma altura, separados por el
+     * ancho de sus columnas. Sin cortar por el hueco, el título de la sección se los llevaba
+     * los tres pegados.
      */
     private fun buildLines(words: List<LayoutTextExtractor.Word>): List<TextLine> {
         data class Key(val page: Int, val yBucket: Int, val sizeBucket: Int)
@@ -306,28 +313,39 @@ class FormSchemaBuilder @Inject constructor() {
             .groupBy { Key(it.page, Math.round(it.y), Math.round(it.fontSize * 10)) }
             .map { (_, ws) ->
                 val sorted = ws.sortedBy { it.x }
+                val run = mutableListOf(sorted.first())
+                for (i in 1 until sorted.size) {
+                    if (sorted[i].x - sorted[i - 1].endX > RUN_GAP) break
+                    run += sorted[i]
+                }
                 TextLine(
                     page = sorted.first().page,
                     y = sorted.first().y,
                     fontSize = sorted.first().fontSize,
-                    x0 = sorted.first().x,
-                    text = sorted.joinToString(" ") { it.text }.trim(),
+                    x0 = run.first().x,
+                    text = run.joinToString(" ") { it.text }.trim(),
                 )
             }
     }
 
-    private fun isAllUpper(text: String): Boolean {
-        val letters = text.filter { it.isLetter() }
-        return letters.isNotEmpty() && letters.all { it.isUpperCase() }
-    }
-
     /**
-     * Detecta las anclas de sección: líneas de ≥ [ANCHOR_MIN_FONT_SIZE] pt, que arrancan en el
-     * margen izquierdo (`x0 < `[ANCHOR_MAX_X]) y van en mayúsculas. Verificado con `pdfplumber`
-     * sobre `Contrato_empresas.pdf`: de 11 anclas buenas, la regla detecta 10 tal cual; la
-     * undécima (`Resumen de todos los servicios contratados`, mayúscula/minúscula mixta, sin
-     * casilla al lado) queda **fuera a propósito** — decidido con Pablo: sus campos no están en
-     * el alcance del alta y caen en la sección anterior sin romper nada.
+     * Detecta las anclas de sección: primer bloque de una línea de ≥ [ANCHOR_MIN_FONT_SIZE] pt
+     * que arranca en el margen izquierdo (`x0 < `[ANCHOR_MAX_X]) y no pasa de
+     * [ANCHOR_MAX_LENGTH] caracteres.
+     *
+     * **No se exige mayúscula.** La 0.10.13 sí lo hacía, y por eso `Resumen de todos los
+     * servicios contratados` (mixta) no era ancla — con la consecuencia, medida después sobre
+     * el PDF real, de que `CAMBIO TITULAR` se tragaba **20 campos en vez de 7**: al no haber
+     * ancla detrás, todo lo que sigue en la página 3 caía en la banda anterior, incluidas la
+     * fecha, las dos firmas y el nombre y DNI de cliente y comercial. Y como `CAMBIO TITULAR`
+     * es una banda con interruptor que en un alta va **apagada**, plegarla escondía campos que
+     * el alta necesita. El requisito de mayúscula no aportaba nada que no cubriera ya el tope
+     * de longitud.
+     *
+     * El tope de longitud es lo que separa un título de sección de la etiqueta larga de una
+     * casilla: medido sobre `Contrato_empresas.pdf`, el título más largo es
+     * `CAPTURA DE FIBRA CON CAMBIO DE TITULARIDAD` (42) y la etiqueta que había que descartar,
+     * `Marcar para solicitar portabilidad de toda la numeración…`, pasa de 100.
      *
      * Se excluyen dos cosas que no son banda:
      *  · [ANCHOR_BLACKLIST] — la etiqueta `DOCUMENTACIÓN`, que se repite una vez por página.
@@ -353,7 +371,7 @@ class FormSchemaBuilder @Inject constructor() {
                 line.x0 < ANCHOR_MAX_X &&
                 line.y >= MASTHEAD_MARGIN &&
                 line.text.length > 3 &&
-                isAllUpper(line.text) &&
+                line.text.length <= ANCHOR_MAX_LENGTH &&
                 line.text !in ANCHOR_BLACKLIST
         }
 
@@ -417,41 +435,71 @@ class FormSchemaBuilder @Inject constructor() {
         var pending = mutableListOf<List<PdfFieldInspector.Field>>()
         var loose = mutableListOf<PdfFieldInspector.Field>()
         var currentAnchorIdx = -2   // centinela: fuerza el primer cambio de banda
-        var enablerUsedForBucket = false
+        // Interruptor de la banda en curso, **todavía sin colocar**. Se guarda hasta que haya
+        // una sección de verdad a la que colgárselo. Antes se emitía en cuanto tocaba, y como
+        // la casilla de banda va sola en su fila y la tabla viene después, salía una sección
+        // SIMPLE vacía (0 campos) con el interruptor y la tabla suelta al lado: cuatro secciones
+        // fantasma en el contrato de Aire, y el plegado envolvía la nada en vez de la tabla.
+        var pendingEnabler: String? = null
 
         fun titleFor(idx: Int) = if (idx < 0) "Cabecera" else anchors[idx].title
-        fun enablerFor(idx: Int) = if (idx < 0) null else anchors[idx].enablerField
+
+        /**
+         * Añade una sección **fundiéndola con la anterior si son dos SIMPLE del mismo título**.
+         * Una banda puede partirse en varios trozos cuando entre medias hay una fila que parecía
+         * de tabla y no llegó a serlo; sin fundir, `AIRE CONNECT` salía dos veces seguidas en la
+         * pantalla, con 2 y 8 campos, y el usuario veía dos cabeceras iguales.
+         */
+        fun emit(section: FormSection) {
+            val prev = sections.lastOrNull()
+            if (prev != null &&
+                section.kind == SectionKind.SIMPLE &&
+                prev.kind == SectionKind.SIMPLE &&
+                prev.title == section.title
+            ) {
+                sections[sections.size - 1] = prev.copy(
+                    fields = prev.fields + section.fields,
+                    enablerField = prev.enablerField ?: section.enablerField,
+                )
+                return
+            }
+            sections += section
+        }
 
         fun flushSimple() {
-            val enabler = if (!enablerUsedForBucket) enablerFor(currentAnchorIdx) else null
             // La casilla que activa la banda no es un campo suelto más de su propia sección:
             // pasa a `enablerField` y desaparece de la lista de campos (§2.1 del plan).
-            val filtered = loose.filter { it.name != enabler }
-            if (filtered.isEmpty() && enabler == null) {
+            val filtered = loose.filter { it.name != pendingEnabler }
+            if (filtered.isEmpty()) {
+                // Nada que enseñar: el interruptor sigue pendiente para la siguiente sección
+                // de esta misma banda (típicamente su tabla).
                 loose = mutableListOf()
                 return
             }
-            sections += FormSection(
-                id = "sec_${sectionCounter++}",
-                title = titleFor(currentAnchorIdx),
-                kind = SectionKind.SIMPLE,
-                fields = filtered.mapIndexed { i, f ->
-                    toField(f, i, rowOf(rows, f), words)
-                },
-                enablerField = enabler,
+            emit(
+                FormSection(
+                    id = "sec_${sectionCounter++}",
+                    title = titleFor(currentAnchorIdx),
+                    kind = SectionKind.SIMPLE,
+                    fields = filtered.mapIndexed { i, f ->
+                        toField(f, i, rowOf(rows, f), words)
+                    },
+                    enablerField = pendingEnabler,
+                )
             )
-            if (enabler != null) enablerUsedForBucket = true
+            pendingEnabler = null
             loose = mutableListOf()
         }
 
         fun flushTableBucket() {
             if (pending.size >= MIN_ROWS_FOR_TABLE) {
-                val enabler = if (!enablerUsedForBucket) enablerFor(currentAnchorIdx) else null
-                sections += tableSection(pending, columnXs, sectionCounter++, words).copy(
-                    title = titleFor(currentAnchorIdx),
-                    enablerField = enabler,
+                emit(
+                    tableSection(pending, columnXs, sectionCounter++, words).copy(
+                        title = titleFor(currentAnchorIdx),
+                        enablerField = pendingEnabler,
+                    )
                 )
-                if (enabler != null) enablerUsedForBucket = true
+                pendingEnabler = null
             } else {
                 pending.forEach { row -> loose += row }
             }
@@ -465,7 +513,7 @@ class FormSchemaBuilder @Inject constructor() {
                 flushTableBucket()
                 flushSimple()
                 currentAnchorIdx = idx
-                enablerUsedForBucket = false
+                pendingEnabler = if (idx < 0) null else anchors[idx].enablerField
             }
 
             if (!isTableRow(row, columnXs)) {
@@ -708,6 +756,21 @@ class FormSchemaBuilder @Inject constructor() {
 
         /** Margen izquierdo máximo para que una línea cuente como ancla de sección. */
         const val ANCHOR_MAX_X = 150f
+
+        /**
+         * Longitud máxima de un título de sección. Es lo que separa un rótulo de banda de la
+         * etiqueta larga de una casilla, ahora que no se exige mayúscula: medido sobre
+         * `Contrato_empresas.pdf`, el título más largo es `CAPTURA DE FIBRA CON CAMBIO DE
+         * TITULARIDAD` (42 caracteres) y la etiqueta a descartar pasa de 100.
+         */
+        const val ANCHOR_MAX_LENGTH = 50
+
+        /**
+         * Hueco horizontal a partir del cual dos palabras de la misma línea y el mismo tamaño
+         * son rótulos distintos. En la página 3, `Resumen de todos los servicios contratados`,
+         * `Cuota de alta` y `Cuota mensual` van a 12 pt y a la misma altura.
+         */
+        const val RUN_GAP = 25f
 
         /**
          * Franja superior de página (logo + banda de cabecera) que nunca es una ancla de
