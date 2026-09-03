@@ -4,11 +4,10 @@
 > o su contenido; con eso y el repo tiene el contexto completo. **No hace falta reenviar los
 > PDFs de Aire**: su análisis está en `docs/ANALISIS_FORMULARIOS_AIRE.md`.
 >
-> **Actualizado**: 2026-09-03. Último commit de código: **0.10.15-valores-por-tipo**
-> (versionCode 85). La **0.10.13 salió verde** confirmada por Pablo; la **0.10.14** se empujó
-> después y su resultado en Actions **no está confirmado en este documento**; la **0.10.15** es
-> esta tanda. Este documento **caduca**: la primera regla de abajo existe precisamente porque lo
-> que aquí se afirma puede estar viejo.
+> **Actualizado**: 2026-09-03. Último commit de código: **0.10.19-canonicas-por-ia**
+> (versionCode 89). Verdes confirmadas por Pablo hasta la **0.10.17** incluida; la **0.10.18** y
+> la **0.10.19** están **sin confirmar**. Este documento **caduca**: la primera regla de abajo existe
+> precisamente porque lo que aquí se afirma puede estar viejo.
 
 Habla en **español de España**.
 
@@ -24,21 +23,28 @@ git clone https://github.com/mejoresiagratis-code/smart-pdf
 cd smart-pdf && git log --oneline -8
 ```
 
-El último commit **de código** debería ser `0.10.15-valores-por-tipo` · versionCode 85.
+El último commit **de código** debería ser `0.10.19-canonicas-por-ia` · versionCode 89.
 Por encima puede haber commits solo de documentación, que no suben versión. Si el último código
 no es ése, este documento está desfasado: manda `git log` y la cabecera del `CHANGELOG.md`.
 
 ### Estado del build
 
-De la 0.10.6 a la **0.10.13, todas verdes**. La **0.10.14 y la 0.10.15 están pendientes de
-confirmar**: pregunta a Pablo el resultado antes de abrir tanda nueva, porque la regla es una
-tanda, una versión, un build verde antes de la siguiente.
+De la 0.10.6 a la **0.10.17, todas verdes** (las 0.10.14 a 0.10.17 confirmadas por Pablo). La
+**0.10.18 está pendiente de confirmar**: pregunta el resultado antes de abrir tanda nueva, porque
+la regla es una tanda, una versión, un build verde antes de la siguiente.
+
+**Despliegue sin tokens** (§7): las tandas de la 0.10.15 a la 0.10.18 se subieron pasando los
+ficheros en un zip que Pablo descomprime en Codespaces y commitea. Dos veces se colaron los zips
+al repo con `git add -A` y hubo que quitarlos con `git rm`; desde entonces hay `*.zip` en
+`.gitignore` y el `add` se hace con **rutas explícitas**, nunca `-A`.
 
 La 0.10.12 se subió **sin typecheckear en local** (es todo Compose, y aquí no hay SDK ni Maven) y
 salió verde igual. No lo tomes como precedente: para Kotlin puro el `kotlinc` de las releases de
 JetBrains sí sirve y ha evitado dos builds rojos — ver §6. La 0.10.13 y la 0.10.15 sí se
 typecheckearon y llevan comprobaciones ejecutables (27 y 21 respectivamente, más las portadas a
-`app/src/test`).
+`app/src/test`). La 0.10.16 es Compose y no se typecheckeó; la 0.10.17 y la 0.10.18 son Kotlin
+puro con pruebas en `app/src/test` (5 y 8 casos) pero tampoco se typecheckearon en local — no
+había `kotlinc` instalado en esa sesión.
 
 Lo siguiente **no es código**: es probar en el móvil lo que ya está subido. Ver sección 5.
 
@@ -59,7 +65,7 @@ Lo siguiente **no es código**: es probar en el móvil lo que ya está subido. V
    **Si vas a tocar el esquema o el mapeo, éste es el documento.**
 5. `docs/roadmap-multiformulario.html` — el roadmap de las 7 fases con el **estado real** de cada
    una, qué falta y por qué. Ábrelo en el navegador; la primera pestaña es el resumen.
-6. `CHANGELOG.md`, entradas **0.9.4 a 0.10.15**.
+6. `CHANGELOG.md`, entradas **0.9.4 a 0.10.19**.
 7. `docs/ESTADO_Y_GUIA_DE_CONTINUIDAD.md` — arquitectura e historia. **Ojo**: su bloque
    «ESTADO ACTUAL» se quedó en `v0.7.10` / versionCode 48 (agosto de 2026), 26 versiones por
    detrás. La parte de arquitectura y la de «archivo histórico» siguen siendo útiles; el estado
@@ -99,7 +105,11 @@ con cuatro formularios rellenables propios: contrato de empresas (481 campos), p
 | 0.10.12 | Paso 1: nombre del fichero en la tarjeta, «Revisar mapeo» abre el panel del editor de etiquetas, y se puede revisar siempre · verde ✅ |
 | 0.10.13 | Fase 5, tanda **5·4b**: etiquetado orgánico — `LayoutTextExtractor`, títulos de sección del texto del PDF, secciones por intervalo entre anclas, `enablerField`, etiqueta geométrica, cabecera de columna heredada, pulsadores fuera y `/Sig` con `FieldKind.SIGNATURE` · verde ✅ |
 | 0.10.14 | Corrección de la 5·4b: el ancla ya no exige mayúsculas y se acota a 50 caracteres, no se emiten secciones vacías y se fusionan títulos repetidos seguidos. `CAMBIO TITULAR` baja de 20 campos a 7 y las 19 secciones quedan en 16 ⚠️ sin confirmar |
-| 0.10.15 | Fase 5, tanda **5·4d** (1ª mitad): `ValueRouting.kt` — los valores se reparten entre el mapa de texto y el de botones según `FieldKind`, con el `onState` real del PDF ⚠️ sin confirmar |
+| 0.10.15 | Fase 5, tanda **5·4d** (1ª mitad): `ValueRouting.kt` — los valores se reparten entre el mapa de texto y el de botones según `FieldKind`, con el `onState` real del PDF ✅ |
+| 0.10.16 | Tanda **5·4d** (2ª mitad): Relleno pinta casillas y radios como tales. `distinct()` en `fillSectionsFrom` — un grupo de 6 opciones pintaba 6 filas idénticas ✅ |
+| 0.10.17 | Tanda **5·4e**: `FieldKeys.labelOf` consulta la etiqueta del esquema. La corrección del editor no llegaba a Relleno ✅ |
+| 0.10.18 | Tanda **5·4f**: `SchemaEditing.setCanonical` + `CanonicalCatalog` + selector en el editor. Se pueden **asignar canónicas a mano** ⚠️ sin confirmar |
+| 0.10.19 | Tanda **5·4g**: `CanonicalMapper` — la IA propone los enganches por texto, sin tocar el proxy (`task=extract` admite 0 imágenes). Botón «Asignar mis datos con IA» ⚠️ sin confirmar |
 
 ### Qué está enganchado y qué no
 
@@ -138,6 +148,13 @@ Con eso, **`MappingEditor` ya no es alcanzable desde el asistente**. No está bo
 y se delimitan **por intervalo entre anclas**, lo que además hizo desaparecer el fallo de orden
 de la 5·4. Las casillas de banda son `FormSection.enablerField`. Los 3 pulsadores quedan fuera
 del esquema y los 4 `/Sig` entran con `FieldKind.SIGNATURE`.
+
+**Enganche de canónicas (0.10.18 y 0.10.19)**: hay tres vías y conviven — a mano con el selector
+del editor, la heurística local `CanonicalCatalog.proposeFor()` (sugerencia en un chip), y la IA
+con `CanonicalMapper` (botón «Asignar mis datos con IA», texto puro por `task=extract`).
+`FieldLabeler` sigue devolviendo **sólo etiquetas**; el enganche es un paso aparte. Mientras un
+campo no tenga `canonical`, siguen mudos el autorrelleno desde el perfil, la validación por tipo y
+el teclado — están escritos y funcionan, sólo les falta el enganche.
 
 **Enganchado desde la 0.10.15 (5·4d, 1ª mitad)**: `WizardViewModel` reparte los valores por
 `FieldKind` antes de generar (`routeFieldValues`), así que un botón se escribe con
@@ -221,7 +238,12 @@ Por orden. La primera no es código.
 
 ## 5. Pendiente de verificar (no lo des por bueno)
 
-- **La 0.10.14 y la 0.10.15 están sin confirmar en Actions.** Pregunta el resultado antes de
+- **La 0.10.18 y la 0.10.19 están sin confirmar en Actions.** Pregunta el resultado antes de abrir tanda nueva.
+- **Nada de la 0.10.16 a la 0.10.18 se ha probado en el móvil.** Lo que hay que mirar con el
+  contrato de Aire: que las casillas y radios salgan como controles y no como cajas de texto
+  (0.10.16), que Relleno muestre la etiqueta corregida y no `Casilla de verificación 59` (0.10.17)
+  que el chip de canónica y su sugerencia aparezcan en los campos de texto del editor (0.10.18) y que «Asignar mis datos con IA» devuelva enganches razonables con el contrato de Aire (0.10.19).
+- **De la 0.10.14 y la 0.10.15 (histórico).** Pregunta el resultado antes de
   abrir tanda nueva.
 - **De la 0.10.14, en el móvil hay que mirar**: que `CAMBIO TITULAR` tenga **7 campos y no 20**,
   que aparezca una sección aparte con la fecha y las dos firmas (los 9 campos del alta de la

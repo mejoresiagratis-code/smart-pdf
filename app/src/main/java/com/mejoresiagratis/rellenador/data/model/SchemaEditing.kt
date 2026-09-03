@@ -48,6 +48,52 @@ object SchemaEditing {
     }
 
     /**
+     * Asigna (o quita, con [canonical] a `null`) la **clave canónica transversal** de todos los
+     * [FormField] cuyo [FormField.name] coincide con [name]. Tanda 5·4f.
+     *
+     * Es la pieza que faltaba para que subir un PDF ajeno sirva de algo más que teclear cada
+     * hueco: [FormField.canonical] es lo único que conecta un campo del PDF con un dato
+     * transversal ([CanonicalKeys]), y de ahí salen tres cosas que ya están escritas y hasta ahora
+     * estaban mudas con cualquier PDF que no fuera el de Orange — autorrelleno desde el perfil,
+     * validación por tipo y teclado adecuado (ver `FieldKeys.canonicalOf`).
+     *
+     * Etiquetar **no** asignaba canónicas: `SchemaLabeling`/`FieldLabeler` sólo escriben
+     * [FormField.label], y el editor de la fase 4 no tenía por dónde tocar esto.
+     *
+     * Una canónica no se reparte entre dos campos: si [canonical] ya estaba puesta en otro
+     * nombre, se le quita a aquél. Dos huecos apuntando al mismo dato harían que
+     * `FieldKeys.canonKeyOf` eligiera uno arbitrariamente (`fs.first()`), y el usuario vería
+     * autorrellenarse un campo y no el otro sin saber por qué.
+     *
+     * Se marca [LabelSource.USUARIO] por el mismo motivo que [setFieldLabel]: es una decisión
+     * manual y ningún reetiquetado posterior debe pisarla.
+     */
+    fun setCanonical(schema: FormSchema, name: String, canonical: String?): FormSchema {
+        val target = canonical?.trim()?.takeIf { it.isNotEmpty() }
+
+        fun remap(field: FormField): FormField = when {
+            field.name == name ->
+                field.copy(canonical = target, labelSource = LabelSource.USUARIO)
+            // Exclusividad: el mismo dato transversal no puede estar en dos campos.
+            target != null && field.canonical == target ->
+                field.copy(canonical = null)
+            else -> field
+        }
+
+        return schema.copy(
+            sections = schema.sections.map { section ->
+                section.copy(
+                    fields = section.fields.map(::remap),
+                    rows = section.rows.map { row ->
+                        row.copy(cells = row.cells.mapValues { (_, field) -> remap(field) })
+                    },
+                    blocks = section.blocks.map { block -> block.map(::remap) },
+                )
+            }
+        )
+    }
+
+    /**
      * Cambia la etiqueta de una [TableColumn] entera (la cabecera). Las celdas individuales de
      * esa columna no se tocan — la etiqueta visible de una celda es la de su columna, igual que
      * hace `SchemaLabeling.relabelRow()` con las etiquetas por visión.

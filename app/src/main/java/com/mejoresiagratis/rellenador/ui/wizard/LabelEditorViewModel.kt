@@ -7,11 +7,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mejoresiagratis.rellenador.data.model.AiProvider
 import com.mejoresiagratis.rellenador.data.model.FormSchema
+import com.mejoresiagratis.rellenador.data.model.SchemaEditing
 import com.mejoresiagratis.rellenador.data.model.TemplateFingerprint
 import com.mejoresiagratis.rellenador.data.pdf.AcroFormFiller
 import com.mejoresiagratis.rellenador.data.pdf.FormSchemaBuilder
 import com.mejoresiagratis.rellenador.data.pdf.LayoutTextExtractor
 import com.mejoresiagratis.rellenador.data.pdf.PdfFieldInspector
+import com.mejoresiagratis.rellenador.data.remote.CanonicalMapper
 import com.mejoresiagratis.rellenador.data.remote.ProxyApi
 import com.mejoresiagratis.rellenador.data.remote.VisionLabelPass
 import com.mejoresiagratis.rellenador.data.repository.PrefsRepository
@@ -48,6 +50,7 @@ class LabelEditorViewModel @Inject constructor(
     private val prefs: PrefsRepository,
     private val api: ProxyApi,
     private val visionPass: VisionLabelPass,
+    private val canonicalMapper: CanonicalMapper,
 ) : ViewModel() {
 
     data class UiState(
@@ -63,6 +66,10 @@ class LabelEditorViewModel @Inject constructor(
         val labelProgress: VisionLabelPass.Progress? = null,
         /** Resultado del último etiquetado, para contarlo en pantalla. */
         val labelNotice: String? = null,
+
+        /** Tanda 5·4g — propuesta de canónicas por IA en curso, y su resultado. */
+        val mapping: Boolean = false,
+        val mapNotice: String? = null,
     )
 
     private val _state = MutableStateFlow(UiState())
@@ -232,6 +239,61 @@ class LabelEditorViewModel @Inject constructor(
                         labelling = false,
                         labelProgress = null,
                         error = it.message ?: "No se pudo etiquetar.",
+                    )
+                },
+            )
+        }
+    }
+
+    /**
+     * Tanda 5·4g — pide a la IA que **proponga** el enganche de cada campo con un dato
+     * transversal, y lo aplica al esquema con [SchemaEditing.setCanonical].
+     *
+     * Se aplica en bloque a propósito, en vez de ir campo a campo: son cientos de huecos y
+     * confirmarlos de uno en uno no lo haría nadie. La red de seguridad es doble — el filtro de
+     * [CanonicalMapper.sanitize] tira las claves inventadas y los duplicados, y en el editor cada
+     * enganche queda visible en su chip y se puede cambiar o quitar. Como toda edición manual,
+     * lo que el usuario corrija después manda sobre esto.
+     *
+     * No manda ningún valor: sólo nombres de campo y los rótulos impresos de la plantilla en
+     * blanco, igual que el etiquetado por visión.
+     */
+    fun proposeCanonicals() {
+        val schema = _state.value.schema ?: return
+        if (_state.value.mapping) return
+
+        _state.value = _state.value.copy(mapping = true, mapNotice = null, error = null)
+        viewModelScope.launch {
+            val outcome = runCatching {
+                val available = visionProviders()
+                if (available.isEmpty()) error(
+                    "No hay ningún motor disponible. Revisa los motores en Ajustes."
+                )
+                canonicalMapper.propose(schema, available)
+            }
+
+            _state.value = outcome.fold(
+                onSuccess = { propuestas ->
+                    val actualizado = propuestas.entries.fold(schema) { acc, (name, canonical) ->
+                        SchemaEditing.setCanonical(acc, name, canonical)
+                    }
+                    _state.value.copy(
+                        schema = actualizado,
+                        mapping = false,
+                        saved = false,
+                        mapNotice = if (propuestas.isEmpty()) {
+                            "Ningún motor propuso enganches utilizables. Puedes asignarlos a " +
+                                "mano con el selector de cada campo."
+                        } else {
+                            "${propuestas.size} enganche(s) propuestos. Revísalos en el chip de " +
+                                "cada campo: lo que corrijas manda sobre la IA."
+                        },
+                    )
+                },
+                onFailure = {
+                    _state.value.copy(
+                        mapping = false,
+                        error = it.message ?: "No se pudieron proponer enganches.",
                     )
                 },
             )

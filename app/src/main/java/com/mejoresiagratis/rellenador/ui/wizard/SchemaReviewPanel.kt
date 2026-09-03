@@ -74,6 +74,27 @@ fun SchemaReviewPanel(
                 state.labelNotice?.let {
                     Text(it, style = MaterialTheme.typography.bodySmall)
                 }
+
+                // Tanda 5.4g - el segundo paso: etiquetar dice QUE se escribe en cada hueco;
+                // esto dice A CUAL DE MIS DATOS corresponde, que es lo que enciende el
+                // autorrelleno, la validacion por tipo y el teclado. Va aqui debajo y no en otro
+                // sitio porque el orden importa: sin etiquetas, no hay de donde deducirlo.
+                if (state.mapping) {
+                    LinearProgressIndicator(Modifier.fillMaxWidth())
+                    Text(
+                        "Emparejando los huecos con tus datos\u2026",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                } else {
+                    OutlinedButton(
+                        onClick = vm::proposeCanonicals,
+                        enabled = !state.labelling,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text("Asignar mis datos con IA") }
+                }
+                state.mapNotice?.let {
+                    Text(it, style = MaterialTheme.typography.bodySmall)
+                }
                 state.error?.let {
                     Text(
                         it,

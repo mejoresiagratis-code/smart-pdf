@@ -8,6 +8,120 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.10.19-canonicas-por-ia] — 2026-09-03
+
+Tanda 5·4g: la IA **propone los enganches**. La 0.10.18 dejó asignar canónicas a mano y sugería
+una desde la etiqueta con una heurística local; esto añade el paso equivalente al etiquetado por
+visión, pero para el enganche.
+
+### El proxy no se toca
+
+`ai-proxy.php` sólo usa `task` en dos sitios: la lista blanca (`extract` / `locate_signature`) y
+la comprobación de imágenes, que exige al menos una **para todo menos `extract`**. Esta tarea es
+de texto puro —nombres y rótulos, sin páginas renderizadas—, así que entra por `extract` sin
+desplegar nada en el servidor. Precedente: `FieldLabeler` reutiliza `locate_signature` igual.
+
+### Añadido
+
+- **`data/remote/CanonicalMapper.kt`**. Manda los campos `TEXT` sin canónica con su etiqueta, más
+  el catálogo de datos aún libres, y pide un JSON `nombre -> clave`. Groq entra en el orden de
+  motores (a diferencia de `FieldLabeler`) porque esto no es visión: es clasificar cadenas.
+- **`sanitize()`** — la parte que no se puede saltar. Un motor puede devolver claves que no
+  existen, campos que no se le preguntaron o la misma canónica para dos huecos. Se filtra contra
+  el catálogo y en un duplicado gana el primero: lo que quede sin proponer se asigna a mano, que
+  es preferible a un enganche silenciosamente equivocado. Un dato en el hueco de otro **no da
+  ningún error** — sale impreso en el contrato y nadie lo ve.
+- **`LabelEditorViewModel.proposeCanonicals()`** y botón «Asignar mis datos con IA» en el panel,
+  debajo de «Etiquetar con IA». Ese orden no es estético: sin etiquetas no hay de dónde deducir
+  el enganche.
+
+Se aplica en bloque, no campo a campo — son cientos de huecos. La red de seguridad es el filtro
+más el chip de cada campo, que deja ver y cambiar cada enganche.
+
+### Privacidad
+
+Igual que el etiquetado: sólo nombres de campo y rótulos impresos de la **plantilla en blanco**.
+Ningún valor de cliente sale del dispositivo.
+
+### Verificación
+
+7 casos en `CanonicalMapperSanitizeTest`: clave inventada, campo no preguntado, duplicado,
+canónica ya ocupada, espacios sobrantes y respuesta vacía. El doble de `ProxyApi` lanza si se le
+llama, para que un cambio futuro que meta red dentro de `sanitize` salte en la prueba.
+
+---
+
+## [0.10.18-canonicos] — 2026-09-03
+
+Tanda 5·4f: **asignar canónicas a mano**. Etiquetar ponía nombres legibles; esto pone el
+enganche. `FormField.canonical` es lo único que conecta un hueco del PDF con un dato transversal
+(`CanonicalKeys`), y con un PDF ajeno seguía siempre en `null`, así que estaban mudos el
+autorrelleno desde el perfil, la validación por tipo y el teclado (`FieldKeys.canonicalOf`).
+
+### Añadido
+
+- **`SchemaEditing.setCanonical(schema, name, canonical)`**. Marca `LabelSource.USUARIO` por el
+  mismo motivo que `setFieldLabel`. **Exclusividad**: si la canónica ya estaba en otro campo, se
+  le quita a aquél — dos huecos apuntando al mismo dato hacían que `FieldKeys.canonKeyOf`
+  eligiera uno arbitrariamente (`fs.first()`) y el usuario veía autorrellenarse uno y no el otro.
+- **`data/model/CanonicalCatalog.kt`**: las 25 canónicas enumerables y con nombre legible (antes
+  eran constantes que sólo se podían usar desde código, no pintar en un selector), más
+  `proposeFor(label)` — propuesta **local**, sin llamada a la IA, deducida de la etiqueta que la
+  visión ya leyó en la fase 3. Reglas de lo específico a lo general: «NIF del representante» no
+  puede caer en `IDENTIFICACION` por contener «nif», y la dirección de instalación no puede
+  confundirse con la fiscal. Ante la duda devuelve `null`: proponer mal es peor que no proponer.
+- **Selector en el editor de etiquetas** (`CanonicalPicker`): un chip con la canónica actual y
+  otro con la sugerencia, que se **ofrece marcada pero no se aplica sola**. Sólo en campos
+  `TEXT`: una casilla o un radio representan una elección, no el CP del cliente.
+
+### Verificación
+
+8 casos en `CanonicalAssignmentTest` — la exclusividad, la precedencia del representante, la
+distinción fiscal/instalación, la normalización de tildes y dos puntos («POBLACIÓN», «CP:») y que
+ante la duda no se proponga nada.
+
+---
+
+## [0.10.17-etiquetas-en-relleno] — 2026-09-03
+
+Un fallo de una línea con efecto desconcertante: corregías una etiqueta en el editor, se guardaba
+bien en el `FormSchema`, y el paso de Relleno seguía mostrando `Casilla de verificación 59`.
+
+`FieldKeys.labelOf()` resolvía la etiqueta **sólo por la vía canónica** (`nombre real -> clave de
+CANON -> ContractFields.labelFor`) y caía al nombre real cuando no había canónica — o sea,
+siempre, en cualquier PDF que no fuera el de Orange. **`FormField.label` no se consultaba nunca.**
+
+- `FieldKeys` acepta un segundo mapa `labels` (`nombre real -> etiqueta del esquema`), que
+  `WizardViewModel.fieldKeys()` rellena desde `activeSchema`.
+- El orden de `labelOf` es: etiqueta del esquema → vía canónica → nombre real. La del esquema
+  manda porque puede venir de una corrección manual del usuario.
+- Arregla de paso los mensajes de deshacer y las hojas de candidatos, que usaban el mismo
+  `labelOf`.
+- Orange no se entera: allí la etiqueta del esquema **es** `ContractFields.labelFor(name)`.
+
+5 casos en `FieldKeysLabelTest`, incluido que una etiqueta en blanco no tape la vía canónica.
+
+---
+
+## [0.10.16-controles-por-tipo] — 2026-09-03
+
+Tanda 5·4d, segunda mitad: el paso de Relleno pinta cada campo **según su `FieldKind`**, no todo
+como caja de texto.
+
+- `FillSections.fillSectionsFrom()`: `distinct()` sobre los nombres y fuera los `/Sig`. Corrige un
+  fallo que estaba vivo: un grupo de radio de 6 opciones pintaba **6 filas idénticas**, todas
+  escribiendo sobre la misma clave.
+- `FillStep`: `FieldRow` recibe las entradas del esquema con ese `name` y desvía — firma no se
+  pinta, radio a `RadioGroupRow`, casilla a `CheckboxRow`, el resto texto. El índice
+  `nombre -> campos` se calcula una vez con `remember`: con 472 campos, resolverlo por fila era
+  recorrer el esquema entero en cada recomposición.
+- Las dos filas nuevas guardan el **`onState` real** (`/Sí`, `/0`, `/Opción1`), nunca un `"On"`
+  inventado, y apagado es cadena vacía y jamás `"0"`. Volver a pulsar la opción marcada la
+  desmarca.
+- Sin esquema activo todo se pinta como texto: el flujo Orange no cambia.
+
+---
+
 ## [0.10.15-valores-por-tipo] — 2026-09-03
 
 Tanda 5·4d, primera mitad: **los valores del asistente se reparten por `FieldKind` antes de

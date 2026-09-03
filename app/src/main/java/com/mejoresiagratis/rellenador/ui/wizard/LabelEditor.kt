@@ -10,6 +10,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.clickable
+import com.mejoresiagratis.rellenador.data.model.CanonicalCatalog
 import com.mejoresiagratis.rellenador.data.model.FieldKind
 import com.mejoresiagratis.rellenador.data.model.FormField
 import com.mejoresiagratis.rellenador.data.model.FormSchema
@@ -125,9 +127,15 @@ private fun SimpleSectionBody(
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         loose.forEach { field ->
-            LabelFieldRow(field) { newLabel ->
-                onSchemaChange(SchemaEditing.setFieldLabel(schema, field.name, newLabel))
-            }
+            LabelFieldRow(
+                field = field,
+                onLabelChange = { newLabel ->
+                    onSchemaChange(SchemaEditing.setFieldLabel(schema, field.name, newLabel))
+                },
+                onCanonicalChange = { canonical ->
+                    onSchemaChange(SchemaEditing.setCanonical(schema, field.name, canonical))
+                },
+            )
         }
         groups.forEach { group ->
             RadioGroupRow(group) { newLabel ->
@@ -184,7 +192,11 @@ private fun RepeatedBlockSectionBody(
 }
 
 @Composable
-private fun LabelFieldRow(field: FormField, onLabelChange: (String) -> Unit) {
+private fun LabelFieldRow(
+    field: FormField,
+    onLabelChange: (String) -> Unit,
+    onCanonicalChange: ((String?) -> Unit)? = null,
+) {
     Column {
         Text(
             field.name,
@@ -199,6 +211,100 @@ private fun LabelFieldRow(field: FormField, onLabelChange: (String) -> Unit) {
                 modifier = Modifier.weight(1f),
             )
             LabelSourceChip(field.labelSource)
+        }
+        // Tanda 5.4f - los campos de texto son los unicos que llevan un dato transversal; una
+        // casilla o un radio representan una eleccion, no el CP del cliente.
+        if (onCanonicalChange != null && field.kind == FieldKind.TEXT) {
+            CanonicalPicker(field, onCanonicalChange)
+        }
+    }
+}
+
+/**
+ * Selector del dato transversal al que corresponde un campo. Tanda 5.4f.
+ *
+ * Sin esto, etiquetar solo ponia nombres bonitos: `FormField.canonical` seguia en null y con ello
+ * quedaban mudos el autorrelleno desde el perfil, la validacion por tipo y el teclado
+ * (ver `FieldKeys.canonicalOf`). Es el enganche, no el rotulo.
+ *
+ * Cuando no hay canonica asignada se OFRECE la propuesta de `CanonicalCatalog.proposeFor()`, que
+ * es local y se deduce de la etiqueta ya leida. Se ofrece, no se aplica: una canonica equivocada
+ * mete el dato del cliente en el hueco de otro y el PDF sale mal sin que salte nada.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CanonicalPicker(field: FormField, onCanonicalChange: (String?) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    val current = field.canonical
+    val suggestion = remember(field.label, current) {
+        if (current == null) CanonicalCatalog.proposeFor(field.label) else null
+    }
+
+    Row(
+        Modifier.fillMaxWidth().padding(top = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        AssistChip(
+            onClick = { open = true },
+            label = {
+                Text(
+                    if (current != null) CanonicalCatalog.labelFor(current) else "Sin asignar",
+                    style = MaterialTheme.typography.labelMedium,
+                )
+            },
+        )
+        if (suggestion != null) {
+            AssistChip(
+                onClick = { onCanonicalChange(suggestion) },
+                label = {
+                    Text(
+                        "Sugerido: ${CanonicalCatalog.labelFor(suggestion)}",
+                        style = MaterialTheme.typography.labelMedium,
+                    )
+                },
+            )
+        }
+    }
+
+    if (open) {
+        ModalBottomSheet(onDismissRequest = { open = false }) {
+            Column(Modifier.padding(bottom = 24.dp)) {
+                Text(
+                    "\u00bfQu\u00e9 dato va en \"${field.label}\"?",
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                )
+                ListItem(
+                    headlineContent = { Text("Sin asignar") },
+                    supportingContent = { Text("Se rellena a mano, sin autorrelleno ni validaci\u00f3n") },
+                    modifier = Modifier.clickable {
+                        onCanonicalChange(null)
+                        open = false
+                    },
+                )
+                HorizontalDivider()
+                CanonicalCatalog.ALL.groupBy { it.group }.forEach { (group, entries) ->
+                    Text(
+                        group,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 2.dp),
+                    )
+                    entries.forEach { entry ->
+                        ListItem(
+                            headlineContent = { Text(entry.label) },
+                            trailingContent = if (entry.key == current) {
+                                { Text("\u2713") }
+                            } else null,
+                            modifier = Modifier.clickable {
+                                onCanonicalChange(entry.key)
+                                open = false
+                            },
+                        )
+                    }
+                }
+            }
         }
     }
 }
