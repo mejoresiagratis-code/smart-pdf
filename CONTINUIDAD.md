@@ -4,8 +4,8 @@
 > o su contenido; con eso y el repo tiene el contexto completo. **No hace falta reenviar los
 > PDFs de Aire**: su análisis está en `docs/ANALISIS_FORMULARIOS_AIRE.md`.
 >
-> **Actualizado**: 2026-09-04. Último commit de código: **0.10.26-etiquetas-y-terceros**
-> (versionCode 96). Verdes hasta la **0.10.17**; la **0.10.19 salió ROJA** (tres errores de
+> **Actualizado**: 2026-09-04. Último commit de código: **0.10.27-etiquetado-por-tandas**
+> (versionCode 97). Verdes hasta la **0.10.17**; la **0.10.19 salió ROJA** (tres errores de
 > compilación), la **0.10.20** los arregla y está **verde**. La **0.10.21 sigue sin confirmar**
 > (se subió para probar en el móvil, no se ha sabido el resultado). **Pablo confirmó verdes la
 > 0.10.22 y la 0.10.23** en el móvil, y de ese mismo QA salieron los reportes que arreglan la
@@ -29,7 +29,7 @@ git clone https://github.com/mejoresiagratis-code/smart-pdf
 cd smart-pdf && git log --oneline -8
 ```
 
-El último commit **de código** debería ser `0.10.26-etiquetas-y-terceros` · versionCode 96.
+El último commit **de código** debería ser `0.10.27-etiquetado-por-tandas` · versionCode 97.
 Por encima puede haber commits solo de documentación, que no suben versión. Si el último código
 no es ése, este documento está desfasado: manda `git log` y la cabecera del `CHANGELOG.md`.
 
@@ -160,6 +160,7 @@ de las dos capturas/pasos está pasando.
 | 0.10.24 | Tanda **5·4i**, arreglo tras la prueba en el móvil: un campo enganchado a mano en «Revisar mapeo» a la misma canónica que otro no se rellenaba al subir documentación —`FieldResolver.resolve` indexa por `keys.real(canonKey)`, un solo nombre por canónica, así que el hermano nunca entraba en `autoValues`. Se enchufa `CanonicalSiblings.expand` también tras la extracción por IA, y los hermanos nuevos heredan `FieldState`/`FieldOrigin` del campo que la IA sí decidió, para que no caigan al desplegable de «sin sugerencias» pese a tener valor ⚠️ sin confirmar, sin typecheck local |
 | 0.10.25 | Tanda **5·4i**, dos arreglos más del mismo QA: (1) la lista de afines en Relleno se recalculaba con `state.fieldValues` entero, así que marcar UNA casilla recomponía y encogía la lista entera — ahora se congela por campo (`remember(key, value.isNotBlank(), schema)`) y cada casilla lleva su propio estado marcado, así que se pueden marcar varias sin que desaparezcan; de paso se quita un `clickable` duplicado que disparaba `confirmAffinity` dos veces por toque. (2) «Asignar mis datos con IA» (`CanonicalMapper`) dejaba sin vincular campos que claramente coincidían: `disponibles` excluía canónicas ya `ocupadas` y `sanitize()` descartaba duplicados — ambos frenos tenían sentido con `setCanonical` exclusivo (ya no lo es desde la mitad 1) y ahora sólo estorbaban. Se ofrece el catálogo completo y no se descartan duplicados; el riesgo titular/tercero se cierra en el prompt (regla 5 nueva), no en el filtro · verde ✅. Pendiente: QA de extremo a extremo con el 036 real y revisión de por qué «algunos etiquetan mal» — ninguno de los dos se puede hacer sin dispositivo, PDF de Aire real y acceso al proxy |
 | 0.10.26 | Tanda **5·4j**, del QA con el contrato de Aire real y su PDF resultante: (1) **el etiquetado por visión iba desplazado** — `collectTargets` numeraba los tokens en orden de secciones del esquema, no en orden visual, y un modelo que tira de índice en vez de coordenadas desplazaba la página entera (`Email representante` → «NOMBRE O RAZÓN SOCIAL:», `TIF` → «Localidad:»). Ahora se ordenan por página y posición de lectura (tolerancia 12pt para no romper filas) ANTES de numerar, y el prompt pide explícitamente usar las coordenadas. (2) **los datos del cliente acababan en los bloques de terceros** — `FormField.thirdParty` existía pero NADIE lo ponía nunca a `true`, así que el CIF y el domicilio de MOFIZOL salieron impresos como los del «titular donante» y del «cambio de titular». `ThirdPartyDetector` (nuevo) marca la bandera por título de sección, y `CanonicalSiblings.expand` deja de cruzar esa frontera ⚠️ sin confirmar, sin typecheck local |
+| 0.10.27 | Tanda **5·4k**, del reporte de que la 0.10.26 dejó el etiquetado peor: (1) el arreglo de la 5·4j sólo alineaba la PRIMERA tanda de cada página — los objetivos se parten en tandas de 24 y a cada una se le manda la página entera, así que con la numeración corrida la segunda tanda empezaba en `k24` y, siendo ya una banda contigua, un motor que empareje por índice le ponía los rótulos del principio de la página (medido: 66 de 136 objetivos desplazados en bloque). Ahora los tokens se numeran desde 0 en cada tanda, una tanda no parte una fila impresa, y la banda vertical viaja al prompt. (2) El orden usaba `(y/12f).toInt()`, el troceado en tramos fijos contra el que ya avisaba `PdfFieldInspector.orderByReadingRows`: el criterio pasa a `ReadingOrder` y lo usan los dos. (3) **«NIF: Off»**: `CHECKBOX_NIF` vale `"NIF"` y el contrato de Aire tiene un campo de TEXTO llamado igual; los mapas fijos se suman después de `routeFieldValues` y se lo saltaban, y `applyButtonValue` caía en su `else` escribiendo `Off` en un campo de texto — `ValueRouting.onlyButtons()` los filtra contra el esquema. Lógica nueva en Kotlin puro (`ReadingOrder`, `LabelTargetPlan`), typecheckeada y **ejecutada** en local: 56 casos en verde ⚠️ sin confirmar |
 
 ### Qué está enganchado y qué no
 
@@ -252,6 +253,12 @@ canónica a mano en dos campos también funciona**, sin pasar por Relleno.
 orden de lectura (`VisionLabelPass.collectTargets`), y `ThirdPartyDetector.mark()` corre justo
 después de `SchemaLabeling.apply()` marcando `thirdParty` en las secciones de tercero, que
 `CanonicalSiblings` ya no cruza. **Sin probar en el móvil todavía.**
+
+**Enganchado desde la 0.10.27 (5·4k)**: `VisionLabelPass` ya no decide por su cuenta qué
+preguntar — lo hace `LabelTargetPlan` (numeración por tanda, filas sin partir, banda al prompt),
+y el orden de lectura es uno solo (`ReadingOrder`, por ancla de fila y no por tramos fijos).
+Los mapas de casillas fijos pasan por `onlyButtons()` antes de llegar a `AcroFormFiller`.
+**Sin probar en el móvil todavía.**
 
 **NO enganchado**: la fase 6 (`/Sig`) y las tablas del Relleno (5·5).
 
@@ -490,6 +497,21 @@ personales); lo que sigue son los patrones, que sí conviene tener escritos.
   rompe en silencio a los llamadores que pasan la lambda suelta (`Foo(x) { … }`): esa lambda
   enlaza con el parámetro nuevo. El compilador señala el llamador, no la firma. Build rojo de la
   0.10.19.
+- **El CI NO compila `app/src/test`.** `.github/workflows/android.yml` sólo corre
+  `./gradlew assembleDebug`. `CanonicalAssignmentTest.kt` llevaba desde la 0.10.22 con un test
+  llamado `` `desde la 5:4i …` `` —los dos puntos son un carácter ilegal en un nombre de método
+  de la JVM, `kotlinc` lo rechaza— y todos los builds salieron verdes igual. O sea que **ninguna
+  de las «comprobaciones ejecutables» del `CHANGELOG` la ha ejecutado nunca el CI**: sólo las
+  sesiones que tenían un `kotlinc` a mano. El nombre se arregló en la 0.10.27; añadir un paso
+  `./gradlew testDebugUnitTest` al workflow es decisión de Pablo.
+- **El orden de lectura de una página se pide a `ReadingOrder`, no se reimplementa.** Trocear el
+  eje Y en tramos fijos (`(y / TOL).toInt()`) parte una fila impresa en cuanto el corte cae entre
+  dos de sus campos. Ya pasó en el SEPA (fila del BIC) y se volvió a colar en `VisionLabelPass`
+  en la 0.10.26. Se agrupa por ancla de fila.
+- **Lo que se le manda a un motor de visión se manda por tandas, y la tanda es el contexto.** No
+  basta con ordenar bien los objetivos de la página: si se pregunta en varias llamadas, cada una
+  tiene que numerar desde 0 y decir qué banda cubre, porque el motor no ve las otras tandas y
+  puede emparejar por índice.
 - **`ProxyResponse.text` es `String?`.** Un motor puede responder `ok` sin cuerpo; todo lo que
   parsee la respuesta del proxy pasa por `?.let`.
 - **Una tanda, una versión, un build verde** antes de la siguiente. Subir `versionCode` y

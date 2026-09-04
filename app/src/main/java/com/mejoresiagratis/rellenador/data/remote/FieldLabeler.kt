@@ -71,9 +71,11 @@ class FieldLabeler @Inject constructor(
         imageB64: String,
         targets: List<Target>,
         available: List<AiProvider>,
+        bandTopPct: Float = 0f,
+        bandBottomPct: Float = 100f,
     ): FieldLabels? {
         if (targets.isEmpty()) return null
-        val prompt = buildPrompt(targets)
+        val prompt = buildPrompt(targets, bandTopPct, bandBottomPct)
 
         for (p in order) {
             if (p !in available) continue
@@ -109,7 +111,11 @@ class FieldLabeler @Inject constructor(
         val isColumn: Boolean = false,
     )
 
-    private fun buildPrompt(targets: List<Target>): String {
+    private fun buildPrompt(
+        targets: List<Target>,
+        bandTopPct: Float = 0f,
+        bandBottomPct: Float = 100f,
+    ): String {
         val campos = targets.filter { !it.isColumn }
         val columnas = targets.filter { it.isColumn }
 
@@ -124,6 +130,10 @@ class FieldLabeler @Inject constructor(
             }
         }
 
+        // Interpolación y no `format()`: esto se inserta en una cadena RAW, sobre la que
+        // `String.format` no se aplica — dejar `%.0f` ahí lo mandaría literal al motor.
+        val desde = bandTopPct.toInt()
+        val hasta = bandBottomPct.toInt()
         return """
 Eres un asistente que etiqueta los huecos rellenables de un formulario impreso en español.
 
@@ -135,10 +145,16 @@ Para cada rectángulo, dime QUÉ SE ESCRIBE AHÍ, leyendo el texto IMPRESO que l
 rótulo suele estar justo a la izquierda del hueco, o justo encima. Para una COLUMNA de tabla,
 el rótulo es la cabecera de esa columna.
 
+ESTA TANDA cubre SÓLO la banda horizontal de la página entre el $desde% y el $hasta% de su
+altura. Los rectángulos van listados en orden de lectura DENTRO de esa banda: de arriba abajo
+y, dentro de cada fila, de izquierda a derecha. Ignora los rótulos que queden fuera de la
+banda: sus huecos se preguntan en otra tanda.
+
 REGLAS
 1. Usa las COORDENADAS de cada rectángulo para localizarlo en la imagen. No supongas que el
-   primer rectángulo de la lista corresponde al primer rótulo de la página: mira dónde cae cada
-   uno. Un rectángulo mal emparejado mete el dato del cliente en el hueco de otro.
+   primer rectángulo de la lista corresponde al primer rótulo de la PÁGINA: el primero de la
+   lista es el primero de LA BANDA. Un rectángulo mal emparejado mete el dato del cliente en el
+   hueco de otro.
 2. Usa EXACTAMENTE el texto impreso del formulario, sin reformular ni traducir. Si pone
    "NIF/CIF/NIE", responde "NIF/CIF/NIE".
 3. Etiqueta corta: lo que rotula el hueco, sin frases ni instrucciones.

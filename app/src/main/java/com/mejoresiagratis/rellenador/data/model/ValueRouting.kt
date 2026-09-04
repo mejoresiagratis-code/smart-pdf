@@ -74,6 +74,41 @@ fun routeFieldValues(values: Map<String, String>, schema: FormSchema?): RoutedVa
 }
 
 /**
+ * Tanda 5·4k — deja pasar sólo las entradas de un mapa de botones **fijo** cuyo destino sea de
+ * verdad un botón según [schema].
+ *
+ * Existe por un fallo que se vio impreso en el PDF del QA de Aire: «NIF: Off» en el hueco del
+ * NIF del representante. La cadena era ésta y no daba ningún error en ningún punto:
+ *
+ *  1. `ContractFields.CHECKBOX_NIF` vale literalmente `"NIF"` — es el nombre de la casilla de
+ *     tipo de identificación del contrato de **Orange**.
+ *  2. El contrato de empresas de **Aire** tiene un campo de TEXTO llamado, también
+ *     literalmente, `NIF` (el del representante, página 1). Comprobado con `pypdf` sobre
+ *     `Contrato_empresas.pdf`: es el único nombre que colisiona de los tres.
+ *  3. Con un cliente con CIF, `ContractFields.checkboxStateFor("CIF")` devuelve
+ *     `{"CIF": "On", "NIF": "Off", "undefined": "Off"}`, y `FieldKeys.reindex` deja `NIF`
+ *     intacto porque no hay canónica que traducir.
+ *  4. Ese mapa se suma a `checkboxes` DESPUÉS de [routeFieldValues], así que se salta el
+ *     reparto por `FieldKind` entero.
+ *  5. `AcroFormFiller.applyButtonValue` cae en su rama `else -> field.setValue(requested)`
+ *     porque el campo no es `PDCheckBox` ni `PDButton`, y escribe la cadena `Off` dentro de un
+ *     campo de texto.
+ *
+ * Un nombre que el esquema **no** conozca se deja pasar: es el comportamiento de siempre y
+ * cubre a Orange, cuyo esquema `BUILTIN` sí declara las tres como [FieldKind.CHECKBOX] y por
+ * tanto pasa igual. Sólo se descarta lo que el esquema afirma que es texto o firma.
+ */
+fun onlyButtons(fixed: Map<String, String>, schema: FormSchema?): Map<String, String> {
+    if (schema == null || fixed.isEmpty()) return fixed
+    val byName = schema.allFields().groupBy { it.name }
+    return fixed.filter { (name, _) ->
+        val group = byName[name] ?: return@filter true
+        val kinds = group.map { it.kind }.toSet()
+        FieldKind.SIGNATURE !in kinds && kinds != setOf(FieldKind.TEXT)
+    }
+}
+
+/**
  * Traduce lo que guardó la interfaz al **estado real** del PDF para ese botón.
  *
  * El orden importa: primero se busca una coincidencia con un `onState` de verdad, porque es el

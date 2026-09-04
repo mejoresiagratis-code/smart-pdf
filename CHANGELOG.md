@@ -8,6 +8,132 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.10.27-etiquetado-por-tandas] — 2026-09-04
+
+Reporte de Pablo sobre la 0.10.26: salió verde, pero **el mapeo de etiquetas quedó incluso peor
+que antes**, tanto antes como después de «Etiquetar con IA». Revisado con el
+`Contrato_empresas.pdf` real delante (488 widgets, 481 nombres únicos, medido con `pypdf`).
+
+### 1. El arreglo de la 0.10.26 estaba incompleto: la página NO se pregunta de una vez
+
+El razonamiento de la 5·4j era correcto —un motor que ignore las coordenadas y empareje `k0` con
+el primer rótulo que lee acierta si el orden de los tokens ES el de lectura— y por eso
+`collectTargets` pasó a numerar en orden de lectura. Lo que no tuvo en cuenta es que los
+objetivos de una página se parten en tandas de `MAX_TARGETS_PER_CALL` (24) porque la respuesta de
+`FieldLabeler` está limitada a 1500 tokens, y **a cada tanda se le manda la página entera** como
+imagen.
+
+Con la numeración corrida, la segunda tanda de la página 1 empezaba en `k24`. Y como a partir de
+la 0.10.26 las tandas son **bandas contiguas** de la página, un motor que empareje por índice le
+pone a la banda de abajo los 24 primeros rótulos de la página: un desplazamiento en bloque, y
+además con mejor pinta que el desorden anterior, que es peor —una etiqueta plausible en el hueco
+de otro campo nadie la revisa.
+
+Medido sobre el contrato real, descontando las celdas de tabla (que heredan la etiqueta de su
+columna y no se preguntan):
+
+| Página | Objetivos | Tandas |
+|---|---|---|
+| 1 | 49 | 3 |
+| 2 | 56 | 3 |
+| 3 | 31 | 2 |
+
+O sea que sólo la primera tanda de cada página quedaba alineada: **70 de 136 objetivos (51%)**;
+los otros 66 se desplazaban en bloque. La 5·4j arregló un tercio del problema y empeoró la
+apariencia de los otros dos.
+
+Arreglo, por los tres lados:
+- **Los tokens se numeran desde 0 en CADA tanda**, así que el índice es la posición dentro de la
+  banda que se pregunta, no dentro de la página.
+- **Una tanda no parte una fila impresa**: se reparten filas completas, no objetivos sueltos, así
+  que `CP:` / `Localidad:` / `Provincia:` no acaban repartidos entre dos llamadas. Una fila más
+  larga que el tope sí se parte, porque no hay alternativa (las de 25 casillas de «Provisión» en
+  Portabilidad, las del IBAN en el SEPA).
+- **La banda viaja al prompt** (`bandTopPct`/`bandBottomPct`): «esta tanda cubre sólo la banda
+  entre el X% y el Y% de la altura; los rectángulos van en orden de lectura DENTRO de esa banda».
+  Con eso las dos estrategias posibles del motor —leer coordenadas o tirar de índice— vuelven a
+  dar el mismo resultado.
+
+Todo esto sale de `VisionLabelPass` a `data/model/LabelTargetPlan.kt` (Kotlin puro), que es lo
+que permite typecheckearlo y **ejecutar** sus comprobaciones en local en vez de subirlas a ver
+qué pasa.
+
+### 2. El troceado del eje Y era la variante rota, y ya estaba diagnosticada
+
+`collectTargets` ordenaba con `(rect.y / 12f).toInt()`. Eso es trocear el eje Y en tramos fijos,
+que es **exactamente** contra lo que avisa el comentario de
+`PdfFieldInspector.orderByReadingRows`, con un caso real medido: en el SEPA de Aire la fila de 11
+casillas del BIC estaba a y≈539 salvo dos campos a y=540,0, y como `539/6 = 89` pero
+`540/6 = 90`, esas dos casillas se iban al final de la fila siguiente. Se reintrodujo un fallo ya
+corregido a diez ficheros de distancia, y con el doble de tolerancia.
+
+En este contrato el daño es pequeño (parte 1 fila de la página 3 y no llega a descolocar nada),
+pero es el mismo fallo. El criterio pasa a vivir en `data/model/ReadingOrder.kt`, por ancla de
+fila y no por tramos, y **las dos** implementaciones lo usan: `PdfFieldInspector` se queda con la
+llamada y su tolerancia de 6 pt.
+
+### 3. «NIF: Off» — una colisión de nombres que se salta `routeFieldValues` entero
+
+Del mismo QA quedaba pendiente `Nombre Representante: JOSE MANUEL ZOLOETA RL` seguido de
+`NIF: Off`. La cadena, sin un solo error en ningún punto:
+
+1. `ContractFields.CHECKBOX_NIF` vale literalmente `"NIF"` — el nombre de la casilla de tipo de
+   identificación del contrato de **Orange**.
+2. El contrato de empresas de **Aire** tiene un campo de **texto** llamado también literalmente
+   `NIF` (el del representante, página 1). Comprobado con `pypdf`: de los tres nombres de Orange
+   (`NIF`, `CIF`, `undefined`) es el **único** que colisiona, y por eso no reventó nada más.
+3. Con un cliente con CIF —MOFIZOL, S.L.— `checkboxStateFor("CIF")` devuelve
+   `{"CIF": "On", "NIF": "Off", "undefined": "Off"}`, y `FieldKeys.reindex` deja `NIF` intacto
+   porque no hay canónica que traducir.
+4. Ese mapa se suma a `checkboxes` **después** de `routeFieldValues()`, así que se salta el
+   reparto por `FieldKind` entero.
+5. `AcroFormFiller.applyButtonValue` cae en su rama `else -> field.setValue(requested)` —el campo
+   no es `PDCheckBox` ni `PDButton`— y escribe la cadena `Off` dentro de un campo de texto.
+
+Arreglo: `ValueRouting.onlyButtons()` filtra los dos mapas fijos (`checkboxStateFor` y
+`altaCheckboxes`) contra el esquema activo antes de sumarlos, descartando lo que el esquema
+afirma que es texto o firma. Un nombre que el esquema no conozca se deja pasar, que es el
+comportamiento de siempre; y Orange no cambia, porque su esquema `BUILTIN` sí declara las tres
+como `FieldKind.CHECKBOX`. Los mapas fijos siguen aplicándose al final y siguen ganando: lo
+único que ya no pueden es escribir en un hueco que no es un botón.
+
+### Lo que este arreglo NO toca
+
+`RoutedValues.skippedSignatures` sigue sin que nadie lo lea. Su comentario dice que se devuelve
+«para que quien llame pueda registrarlo» y nadie registra nada. Es inofensivo y se deja anotado.
+
+### Verificación
+
+`ReadingOrder`, `LabelTargetPlan` y `onlyButtons` son Kotlin puro: typecheckeados con
+`kotlinc 2.1.0 -Werror` y con sus comprobaciones **ejecutadas** en local, 18 casos nuevos en
+verde, más los 38 de los tests que ya existían y que tocan lo modificado (`ValueRoutingTest`,
+`ThirdPartyDetectorTest`, `CanonicalSiblingsTest`, `AffinityGroupTest`,
+`CanonicalAssignmentTest`) — 56 en total, 0 fallos. El plan de tandas se comprobó además contra
+la geometría **real** del `Contrato_empresas.pdf`: 8 tandas, todas empezando en 0, ninguna por
+encima del tope y **cero filas impresas partidas**.
+
+`VisionLabelPass`, `FieldLabeler` y `PdfFieldInspector` dependen de Android o de pdfbox y no se
+typecheckean aquí: van con balance sintáctico y revisión de que cada símbolo nuevo existe. El
+juez sigue siendo Actions.
+
+### Un hallazgo que no es de esta tanda: el CI no compila los tests
+
+`CanonicalAssignmentTest.kt` tenía un test llamado ``fun `desde la 5:4i …`()``. Los dos puntos
+son un carácter **ilegal** en un nombre de método de la JVM y `kotlinc` lo rechaza con
+`name contains illegal characters: :`. O sea que ese fichero no compila desde la 0.10.22 — y
+todos los builds desde entonces salieron verdes.
+
+El motivo es que `.github/workflows/android.yml` sólo ejecuta `./gradlew assembleDebug`, que no
+compila `app/src/test`. Todas las «comprobaciones ejecutables» que el `CHANGELOG` y
+`CONTINUIDAD.md` dan por verificadas desde la 0.10.13 **no las ha ejecutado nunca el CI**: sólo
+se han ejecutado las sesiones en que había un `kotlinc` a mano.
+
+Aquí se arregla el nombre (`5:4i` → `5-4i`, sin cambio de significado). **El workflow no se
+toca**: es de Pablo. Lo que hace falta es añadirle un paso `./gradlew testDebugUnitTest` —
+decisión suya.
+
+---
+
 ## [0.10.26-etiquetas-y-terceros] — 2026-09-04
 
 QA de Pablo con el contrato de Aire real y datos de MOFIZOL, S.L. (capturas del mapeo antes y

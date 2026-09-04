@@ -417,6 +417,24 @@ class WizardViewModel @Inject constructor(
      * Sin esquema activo o con un esquema `BUILTIN` todo `TEXT` (Orange), el resultado es
      * idéntico al de la 5·4c.
      */
+    /**
+     * Tanda 5·4k — los mapas de casillas **fijos** (política de la app, no dato del usuario),
+     * ya traducidos a nombres reales y filtrados contra el esquema activo.
+     *
+     * Siguen aplicándose DESPUÉS de `routeValues()` y ganando sobre lo que escribió el usuario;
+     * lo único nuevo es que ya no pueden escribir en un campo que el esquema declara de texto.
+     * Sin el filtro, un cliente con CIF dejaba «Off» impreso en el NIF del representante del
+     * contrato de Aire, que se llama literalmente igual que la casilla NIF de Orange.
+     */
+    private fun fixedButtons(s: WizardUiState): Map<String, String> =
+        com.mejoresiagratis.rellenador.data.model.onlyButtons(
+            fieldKeys().reindex(
+                com.mejoresiagratis.rellenador.data.model.ContractFields
+                    .checkboxStateFor(s.tipoIdentificacion)
+            ) + altaCheckboxes(),
+            s.activeSchema,
+        )
+
     private fun routeValues(s: WizardUiState) =
         com.mejoresiagratis.rellenador.data.model.routeFieldValues(s.fieldValues, s.activeSchema)
 
@@ -1294,10 +1312,11 @@ class WizardViewModel @Inject constructor(
                         // Tanda 5·4 §6.3 — a las casillas de tipo de identificación se suman las
                         // de cabecera del contrato reconocido (ALTA NUEVA en el contrato de Aire,
                         // con MODIFICACIÓN y PORTABILIDAD desmarcadas de propina).
-                        checkboxes = routed.buttons + fieldKeys().reindex(
-                            com.mejoresiagratis.rellenador.data.model.ContractFields
-                                .checkboxStateFor(s.tipoIdentificacion)
-                        ) + altaCheckboxes()
+                        // Tanda 5·4k — los dos mapas fijos se filtran contra el esquema antes
+                        // de sumarse: `CHECKBOX_NIF` vale "NIF", que en el contrato de Aire es
+                        // un campo de TEXTO, y acababa impreso como «NIF: Off». Ver
+                        // `ValueRouting.onlyButtons`.
+                        checkboxes = routed.buttons + fixedButtons(s)
                     )
                 }
             }.getOrElse {
@@ -1341,10 +1360,8 @@ class WizardViewModel @Inject constructor(
                     // Tanda 5·3 — ver la nota de `generatePdf`.
                     // Tanda 5·4 §6.3 — igual que en `generatePdf`, con las casillas de cabecera
                     // del contrato reconocido (ALTA NUEVA en el contrato de Aire).
-                    checkboxes = routed.buttons + fieldKeys().reindex(
-                        com.mejoresiagratis.rellenador.data.model.ContractFields
-                            .checkboxStateFor(s.tipoIdentificacion)
-                    ) + altaCheckboxes()
+                    // Tanda 5·4k — ver la nota de `generatePdf`.
+                    checkboxes = routed.buttons + fixedButtons(s)
                 )
                 previewRenderer?.close()
                 PdfPageRenderer(file)

@@ -42,7 +42,7 @@ class CanonicalAssignmentTest {
     }
 
     @Test
-    fun `desde la 5:4i una canonica SI puede quedar en dos campos a la vez`() {
+    fun `desde la 5-4i una canonica SI puede quedar en dos campos a la vez`() {
         // El caso que motiva 5·4i: nombre fiscal y nombre cliente son el mismo dato en tres
         // páginas, y el usuario confirma que comparten canónica.
         val s = SchemaEditing.setCanonical(
