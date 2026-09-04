@@ -24,6 +24,13 @@ object CanonicalSiblings {
      * distinto que el usuario puso a mano; queda en pie el aviso de que hay huecos con canónica
      * repetida, pero forzarlo sin avisar sería peor que dejarlo como está.
      *
+     * Tanda 5·4j — y **nunca cruza la frontera de [FormField.thirdParty]**. En el QA del contrato
+     * de Aire, el CIF y el domicilio del cliente acabaron impresos en los bloques de «titular
+     * donante» y «cambio de titular», que son de OTRA empresa: un dato que salta esa frontera no
+     * da ningún error, sale impreso y nadie lo ve. Un campo del titular sólo reparte a campos del
+     * titular, y uno de un tercero sólo a campos de ese mismo lado (ver [ThirdPartyDetector], que
+     * es quien marca la bandera).
+     *
      * @param schema esquema activo; `null` (sin esquema, o `BUILTIN` sin canónicas repetidas)
      *   devuelve [delta] sin tocar.
      */
@@ -45,14 +52,18 @@ object CanonicalSiblings {
         val canonicalOfName: Map<String, String> = schema.allFields()
             .mapNotNull { field -> field.canonical?.let { field.name to it } }
             .toMap()
+        val thirdPartyOfName: Map<String, Boolean> = schema.allFields()
+            .associate { it.name to it.thirdParty }
 
         val expanded = delta.toMutableMap()
         delta.forEach { (name, value) ->
             if (value.isBlank()) return@forEach
             val canonical = canonicalOfName[name] ?: return@forEach
+            val sourceIsThirdParty = thirdPartyOfName[name] ?: false
             byCanonical[canonical].orEmpty().forEach { sibling ->
                 if (sibling != name &&
                     sibling !in expanded &&
+                    (thirdPartyOfName[sibling] ?: false) == sourceIsThirdParty &&
                     currentValues[sibling].isNullOrBlank()
                 ) {
                     expanded[sibling] = value

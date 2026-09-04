@@ -62,6 +62,56 @@ class CanonicalSiblingsTest {
     }
 
     @Test
+    fun `un valor NO cruza la frontera de tercero`() {
+        // El fallo real del QA: el CIF del cliente acabó impreso como el del titular donante.
+        val s = FormSchema(
+            id = "t", title = "t", source = SchemaSource.LEARNED, fingerprint = "fp", pageCount = 1,
+            sections = listOf(
+                FormSection(
+                    id = "s1", title = "DATOS DEL CLIENTE",
+                    fields = listOf(f("A", CanonicalKeys.IDENTIFICACION)),
+                ),
+                FormSection(
+                    id = "s2", title = "CAMBIO TITULAR",
+                    fields = listOf(
+                        FormField(
+                            name = "B", label = "CIF / NIF / NIE", kind = FieldKind.TEXT,
+                            canonical = CanonicalKeys.IDENTIFICACION, thirdParty = true,
+                        )
+                    ),
+                ),
+            ),
+        )
+        val out = CanonicalSiblings.expand(s, emptyMap(), mapOf("A" to "B21762786"))
+        assertEquals(mapOf("A" to "B21762786"), out)
+        assertFalse(out.containsKey("B"))
+    }
+
+    @Test
+    fun `entre dos campos del MISMO tercero si se reparte`() {
+        val s = FormSchema(
+            id = "t", title = "t", source = SchemaSource.LEARNED, fingerprint = "fp", pageCount = 1,
+            sections = listOf(
+                FormSection(
+                    id = "s2", title = "CAMBIO TITULAR",
+                    fields = listOf(
+                        FormField(
+                            name = "A", label = "CIF", kind = FieldKind.TEXT,
+                            canonical = CanonicalKeys.IDENTIFICACION, thirdParty = true,
+                        ),
+                        FormField(
+                            name = "B", label = "CIF", kind = FieldKind.TEXT,
+                            canonical = CanonicalKeys.IDENTIFICACION, thirdParty = true,
+                        ),
+                    ),
+                ),
+            ),
+        )
+        val out = CanonicalSiblings.expand(s, emptyMap(), mapOf("A" to "X1234567Z"))
+        assertEquals("X1234567Z", out["B"])
+    }
+
+    @Test
     fun `orange no tiene canonicas repetidas`() {
         // Documenta la garantía citada en el comentario de la clase: con el esquema construido
         // como BuiltinSchemas.orangeDistribution() (sin dos campos con la misma canónica),

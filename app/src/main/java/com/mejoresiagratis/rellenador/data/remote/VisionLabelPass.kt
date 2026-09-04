@@ -108,7 +108,11 @@ class VisionLabelPass @Inject constructor(
             }
         }
 
-        val applied = SchemaLabeling.apply(schema, merged)
+        // Tanda 5·4j — las secciones de tercero se marcan DESPUÉS de etiquetar, porque es el
+        // etiquetado el que da título legible a las secciones ("CAMBIO TITULAR", "CAPTURA DE
+        // FIBRA CON CAMBIO DE TITULARIDAD"), y `ThirdPartyDetector` decide por ese título.
+        val applied = com.mejoresiagratis.rellenador.data.model.ThirdPartyDetector
+            .mark(SchemaLabeling.apply(schema, merged))
         Result(
             schema = applied,
             labelled = merged.campos.size + merged.columnas.size,
@@ -154,16 +158,35 @@ class VisionLabelPass @Inject constructor(
      *   modos, así que preguntarlo sería gastar una llamada para tirar la respuesta.
      * - **lo que no tiene geometría** (`rect == null`): sin rectángulo no hay nada que situar en
      *   la página. Pasa con los esquemas `BUILTIN` y con los guardados antes de la 0.10.4.
+     *
+     * ### Orden de lectura (tanda 5·4j)
+     *
+     * Los tokens se numeran **después** de ordenar cada página por posición de lectura
+     * (y, luego x), no en el orden en que aparecen las secciones del esquema. La diferencia
+     * importa mucho más de lo que parece: un modelo de visión que decide ignorar las
+     * coordenadas y emparejar `campo_0` con el primer rótulo que lee, `campo_1` con el
+     * segundo, etc., acierta si el orden de los tokens ES el orden de lectura, y se
+     * desplaza entero si no lo es.
+     *
+     * Y no lo era: `collectTargets` recorría `schema.sections` y dentro de cada una sus campos,
+     * un orden que no tiene por qué coincidir con el visual (una sección de la mitad inferior
+     * puede ir antes que otra de la superior). En el QA del contrato de Aire el resultado fue un
+     * desplazamiento sistemático: el campo `Email representante` acabó etiquetado «NOMBRE O
+     * RAZÓN SOCIAL:», `Contacto Administracion` como «Domicilio:», `TIF` como «Localidad:» —
+     * cada uno con el rótulo de un campo que está MÁS ARRIBA en la página. Ordenar por lectura
+     * hace que las dos estrategias del modelo (leer coordenadas, o tirar de índice) den el
+     * mismo resultado correcto.
      */
     private fun collectTargets(schema: FormSchema): List<Pair<Int, List<Aim>>> {
+        // Se recogen primero SIN token, se ordenan por página y posición de lectura, y sólo
+        // entonces se numeran: el índice del token queda alineado con el orden visual.
         val byPage = sortedMapOf<Int, MutableList<Aim>>()
-        var n = 0
 
         fun addField(f: FormField) {
             val r = f.rect ?: return
             if (f.labelSource == LabelSource.USUARIO) return
             byPage.getOrPut(f.page) { mutableListOf() } += Aim(
-                token = "$TOKEN_FIELD${n++}", rect = r, fieldName = f.name
+                token = "", rect = r, fieldName = f.name
             )
         }
 
@@ -179,12 +202,29 @@ class VisionLabelPass @Inject constructor(
                 val r = col.rect ?: continue
                 if (col.labelSource == LabelSource.USUARIO) continue
                 byPage.getOrPut(col.page) { mutableListOf() } += Aim(
-                    token = "$TOKEN_COLUMN${n++}", rect = r, columnId = col.id
+                    token = "", rect = r, columnId = col.id
                 )
             }
         }
 
-        return byPage.map { (page, aims) -> page to aims.toList() }
+        // `ROW_TOLERANCE_PT`: dos huecos de la MISMA fila impresa (CP / Localidad / Provincia)
+        // rara vez comparten `y` al punto. Sin tolerancia, una diferencia de 2pt los ordenaría
+        // en vertical y volvería a descolocar el índice dentro de la fila.
+        var n = 0
+        return byPage.map { (page, aims) ->
+            val ordered = aims
+                .sortedWith(
+                    compareBy(
+                        { (it.rect.y / ROW_TOLERANCE_PT).toInt() },
+                        { it.rect.x },
+                    )
+                )
+                .map { aim ->
+                    val prefix = if (aim.isColumn) TOKEN_COLUMN else TOKEN_FIELD
+                    aim.copy(token = "$prefix${n++}")
+                }
+            page to ordered
+        }
     }
 
     // ── Traducción de vuelta ─────────────────────────────────────────────────
@@ -249,5 +289,14 @@ class VisionLabelPass @Inject constructor(
 
         const val TOKEN_FIELD = "k"
         const val TOKEN_COLUMN = "t"
+
+        /**
+         * Tolerancia vertical, en puntos, para considerar que dos huecos están en la MISMA fila
+         * impresa al ordenarlos por orden de lectura (tanda 5·4j). `CP:` / `Localidad:` /
+         * `Provincia:` comparten fila en el contrato de Aire pero no comparten `y` exacto;
+         * sin tolerancia se ordenarían en vertical y el índice del token volvería a descolocarse
+         * dentro de la fila. 12pt ≈ una línea de texto del formulario.
+         */
+        const val ROW_TOLERANCE_PT = 12f
     }
 }

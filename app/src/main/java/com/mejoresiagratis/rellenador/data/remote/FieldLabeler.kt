@@ -136,12 +136,19 @@ rótulo suele estar justo a la izquierda del hueco, o justo encima. Para una COL
 el rótulo es la cabecera de esa columna.
 
 REGLAS
-1. Usa EXACTAMENTE el texto impreso del formulario, sin reformular ni traducir. Si pone
+1. Usa las COORDENADAS de cada rectángulo para localizarlo en la imagen. No supongas que el
+   primer rectángulo de la lista corresponde al primer rótulo de la página: mira dónde cae cada
+   uno. Un rectángulo mal emparejado mete el dato del cliente en el hueco de otro.
+2. Usa EXACTAMENTE el texto impreso del formulario, sin reformular ni traducir. Si pone
    "NIF/CIF/NIE", responde "NIF/CIF/NIE".
-2. Etiqueta corta: lo que rotula el hueco, sin frases ni instrucciones.
-3. Si un rectángulo no tiene un rótulo claro, OMÍTELO. Es preferible que falte una etiqueta a
+3. Etiqueta corta: lo que rotula el hueco, sin frases ni instrucciones.
+4. Si el hueco pertenece a un bloque de un TERCERO —«titular donante», «cambio de titular»,
+   «titular de la línea», «persona de contacto» de otra dirección— incluye esa pertenencia en la
+   etiqueta (por ejemplo "Domicilio titular donante", no sólo "Domicilio"). Son datos de OTRA
+   persona o empresa y confundirlos con los del cliente estropea el contrato en silencio.
+5. Si un rectángulo no tiene un rótulo claro, OMÍTELO. Es preferible que falte una etiqueta a
    que esté inventada: una etiqueta inventada parece correcta y nadie la revisa.
-4. No inventes rectángulos ni cambies los identificadores que te doy.
+6. No inventes rectángulos ni cambies los identificadores que te doy.
 
 RECTÁNGULOS (${campos.size} campos, ${columnas.size} columnas)
 $lista

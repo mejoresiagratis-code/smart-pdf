@@ -8,6 +8,81 @@ artifact / APK del workflow coincide con `versionName` para poder distinguirlos.
 
 ---
 
+## [0.10.26-etiquetas-y-terceros] — 2026-09-04
+
+QA de Pablo con el contrato de Aire real y datos de MOFIZOL, S.L. (capturas del mapeo antes y
+después de etiquetar, y el PDF resultante). El PDF generado es la evidencia dura: dos fallos
+graves, ninguno de los cuales da error — salen impresos y nadie los ve.
+
+### 1. El etiquetado por visión iba DESPLAZADO
+
+Visto en las capturas: el campo cuyo nombre técnico es `Email representante` recibió la etiqueta
+«NOMBRE O RAZÓN SOCIAL:»; `Contacto Administracion` recibió «Domicilio:»; `TIF` recibió
+«Localidad:»; `email administracion` recibió «Provincia:». Todos reciben el rótulo de un campo que
+está **más arriba** en la misma página. Y el PDF lo confirma: «E-mail Representante: MOFIZOL,
+S.L.», «Contacto Administración: CALLE REAL 39», «TIF: UTIEL».
+
+Causa: `VisionLabelPass.collectTargets` numeraba los tokens (`k0`, `k1`…) recorriendo
+`schema.sections` y, dentro, sus campos — un orden que **no es el orden visual de la página**. Un
+modelo de visión que decide ignorar las coordenadas y emparejar `k0` con el primer rótulo que lee,
+`k1` con el segundo, etc., acierta si el orden de los tokens es el de lectura y se desplaza entero
+si no lo es. No lo era.
+
+Arreglo: los objetivos se recogen primero sin token, se ordenan por página y **posición de
+lectura** (y con tolerancia de 12pt para no romper filas como `CP:` / `Localidad:` / `Provincia:`,
+luego x), y sólo entonces se numeran. Así el índice del token queda alineado con el orden visual y
+las dos estrategias posibles del modelo (leer coordenadas o tirar de índice) dan el mismo
+resultado correcto. Además, el prompt de `FieldLabeler` gana una regla 1 nueva que le pide
+explícitamente usar las coordenadas y no suponer que el primer rectángulo es el primer rótulo.
+
+### 2. Los datos del cliente acababan en los bloques de TERCEROS
+
+En el PDF resultante, con el cliente MOFIZOL, S.L. (CIF B21762786):
+- Página 2, «CAPTURA DE FIBRA CON CAMBIO DE TITULARIDAD»: el CIF, domicilio, localidad y
+  provincia del **titular donante** salieron con los datos de MOFIZOL.
+- Página 3, «CAMBIO TITULAR» (datos del titular de la línea «en caso de ser diferente del
+  cliente»): razón social, CIF, domicilio, CP, localidad y provincia, todos del cliente.
+
+Un contrato así declara que el donante de la línea es el propio cliente — lo contrario de lo que
+el bloque quiere decir.
+
+Causa: `FormField.thirdParty` existe desde la 5·4b y `AffinityGroup` lo respeta desde la 5·4i,
+pero **nadie lo ponía nunca a `true`**. Ni `FormSchemaBuilder` lo deduce ni el etiquetado lo
+escribe, así que en la práctica la bandera era decorativa y el reparto por canónica cruzaba
+alegremente la frontera.
+
+Arreglo: `ThirdPartyDetector` (nuevo) marca la bandera en todas las secciones cuyo **título**
+delata a un tercero (`cambio titular`, `cambio de titularidad`, `titular donante`, `operador
+donante`, `titular de la línea`, `firma titular`, `datos titular`), normalizando acentos y
+mayúsculas. Se decide por el título de la sección y no por el rótulo del campo a propósito: dentro
+del bloque de cambio de titular los rótulos son idénticos a los del titular («Domicilio», «CP»,
+«Localidad») y sólo la cabecera dice de quién son. Se engancha en `VisionLabelPass` justo después
+de `SchemaLabeling.apply`, porque es el etiquetado el que da título legible a las secciones.
+
+Y `CanonicalSiblings.expand` deja de cruzar esa frontera: un campo del titular sólo reparte a
+campos del titular, y uno de un tercero sólo a campos del mismo lado. El criterio es
+deliberadamente conservador — marcar de más deja un campo sin autorrellenar (molesto pero
+visible), marcar de menos mete el dato de otro en el contrato (invisible).
+
+Tests nuevos: `ThirdPartyDetectorTest` (5 casos, con los títulos reales del contrato de Aire) y
+dos casos más en `CanonicalSiblingsTest` (que el valor no cruza la frontera, y que entre dos
+campos del MISMO tercero sí se reparte).
+
+### Lo que este QA deja pendiente
+
+- **«Total IVA incluido: B21762786», «Cuota de alta: B21762786», «Cuota mensual: B21762786»** — un
+  CIF en tres campos de importe. No es reparto por canónica (esos campos no tienen ninguna): sale
+  de la extracción por IA o del propio `AffinityGroup` por etiqueta. Hace falta mirarlo con el
+  esquema real delante; no se toca a ciegas.
+- **`Nombre Representante: JOSE MANUEL ZOLOETA RL` seguido de `NIF: Off`** — `Off` es el estado
+  apagado de una casilla escrito en un campo de texto. Apunta a `routeFieldValues`/`onState`, no a
+  esta tanda.
+- **`Campo de texto 381` («NOMBRE Y DNI») sugerido como «CIF / NIF / NIE de la empresa»** — la
+  propuesta local de `CanonicalCatalog.proposeFor` se queda con el DNI y pierde el nombre. Es un
+  caso para el catálogo, no para el mapeo.
+
+---
+
 ## [0.10.25-qa-afines] — 2026-09-04
 
 Dos arreglos del reporte de Pablo tras probar en el móvil (0.10.22/23/24 confirmadas verdes).

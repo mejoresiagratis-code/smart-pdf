@@ -4,12 +4,13 @@
 > o su contenido; con eso y el repo tiene el contexto completo. **No hace falta reenviar los
 > PDFs de Aire**: su análisis está en `docs/ANALISIS_FORMULARIOS_AIRE.md`.
 >
-> **Actualizado**: 2026-09-04. Último commit de código: **0.10.25-qa-afines**
-> (versionCode 95). Verdes hasta la **0.10.17**; la **0.10.19 salió ROJA** (tres errores de
+> **Actualizado**: 2026-09-04. Último commit de código: **0.10.26-etiquetas-y-terceros**
+> (versionCode 96). Verdes hasta la **0.10.17**; la **0.10.19 salió ROJA** (tres errores de
 > compilación), la **0.10.20** los arregla y está **verde**. La **0.10.21 sigue sin confirmar**
 > (se subió para probar en el móvil, no se ha sabido el resultado). **Pablo confirmó verdes la
 > 0.10.22 y la 0.10.23** en el móvil, y de ese mismo QA salieron los reportes que arreglan la
-> 0.10.24 y la 0.10.25 (ver tabla) — ninguna de las dos probada todavía. No hubo build de la
+> 0.10.24 y la 0.10.25, ambas verdes. Del QA con el contrato de Aire real (capturas + PDF
+> resultante) salió la **0.10.26**, sin confirmar. No hubo build de la
 > 0.10.18 (ver §1). Este documento
 > **caduca**: la primera regla de abajo existe precisamente porque lo que aquí se afirma puede
 > estar viejo.
@@ -28,7 +29,7 @@ git clone https://github.com/mejoresiagratis-code/smart-pdf
 cd smart-pdf && git log --oneline -8
 ```
 
-El último commit **de código** debería ser `0.10.25-qa-afines` · versionCode 95.
+El último commit **de código** debería ser `0.10.26-etiquetas-y-terceros` · versionCode 96.
 Por encima puede haber commits solo de documentación, que no suben versión. Si el último código
 no es ése, este documento está desfasado: manda `git log` y la cabecera del `CHANGELOG.md`.
 
@@ -38,9 +39,10 @@ De la 0.10.6 a la **0.10.17, todas verdes** (las 0.10.14 a 0.10.17 confirmadas p
 **0.10.19 salió ROJA** y la **0.10.20 la arregló y está verde** (run 33724263803, comprobado por
 API). La **0.10.21 sigue sin confirmar en el móvil**. **La 0.10.22 y la 0.10.23 las confirmó
 Pablo probándolas en el móvil** — de ese mismo QA salieron los reportes que arreglan la 0.10.24 y
-la 0.10.25 (ver tabla). **Ninguna de las dos está confirmada todavía**: pregunta el resultado
-antes de abrir tanda nueva, porque la regla es una tanda, una versión, un build verde antes de la
-siguiente.
+la 0.10.25 (ver tabla), las dos **verdes** (runs 33818151135 y 33819933422). Del QA con el
+contrato de Aire real y el PDF resultante salió la **0.10.26**, que está **sin confirmar**:
+pregunta el resultado antes de abrir tanda nueva, porque la regla es una tanda, una versión, un
+build verde antes de la siguiente.
 
 **La 0.10.18 nunca tuvo build.** El `versionCode` va 87 (0.10.17) → 89 (0.10.19): el 88 no
 existe y el código de la 5·4f entró **dentro** del commit de la 0.10.19 (`c898892`). Si en algún
@@ -156,7 +158,8 @@ de las dos capturas/pasos está pasando.
 | 0.10.22 | Tanda **5·4i, mitad 1** (lógica, Kotlin puro): `setCanonical` deja de ser exclusivo, `CanonicalSiblings` reparte un valor a los hermanos vacíos que comparten canónica, `AffinityGroup` detecta candidatos por etiqueta idéntica o canónica ya compartida (respeta `thirdParty`). `CanonicalMapper` se deja sin tocar a propósito (sigue 1:1). La mitad 2 (Compose, lista con casilla en Relleno) va en tanda aparte, sin typecheck local (no había `kotlinc` moderno disponible en la sesión — usa trailing commas, y el `kotlinc` 1.3.31 de apt no las soporta) · verde ✅ |
 | 0.10.23 | Tanda **5·4i, mitad 2** (Compose): en `FieldRow` de `FillStep.kt`, cuando un campo tiene valor y `AffinityGroup` propone candidatos vacíos, aparece un botón plegable «Este dato aparece en otros N campos» con una casilla por candidato. Marcarla llama a `WizardViewModel.confirmAffinity()`: si el origen tiene canónica, se la asigna también al candidato (enganche real, `CanonicalSiblings` los mantiene sincronizados); si no, es copia puntual del valor. Deshacible con `setFieldValue` de por medio, sin typecheck local (mismo motivo que la 0.10.22) · verde ✅ (confirmada por Pablo en el móvil) |
 | 0.10.24 | Tanda **5·4i**, arreglo tras la prueba en el móvil: un campo enganchado a mano en «Revisar mapeo» a la misma canónica que otro no se rellenaba al subir documentación —`FieldResolver.resolve` indexa por `keys.real(canonKey)`, un solo nombre por canónica, así que el hermano nunca entraba en `autoValues`. Se enchufa `CanonicalSiblings.expand` también tras la extracción por IA, y los hermanos nuevos heredan `FieldState`/`FieldOrigin` del campo que la IA sí decidió, para que no caigan al desplegable de «sin sugerencias» pese a tener valor ⚠️ sin confirmar, sin typecheck local |
-| 0.10.25 | Tanda **5·4i**, dos arreglos más del mismo QA: (1) la lista de afines en Relleno se recalculaba con `state.fieldValues` entero, así que marcar UNA casilla recomponía y encogía la lista entera — ahora se congela por campo (`remember(key, value.isNotBlank(), schema)`) y cada casilla lleva su propio estado marcado, así que se pueden marcar varias sin que desaparezcan; de paso se quita un `clickable` duplicado que disparaba `confirmAffinity` dos veces por toque. (2) «Asignar mis datos con IA» (`CanonicalMapper`) dejaba sin vincular campos que claramente coincidían: `disponibles` excluía canónicas ya `ocupadas` y `sanitize()` descartaba duplicados — ambos frenos tenían sentido con `setCanonical` exclusivo (ya no lo es desde la mitad 1) y ahora sólo estorbaban. Se ofrece el catálogo completo y no se descartan duplicados; el riesgo titular/tercero se cierra en el prompt (regla 5 nueva), no en el filtro ⚠️ sin confirmar, sin typecheck local. Pendiente: QA de extremo a extremo con el 036 real y revisión de por qué «algunos etiquetan mal» — ninguno de los dos se puede hacer sin dispositivo, PDF de Aire real y acceso al proxy |
+| 0.10.25 | Tanda **5·4i**, dos arreglos más del mismo QA: (1) la lista de afines en Relleno se recalculaba con `state.fieldValues` entero, así que marcar UNA casilla recomponía y encogía la lista entera — ahora se congela por campo (`remember(key, value.isNotBlank(), schema)`) y cada casilla lleva su propio estado marcado, así que se pueden marcar varias sin que desaparezcan; de paso se quita un `clickable` duplicado que disparaba `confirmAffinity` dos veces por toque. (2) «Asignar mis datos con IA» (`CanonicalMapper`) dejaba sin vincular campos que claramente coincidían: `disponibles` excluía canónicas ya `ocupadas` y `sanitize()` descartaba duplicados — ambos frenos tenían sentido con `setCanonical` exclusivo (ya no lo es desde la mitad 1) y ahora sólo estorbaban. Se ofrece el catálogo completo y no se descartan duplicados; el riesgo titular/tercero se cierra en el prompt (regla 5 nueva), no en el filtro · verde ✅. Pendiente: QA de extremo a extremo con el 036 real y revisión de por qué «algunos etiquetan mal» — ninguno de los dos se puede hacer sin dispositivo, PDF de Aire real y acceso al proxy |
+| 0.10.26 | Tanda **5·4j**, del QA con el contrato de Aire real y su PDF resultante: (1) **el etiquetado por visión iba desplazado** — `collectTargets` numeraba los tokens en orden de secciones del esquema, no en orden visual, y un modelo que tira de índice en vez de coordenadas desplazaba la página entera (`Email representante` → «NOMBRE O RAZÓN SOCIAL:», `TIF` → «Localidad:»). Ahora se ordenan por página y posición de lectura (tolerancia 12pt para no romper filas) ANTES de numerar, y el prompt pide explícitamente usar las coordenadas. (2) **los datos del cliente acababan en los bloques de terceros** — `FormField.thirdParty` existía pero NADIE lo ponía nunca a `true`, así que el CIF y el domicilio de MOFIZOL salieron impresos como los del «titular donante» y del «cambio de titular». `ThirdPartyDetector` (nuevo) marca la bandera por título de sección, y `CanonicalSiblings.expand` deja de cruzar esa frontera ⚠️ sin confirmar, sin typecheck local |
 
 ### Qué está enganchado y qué no
 
@@ -244,6 +247,11 @@ CUALQUIER entrada de `CanonicalCatalog.ALL` en cada campo, sin excluir las ya us
 antes esto era inofensivo porque `setCanonical` deshacía la del campo anterior en cuanto elegías
 la misma en uno nuevo; ahora que no lo hace, **abrir el editor de etiquetas y asignar la misma
 canónica a mano en dos campos también funciona**, sin pasar por Relleno.
+
+**Enganchado desde la 0.10.26 (5·4j)**: los objetivos del etiquetado por visión se numeran en
+orden de lectura (`VisionLabelPass.collectTargets`), y `ThirdPartyDetector.mark()` corre justo
+después de `SchemaLabeling.apply()` marcando `thirdParty` en las secciones de tercero, que
+`CanonicalSiblings` ya no cruza. **Sin probar en el móvil todavía.**
 
 **NO enganchado**: la fase 6 (`/Sig`) y las tablas del Relleno (5·5).
 
